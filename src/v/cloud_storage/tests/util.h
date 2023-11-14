@@ -78,7 +78,7 @@ struct in_memory_segment {
     // should contain number of config records inside the overlapping area. This
     // is needed to compute the offset_delta field in the manifest correctly.
     //
-    // Only used to emulate an older version of Redpanda that had offset
+    // Only used to emulate an older version of Funes that had offset
     // overlap between segments.
     int delta_offset_overlap{0};
 };

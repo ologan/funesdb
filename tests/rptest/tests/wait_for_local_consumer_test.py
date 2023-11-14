@@ -11,12 +11,12 @@ from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.kaf_producer import KafProducer
 from rptest.services.kaf_consumer import KafConsumer
 
 
-class WaitForLocalConsumerTest(RedpandaTest):
+class WaitForLocalConsumerTest(FunesTest):
     """
     Start a kaf-based producer and consumer, then wait until the consumer has
     observed a certain number of produced records.
@@ -29,8 +29,8 @@ class WaitForLocalConsumerTest(RedpandaTest):
         super(WaitForLocalConsumerTest, self).__init__(test_context=ctx,
                                                        num_brokers=1)
 
-        self._producer = KafProducer(ctx, self.redpanda, self.topic)
-        self._consumer = KafConsumer(ctx, self.redpanda, self.topic)
+        self._producer = KafProducer(ctx, self.funes, self.topic)
+        self._consumer = KafConsumer(ctx, self.funes, self.topic)
 
     @cluster(num_nodes=3)
     def test_wait_for_local_consumer(self):

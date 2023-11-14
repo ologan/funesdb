@@ -30,9 +30,9 @@
 #include <string_view>
 #include <type_traits>
 
-namespace kafka {
+namespace sql {
 
-using offset = named_type<int64_t, struct kafka_offset_type>;
+using offset = named_type<int64_t, struct sql_offset_type>;
 
 inline offset next_offset(offset p) {
     if (p < offset{0}) {
@@ -48,7 +48,7 @@ inline constexpr offset prev_offset(offset o) {
     return o - offset{1};
 }
 
-} // namespace kafka
+} // namespace sql
 
 namespace cloud_storage_clients {
 
@@ -61,7 +61,7 @@ namespace model {
 using node_uuid = named_type<uuid_t, struct node_uuid_type>;
 using cluster_uuid = named_type<uuid_t, struct cluster_uuid_type>;
 
-// Named after Kafka cleanup.policy topic property
+// Named after SQL cleanup.policy topic property
 enum class cleanup_policy_bitflags : uint8_t {
     none = 0,
     deletion = 1U,
@@ -93,9 +93,9 @@ inline void operator&=(cleanup_policy_bitflags& a, cleanup_policy_bitflags b) {
 std::ostream& operator<<(std::ostream&, cleanup_policy_bitflags);
 std::istream& operator>>(std::istream&, cleanup_policy_bitflags&);
 
-// Named after Kafka compaction.strategy topic property
+// Named after SQL compaction.strategy topic property
 enum class compaction_strategy : int8_t {
-    /// \brief offset compaction means the old schoold kafka compacted topics
+    /// \brief offset compaction means the old schoold sql compacted topics
     /// strategy before KIP 280
     offset,
     /// \brief timestamp compaction is not yet supported
@@ -142,25 +142,25 @@ using ns = named_type<ss::sstring, struct model_ns_type>;
 
 using offset = named_type<int64_t, struct model_offset_type>;
 
-/// Delta between redpanda and kafka offsets. It supposed to be used
+/// Delta between funes and sql offsets. It supposed to be used
 /// by offset translation facilities.
 using offset_delta = named_type<int64_t, struct model_offset_delta_type>;
 
-/// \brief conversion from kafka offset to redpanda offset
+/// \brief conversion from sql offset to funes offset
 inline constexpr model::offset
-operator+(kafka::offset o, model::offset_delta d) {
+operator+(sql::offset o, model::offset_delta d) {
     return model::offset{o() + d()};
 }
 
-/// \brief conversion from redpanda offset to kafka offset
-inline constexpr kafka::offset
+/// \brief conversion from funes offset to sql offset
+inline constexpr sql::offset
 operator-(model::offset o, model::offset_delta d) {
-    return kafka::offset{o() - d()};
+    return sql::offset{o() - d()};
 }
 
 /// \brief get offset delta from pair of offsets
 inline constexpr model::offset_delta
-operator-(model::offset r, kafka::offset k) {
+operator-(model::offset r, sql::offset k) {
     return model::offset_delta{r() - k()};
 }
 
@@ -175,13 +175,13 @@ inline constexpr model::offset offset_cast(model::offset_delta d) {
     return model::offset{d()};
 }
 
-/// \brief cast to kafka::offset
+/// \brief cast to sql::offset
 ///
 /// This function is used when we have a field which is incorrectly represented
-/// as model::offset instead of kafka::offset and we need to convert it to
+/// as model::offset instead of sql::offset and we need to convert it to
 /// proper type.
-inline constexpr kafka::offset offset_cast(model::offset r) {
-    return kafka::offset{r()};
+inline constexpr sql::offset offset_cast(model::offset r) {
+    return sql::offset{r()};
 }
 
 /// \brief cast to model::offset_delta
@@ -324,12 +324,12 @@ struct ntp {
 };
 
 /**
- * Enum describing Kafka's control record types. The Control record key schema
+ * Enum describing SQL's control record types. The Control record key schema
  * is defined as a tuple of [version: int16_t, type: control_record_type].
- * Currently Kafka protocol uses version 0 of control record schema.
+ * Currently SQL protocol uses version 0 of control record schema.
  *
- * Internal redpanda control records are propagated with unknown type.
- * Unknown control records are expected to be ignored by Kafka clients
+ * Internal funes control records are propagated with unknown type.
+ * Unknown control records are expected to be ignored by SQL clients
  *
  */
 enum class control_record_type : int16_t {
@@ -426,20 +426,20 @@ using client_address_t = named_type<ss::sstring, struct client_address_tag>;
 
 } // namespace model
 
-namespace kafka {
+namespace sql {
 
 /// \brief cast to model::offset
 ///
 /// The purpose of this function is to mark every place where we converting
-/// from kafka offset to model::offset. This is done in places where the kafka
+/// from sql offset to model::offset. This is done in places where the sql
 /// offset is represetnted as an instance of the model::offset. Once we convert
-/// every such field to kafka::delta_offset we will be able to depricate and
+/// every such field to sql::delta_offset we will be able to depricate and
 /// remove this function.
-inline constexpr model::offset offset_cast(kafka::offset k) {
+inline constexpr model::offset offset_cast(sql::offset k) {
     return model::offset{k()};
 }
 
-} // namespace kafka
+} // namespace sql
 
 namespace detail {
 inline size_t ntp_hash(

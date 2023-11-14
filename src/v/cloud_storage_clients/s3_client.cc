@@ -1,11 +1,11 @@
 /*
  * Copyright 2020 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage_clients/s3_client.h"
@@ -60,7 +60,7 @@ struct aws_header_names {
 
 struct aws_header_values {
     static constexpr boost::beast::string_view user_agent
-      = "redpanda.vectorized.io";
+      = "funes.vectorized.io";
     static constexpr boost::beast::string_view text_plain = "text/plain";
 };
 
@@ -359,7 +359,7 @@ ss::future<ResultT>
 parse_rest_error_response(boost::beast::http::status result, iobuf&& buf) {
     if (buf.empty()) {
         // AWS errors occasionally come with an empty body
-        // (See https://github.com/redpanda-data/redpanda/issues/6061)
+        // (See https://github.com/redpanda-data/funes/issues/6061)
         // Without a proper code, we treat it as a hint to gracefully retry
         // (synthesize the slow_down code).
         rest_error_response err(

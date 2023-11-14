@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/remote_segment.h"
@@ -229,7 +229,7 @@ const model::offset remote_segment::get_base_rp_offset() const {
     return _base_rp_offset;
 }
 
-const kafka::offset remote_segment::get_base_kafka_offset() const {
+const sql::offset remote_segment::get_base_sql_offset() const {
     return _base_rp_offset - _base_offset_delta;
 }
 
@@ -275,8 +275,8 @@ remote_segment::data_stream(size_t pos, ss::io_priority_class io_priority) {
 
 ss::future<remote_segment::input_stream_with_offsets>
 remote_segment::offset_data_stream(
-  kafka::offset start,
-  kafka::offset end,
+  sql::offset start,
+  sql::offset end,
   std::optional<model::timestamp> first_timestamp,
   ss::io_priority_class io_priority) {
     vlog(_ctxlog.debug, "remote segment file input stream at offset {}", start);
@@ -340,25 +340,25 @@ remote_segment::offset_data_stream(
     co_return input_stream_with_offsets{
       .stream = std::move(data_stream),
       .rp_offset = pos.rp_offset,
-      .kafka_offset = pos.kaf_offset,
+      .sql_offset = pos.kaf_offset,
     };
 }
 
 std::optional<offset_index::find_result>
-remote_segment::maybe_get_offsets(kafka::offset kafka_offset) {
+remote_segment::maybe_get_offsets(sql::offset sql_offset) {
     if (!_index) {
         return {};
     }
-    auto pos = _index->find_kaf_offset(kafka_offset);
+    auto pos = _index->find_kaf_offset(sql_offset);
     if (!pos) {
         return {};
     }
     vlog(
       _ctxlog.debug,
-      "Using index to locate Kafka offset {}, the result is rp-offset: {}, "
-      "kafka-offset: "
+      "Using index to locate SQL offset {}, the result is rp-offset: {}, "
+      "sql-offset: "
       "{}, file-pos: {}",
-      kafka_offset,
+      sql_offset,
       pos->rp_offset,
       pos->kaf_offset,
       pos->file_pos);
@@ -387,7 +387,7 @@ remote_segment::maybe_get_offsets(model::timestamp ts) {
     vlog(
       _ctxlog.debug,
       "Using index to locate timestamp {}, the result is rp-offset: {}, "
-      "kafka-offset: "
+      "sql-offset: "
       "{}, file-pos: {}",
       ts,
       pos->rp_offset,
@@ -406,7 +406,7 @@ ss::future<uint64_t> remote_segment::put_segment_in_cache_and_create_index(
   ss::input_stream<char> s) {
     offset_index tmpidx(
       get_base_rp_offset(),
-      get_base_kafka_offset(),
+      get_base_sql_offset(),
       0,
       remote_segment_sampling_step_bytes,
       _base_timestamp);
@@ -1007,23 +1007,23 @@ uint64_t remote_segment::max_hydrated_chunks() const {
 }
 
 chunk_start_offset_t
-remote_segment::get_chunk_start_for_kafka_offset(kafka::offset koff) const {
+remote_segment::get_chunk_start_for_sql_offset(sql::offset koff) const {
     vassert(
       _coarse_index.has_value(),
-      "cannot find byte range for kafka offset {} when coarse index is not "
+      "cannot find byte range for sql offset {} when coarse index is not "
       "initialized.",
       koff);
 
-    vlog(_ctxlog.trace, "get_chunk_start_for_kafka_offset {}", koff);
+    vlog(_ctxlog.trace, "get_chunk_start_for_sql_offset {}", koff);
 
     if (unlikely(_coarse_index->empty())) {
         return 0;
     }
 
-    // TODO (abhijat) assert that koff >= segment base kafka && koff <= segment
-    // end kafka
+    // TODO (abhijat) assert that koff >= segment base sql && koff <= segment
+    // end sql
     auto it = _coarse_index->upper_bound(koff);
-    // The kafka offset lies in the first chunk of the file.
+    // The sql offset lies in the first chunk of the file.
     if (it == _coarse_index->begin()) {
         return 0;
     }
@@ -1040,7 +1040,7 @@ const offset_index::coarse_index_t& remote_segment::get_coarse_index() const {
 /// Batch consumer that connects to remote_segment_batch_reader.
 /// It also does offset translation based on incomplete data in
 /// manifests.
-/// The implementation assumes that the config has kafka offsets
+/// The implementation assumes that the config has sql offsets
 /// and does conversion based on that.
 /// The problem is that we don't have full information regarding
 /// offset translation in manifests. Because of that we can only
@@ -1054,8 +1054,8 @@ const offset_index::coarse_index_t& remote_segment::get_coarse_index() const {
 /// will start from the begining of the segment.
 ///
 /// This consumer expects config.start_offset/max_offset to be
-/// kafka offsets. It also returns batches with kafka offsets.
-/// The log output always contains redpanda offsets unless the
+/// sql offsets. It also returns batches with sql offsets.
+/// The log output always contains funes offsets unless the
 /// annotation is added.
 ///
 /// Note that the state that this consumer has can only be used
@@ -1078,37 +1078,37 @@ public:
       , _ctxlog(cst_log, _rtc, ntp.path())
       , _filtered_types(raft::offset_translator_batch_types(ntp)) {}
 
-    /// Translate redpanda offset to kafka offset
+    /// Translate funes offset to sql offset
     ///
     /// \note this can only be applied to current record batch
-    kafka::offset rp_to_kafka(model::offset k) const noexcept {
+    sql::offset rp_to_sql(model::offset k) const noexcept {
         vassert(
           k() >= _parent._cur_delta(),
-          "Redpanda offset {} is smaller than the delta {}",
+          "Funes offset {} is smaller than the delta {}",
           k,
           _parent._cur_delta);
         return k - _parent._cur_delta;
     }
 
-    /// Translate kafka offset to redpanda offset
+    /// Translate sql offset to funes offset
     ///
     /// \note this can only be applied to current record batch
-    model::offset kafka_to_rp(kafka::offset k) const noexcept {
+    model::offset sql_to_rp(sql::offset k) const noexcept {
         return k + _parent._cur_delta;
     }
 
     /// Point config.start_offset to the next record batch
     ///
-    /// \param header is a record batch header with redpanda offset
+    /// \param header is a record batch header with funes offset
     /// \note this can only be applied to current record batch
     void
     advance_config_offsets(const model::record_batch_header& header) noexcept {
         _parent._cur_rp_offset = header.last_offset() + model::offset{1};
 
         if (header.type == model::record_batch_type::raft_data) {
-            auto next = rp_to_kafka(header.last_offset()) + model::offset(1);
+            auto next = rp_to_sql(header.last_offset()) + model::offset(1);
             if (next > _config.start_offset) {
-                _config.start_offset = kafka::offset_cast(next);
+                _config.start_offset = sql::offset_cast(next);
             }
         }
     }
@@ -1122,10 +1122,10 @@ public:
           header,
           _parent._cur_delta);
 
-        if (rp_to_kafka(header.base_offset) > _config.max_offset) {
+        if (rp_to_sql(header.base_offset) > _config.max_offset) {
             vlog(
               _ctxlog.debug,
-              "[{}] accept_batch_start stop parser because {} > {}(kafka "
+              "[{}] accept_batch_start stop parser because {} > {}(sql "
               "offset)",
               _config.client_address,
               header.base_offset(),
@@ -1148,14 +1148,14 @@ public:
         // The segment can be scanned from the begining so we should skip
         // irrelevant batches.
         if (unlikely(
-              rp_to_kafka(header.last_offset()) < _config.start_offset)) {
+              rp_to_sql(header.last_offset()) < _config.start_offset)) {
             vlog(
               _ctxlog.debug,
               "[{}] accept_batch_start skip because "
-              "last_kafka_offset {} (last_rp_offset: {}) < "
+              "last_sql_offset {} (last_rp_offset: {}) < "
               "config.start_offset: {}",
               _config.client_address,
-              rp_to_kafka(header.last_offset()),
+              rp_to_sql(header.last_offset()),
               header.last_offset(),
               _config.start_offset);
             return batch_consumer::consume_result::skip_batch;
@@ -1247,10 +1247,10 @@ public:
 
         // NOTE: we need to translate offset of the batch after we updated
         // start offset of the config since it assumes that the header has
-        // redpanda offset.
-        batch.header().base_offset = kafka::offset_cast(
-          rp_to_kafka(batch.base_offset()));
-        // since base offset isn't accounted into Kafka crc we need to only
+        // funes offset.
+        batch.header().base_offset = sql::offset_cast(
+          rp_to_sql(batch.base_offset()));
+        // since base offset isn't accounted into SQL crc we need to only
         // update header_crc
         batch.header().header_crc = model::internal_header_only_crc(
           batch.header());
@@ -1382,7 +1382,7 @@ remote_segment_batch_reader::init_parser() {
         _config, *this, _seg->get_term(), _seg->get_ntp(), _rtc),
       storage::segment_reader_handle(std::move(stream_off.stream)));
     _cur_rp_offset = stream_off.rp_offset;
-    _cur_delta = stream_off.rp_offset - stream_off.kafka_offset;
+    _cur_delta = stream_off.rp_offset - stream_off.sql_offset;
     co_return parser;
 }
 

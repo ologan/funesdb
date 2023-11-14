@@ -22,14 +22,14 @@ func newSetCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 
 You can either provide a path to a file containing the license:
 
-    rpk cluster license set --path /home/organization/redpanda.license
+    rpk cluster license set --path /home/organization/funes.license
 
 Or inline the license string:
 
     rpk cluster license set <license string>
 
 If neither are present, rpk will look for the license in the
-default location '/etc/redpanda/redpanda.license'.
+default location '/etc/funes/funes.license'.
 `,
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -37,8 +37,8 @@ default location '/etc/redpanda/redpanda.license'.
 				out.Die("inline license cannot be passed if flag '--path' is set")
 			}
 			if licPath == "" && len(args) == 0 {
-				fmt.Println("Neither license file nor inline license was provided, checking '/etc/redpanda/redpanda.license'.")
-				licPath = "/etc/redpanda/redpanda.license"
+				fmt.Println("Neither license file nor inline license was provided, checking '/etc/funes/funes.license'.")
+				licPath = "/etc/funes/funes.license"
 			}
 
 			p, err := p.LoadVirtualProfile(fs)

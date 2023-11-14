@@ -12,6 +12,6 @@ v_cc_library(
     v::version
   )
 
-add_dependencies(v_features kafka_codegen_headers)
+add_dependencies(v_features sql_codegen_headers)
 
 add_subdirectory(tests)

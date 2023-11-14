@@ -13,8 +13,8 @@ from ducktape.mark import parametrize
 
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.tests.funes_test import FunesTest
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.util import (
     produce_until_segments,
@@ -22,7 +22,7 @@ from rptest.util import (
 )
 
 
-class FetchAfterDeleteTest(RedpandaTest):
+class FetchAfterDeleteTest(FunesTest):
     def __init__(self, test_context):
         self.segment_size = 1048576
         super(FetchAfterDeleteTest,
@@ -34,7 +34,7 @@ class FetchAfterDeleteTest(RedpandaTest):
                              })
 
     def setUp(self):
-        # Override parent's setUp so that we can start redpanda later
+        # Override parent's setUp so that we can start funes later
         pass
 
     @cluster(num_nodes=3)
@@ -46,28 +46,28 @@ class FetchAfterDeleteTest(RedpandaTest):
         Test fetching when consumer offset was deleted by retention
         """
 
-        self.redpanda._extra_rp_conf[
+        self.funes._extra_rp_conf[
             "enable_transactions"] = transactions_enabled
-        self.redpanda._extra_rp_conf[
+        self.funes._extra_rp_conf[
             "enable_idempotence"] = transactions_enabled
-        self.redpanda.start()
+        self.funes.start()
 
         topic = TopicSpec(partition_count=1,
                           replication_factor=3,
                           cleanup_policy=TopicSpec.CLEANUP_DELETE)
         self.client().create_topic(topic)
 
-        kafka_tools = KafkaCliTools(self.redpanda)
+        sql_tools = SQLCliTools(self.funes)
 
         # produce until segments have been compacted
         produce_until_segments(
-            self.redpanda,
+            self.funes,
             topic=topic.name,
             partition_idx=0,
             count=10,
         )
         consumer_group = 'test'
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def consume(n=1):
 
@@ -84,12 +84,12 @@ class FetchAfterDeleteTest(RedpandaTest):
 
         # change retention time
         retention_bytes = 2 * self.segment_size
-        kafka_tools.alter_topic_config(
+        sql_tools.alter_topic_config(
             topic.name, {
                 TopicSpec.PROPERTY_RETENTION_BYTES: retention_bytes,
             })
 
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         topic.name,
                                         target_bytes=retention_bytes)
 

@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/anomalies_detector.h"
@@ -59,8 +59,8 @@ ss::future<anomalies_detector::result> anomalies_detector::run(
         spillover_manifest_path_components comp{
           .base = iter->base_offset,
           .last = iter->committed_offset,
-          .base_kafka = iter->base_kafka_offset(),
-          .next_kafka = iter->next_kafka_offset(),
+          .base_sql = iter->base_sql_offset(),
+          .next_sql = iter->next_sql_offset(),
           .base_ts = iter->base_timestamp,
           .last_ts = iter->max_timestamp,
         };

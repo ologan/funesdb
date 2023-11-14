@@ -9,7 +9,7 @@
 
 from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 import subprocess
 import random
@@ -17,13 +17,13 @@ import string
 import sys
 
 BOOTSTRAP_CONFIG = {
-    'kafka_tcp_keepalive_timeout': 1,
-    'kafka_tcp_keepalive_probe_interval_seconds': 1,
-    'kafka_tcp_keepalive_probes': 3
+    'sql_tcp_keepalive_timeout': 1,
+    'sql_tcp_keepalive_probe_interval_seconds': 1,
+    'sql_tcp_keepalive_probes': 3
 }
 
 
-class TcpKeepaliveTest(RedpandaTest):
+class TcpKeepaliveTest(FunesTest):
     def __init__(self, *args, **kwargs):
         rp_conf = BOOTSTRAP_CONFIG.copy()
 
@@ -45,7 +45,7 @@ class TcpKeepaliveTest(RedpandaTest):
             # spawn netcat running in that group
             with subprocess.Popen([
                     'sudo', 'sg', group_name, "nc -v {} 9092".format(
-                        self.redpanda.nodes[0].account.hostname)
+                        self.funes.nodes[0].account.hostname)
             ],
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT) as nc_proc:
@@ -66,8 +66,8 @@ class TcpKeepaliveTest(RedpandaTest):
                 nc_proc.wait(timeout=10)
 
             # confirm RP also saw the client gone
-            wait_until(lambda: self.redpanda.search_log_node(
-                self.redpanda.nodes[0], 'Disconnected'),
+            wait_until(lambda: self.funes.search_log_node(
+                self.funes.nodes[0], 'Disconnected'),
                        timeout_sec=10,
                        err_msg="Failed to find disconnect message in log")
 

@@ -152,7 +152,7 @@ private:
      * cluster::shard_table state isn't corrupted.
      */
 
-    // kafka index
+    // sql index
     absl::node_hash_map<
       model::ntp,
       shard_revision,

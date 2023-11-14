@@ -39,11 +39,11 @@ class LicenseWorkload(PWorkload):
         self.license = sample_license()
         if self.license is None:
             self.ctx.logger.info(
-                "Skipping test, REDPANDA_SAMPLE_LICENSE env var not found")
+                "Skipping test, FUNES_SAMPLE_LICENSE env var not found")
             return
 
-        self.ctx.redpanda.set_environment({
-            '__REDPANDA_LICENSE_CHECK_INTERVAL_SEC':
+        self.ctx.funes.set_environment({
+            '__FUNES_LICENSE_CHECK_INTERVAL_SEC':
             f'{LicenseWorkload.LICENSE_CHECK_INTERVAL_SEC}'
         })
 
@@ -56,7 +56,7 @@ class LicenseWorkload(PWorkload):
                 time.time() + LicenseWorkload.LICENSE_CHECK_INTERVAL_SEC * 2)
             # Ensure a valid license cannot be uploaded in this cluster state
             try:
-                Admin(self.ctx.redpanda).put_license(self.license)
+                Admin(self.ctx.funes).put_license(self.license)
                 assert False
             except HTTPError as e:
                 assert e.response.status_code == 400
@@ -66,7 +66,7 @@ class LicenseWorkload(PWorkload):
             if self.first_license_check > time.time():
                 return PWorkload.NOT_DONE
 
-            assert self.ctx.redpanda.search_log_any(
+            assert self.ctx.funes.search_log_any(
                 "Enterprise feature(s).*") is False
             return PWorkload.DONE
 
@@ -80,12 +80,12 @@ class LicenseWorkload(PWorkload):
         # just check that no log nag is present
         if version[0:2] <= (22, 1):
             # These logs can't exist in v22.1 but double check anyway...
-            assert self.ctx.redpanda.search_log_any(
+            assert self.ctx.funes.search_log_any(
                 "Enterprise feature(s).*") is False
             return PWorkload.DONE
 
         # license is installable
-        admin = Admin(self.ctx.redpanda)
+        admin = Admin(self.ctx.funes)
 
         if not self.assert_admin_done:
             assert admin.supports_feature("license")
@@ -95,23 +95,23 @@ class LicenseWorkload(PWorkload):
         if not self.license_installed:
             self.first_license_check = self.first_license_check or (
                 time.time() + LicenseWorkload.LICENSE_CHECK_INTERVAL_SEC * 4 *
-                len(self.ctx.redpanda.nodes))
+                len(self.ctx.funes.nodes))
             # ensure that enough time passed for log nag to appear
             if self.first_license_check > time.time():
                 return PWorkload.NOT_DONE
 
             # check for License nag in the log
-            assert self.ctx.redpanda.search_log_any(
+            assert self.ctx.funes.search_log_any(
                 "Enterprise feature(s).*"), "License nag log not found"
 
             # Install license
             assert admin.put_license(self.license).status_code == 200
-            self.ctx.redpanda.unset_environment(
-                ['__REDPANDA_LICENSE_CHECK_INTERVAL_SEC'])
+            self.ctx.funes.unset_environment(
+                ['__FUNES_LICENSE_CHECK_INTERVAL_SEC'])
             self.license_installed = True
             return PWorkload.DONE
 
-        # license was installed and this is a new version of redpanda
+        # license was installed and this is a new version of funes
         self.installed_license_timeout = self.installed_license_timeout or (
             time.time() + 30)
 

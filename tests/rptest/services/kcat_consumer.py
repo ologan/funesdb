@@ -38,7 +38,7 @@ class KcatConsumer(BackgroundThreadService):
 
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic,
                  partition: Optional[int] = None,
                  *,
@@ -60,7 +60,7 @@ class KcatConsumer(BackgroundThreadService):
             The offset to fallback if offset or first_timestamp have a specific
             value or the value OffsetMeta.stored, but there is no initial offset
             in offset store or the desired offset is out of range. When not
-            specified, the default librdkafka option is 'end'. The value of
+            specified, the default librdsql option is 'end'. The value of
             OffsetDefaultMeta.error would trigger an error
             (ERR__AUTO_OFFSET_RESET) if the default needed to be applied.
         """
@@ -71,16 +71,16 @@ class KcatConsumer(BackgroundThreadService):
         self._end_of_topic = {}
         self._consumed_count = {}
         self._on_message = KcatConsumer.default_on_message
-        self._redpanda = redpanda
+        self._funes = funes
         self._topic = topic
         self._partition = partition
         if caption:
-            self._redpanda.logger.info(f"{caption} is {self.service_id}")
+            self._funes.logger.info(f"{caption} is {self.service_id}")
             self._caption = f"[{caption}] "
         else:
             self._caption = f"[{self.service_id}] "
 
-        self._cmd = ["kcat", "-b", self._redpanda.brokers()]
+        self._cmd = ["kcat", "-b", self._funes.brokers()]
         trailopts = ["-J"]
 
         if cgroup_name is None:
@@ -128,8 +128,8 @@ class KcatConsumer(BackgroundThreadService):
         if num_msgs is not None:
             self._cmd += ["-c", f"{num_msgs}"]
 
-        if getattr(self._redpanda, "sasl_enabled", lambda: False)():
-            cfg = self._redpanda.security_config()
+        if getattr(self._funes, "sasl_enabled", lambda: False)():
+            cfg = self._funes.security_config()
             self._cmd += [
                 "-X", f"security.protocol={cfg['security_protocol']}", "-X"
                 f"sasl.mechanism={cfg['sasl_mechanism']}", "-X",
@@ -138,8 +138,8 @@ class KcatConsumer(BackgroundThreadService):
             ]
             if cfg['sasl_mechanism'] == "GSSAPI":
                 self._cmd += [
-                    "-X", "sasl.kerberos.service.name=redpanda",
-                    '-Xsasl.kerberos.kinit.cmd=kinit client -t /var/lib/redpanda/client.keytab'
+                    "-X", "sasl.kerberos.service.name=funes",
+                    '-Xsasl.kerberos.kinit.cmd=kinit client -t /var/lib/funes/client.keytab'
                 ]
 
         self._cmd += trailopts
@@ -179,7 +179,7 @@ class KcatConsumer(BackgroundThreadService):
                                cmd,
                                allow_fail=False,
                                timeout_sec=None):
-        self._redpanda.logger.debug("Running ssh command: %s" % cmd)
+        self._funes.logger.debug("Running ssh command: %s" % cmd)
 
         client = node.account.ssh_client
         chan = client.get_transport().open_session(timeout=timeout_sec)
@@ -194,7 +194,7 @@ class KcatConsumer(BackgroundThreadService):
 
         return KcatConsumer.SSHCapturedPipes(
             stdin, stdout, stderr, cmd,
-            self._redpanda.logger if allow_fail else None)
+            self._funes.logger if allow_fail else None)
 
     def _worker(self, worker_idx, node):
         self._stopping.clear()
@@ -221,7 +221,7 @@ class KcatConsumer(BackgroundThreadService):
             self.done = True
 
     def _stdout_reader(self, stdout: paramiko.channel.ChannelFile) -> None:
-        #self._redpanda.logger.debug(f"start ({stdout})")
+        #self._funes.logger.debug(f"start ({stdout})")
         for line in iter(stdout.readline, ''):
             if self._pid is None:
                 self._pid = line.strip()
@@ -238,7 +238,7 @@ class KcatConsumer(BackgroundThreadService):
                 self._consumed_count[partition] += 1
                 self._on_message(self, j)
             except:
-                self._redpanda.logger.error(
+                self._funes.logger.error(
                     f"{self._caption}Exception while processing kcat output line: {line.strip()}"
                 )
                 raise
@@ -256,25 +256,25 @@ class KcatConsumer(BackgroundThreadService):
                 if m:
                     partition = int(m.group("partition"))
                     if m.group("topic") != self._topic:
-                        self._redpanda.logger.warning(
+                        self._funes.logger.warning(
                             "{}Topic reported by kcat ({}}) is different from the requested ({}). Line: {}"
                             .format(self._caption, m.group("topic"),
                                     self._topic, line.strip()))
                     elif self._partition is not None and partition != self._partition:
-                        self._redpanda.logger.warning(
+                        self._funes.logger.warning(
                             "{}Partition reported by kcat ({}) is different from the requested ({}). Line: {}"
                             .format(self._caption, partition, self._partition,
                                     line.strip()))
                     else:
                         self._end_of_topic[partition] = int(m.group("offset"))
-                        self._redpanda.logger.debug(
+                        self._funes.logger.debug(
                             f"{self._caption}Reached end of the topic partition {partition} at offset {self._end_of_topic[partition]}"
                         )
                 else:
-                    self._redpanda.logger.debug(
+                    self._funes.logger.debug(
                         f"{self._caption}{line.strip()}")
             else:
-                self._redpanda.logger.warn(
+                self._funes.logger.warn(
                     f"{self._caption}Unrecognized kcat output: {line.strip()}")
 
     def stop_node(self, node):
@@ -297,4 +297,4 @@ class KcatConsumer(BackgroundThreadService):
         self._on_message = on_message
 
     def default_on_message(self, message: dict) -> None:
-        self._redpanda.logger.debug(f"{self._caption}{json.dumps(message)}")
+        self._funes.logger.debug(f"{self._caption}{json.dumps(message)}")

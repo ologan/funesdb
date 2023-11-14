@@ -11,10 +11,10 @@ from time import time
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.services.rpk_consumer import RpkConsumer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.utils.node_metrics import NodeMetrics
 
@@ -23,7 +23,7 @@ def assert_lists_equal(l1: list[float], l2: list[float]):
     assert l1 == l2
 
 
-class NodeMetricsTest(RedpandaTest):
+class NodeMetricsTest(FunesTest):
     """ Basic tests for node-level metrics. See partitions_metrics_test.py for
     per-partition metrics. """
 
@@ -31,7 +31,7 @@ class NodeMetricsTest(RedpandaTest):
 
     def __init__(self, test_ctx):
         super().__init__(test_context=test_ctx)
-        self.node_metrics = NodeMetrics(self.redpanda)
+        self.node_metrics = NodeMetrics(self.funes)
 
     def _count_greater(self, l1: list[float], l2: list[float]) -> int:
         """ return number of elements in l1 that were *strictly greater* than their
@@ -40,10 +40,10 @@ class NodeMetricsTest(RedpandaTest):
         for v, u in zip(l1, l2):
             if v > u:
                 num_greater += 1
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"count_greater({v} - {u} = {v - u}) -> {num_greater}")
 
-        self.redpanda.logger.debug(
+        self.funes.logger.debug(
             f"count_greater: {l1} / {l2} -> {num_greater}")
         return num_greater
 
@@ -55,7 +55,7 @@ class NodeMetricsTest(RedpandaTest):
         record_size = 1024
 
         # Produce data and confirm metrics update
-        ktools = KafkaCliTools(self.redpanda)
+        ktools = SQLCliTools(self.funes)
         ktools.produce(self.topic, num_records, record_size, acks=-1)
 
         new_free = self.node_metrics.disk_free_bytes()
@@ -73,7 +73,7 @@ class NodeMetricsTest(RedpandaTest):
         orig_total = self.node_metrics.disk_total_bytes()
         orig_free = self.node_metrics.disk_free_bytes()
 
-        self.redpanda.logger.debug(
+        self.funes.logger.debug(
             f'orig total {orig_total}, orig free {orig_free}')
 
         # for alert field, just confirm it exists and in valid range. Actual
@@ -104,6 +104,6 @@ class NodeMetricsTest(RedpandaTest):
         # Assert total space has not changed
         new_total = self.node_metrics.disk_total_bytes()
         assert_lists_equal(orig_total, new_total)
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Elapsed: {t1-t0} sec to first metrics, {t2-t1} to consume space metric"
         )

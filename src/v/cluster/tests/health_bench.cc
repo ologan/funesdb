@@ -73,7 +73,7 @@ struct health_bench : health_report_accessor {
             std::vector<topic_status> statuses;
             for (model::node_id node{0}; node < nodes; node++) {
                 model::topic_namespace tns{
-                  model::kafka_namespace,
+                  model::sql_namespace,
                   model::topic(fmt::format("topic_{}", topic))};
 
                 statuses.emplace_back(topic_status{tns, {}});

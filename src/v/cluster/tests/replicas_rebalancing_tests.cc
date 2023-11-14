@@ -17,7 +17,7 @@ calculate_replicas_per_node(const cluster::metadata_cache& cache) {
     absl::node_hash_map<model::node_id, size_t> ret;
 
     for (auto& [tp_ns, tp_md] : cache.all_topics_metadata()) {
-        if (tp_ns.ns == model::redpanda_ns) {
+        if (tp_ns.ns == model::funes_ns) {
             continue;
         }
         for (auto& p_md : tp_md.get_assignments()) {

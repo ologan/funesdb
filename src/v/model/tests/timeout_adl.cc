@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(test_timeout_clock_is_ms_2) {
     BOOST_REQUIRE_EQUAL(res, d);
 };
 
-// In https://github.com/redpanda-data/redpanda/pull/5051
+// In https://github.com/redpanda-data/funes/pull/5051
 // the implementation of adl<model::timeout_clock::duration> was refactored
 // This is roughly the old implementation.
 struct adl_legacy_duration {

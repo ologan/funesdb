@@ -23,7 +23,7 @@ struct instance_generator<cluster::begin_group_tx_request> {
     static cluster::begin_group_tx_request random() {
         return cluster::begin_group_tx_request(
           model::random_ntp(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           model::random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
           tests::random_duration<model::timeout_clock::duration>(),
@@ -33,14 +33,14 @@ struct instance_generator<cluster::begin_group_tx_request> {
         return {
           cluster::begin_group_tx_request(
             model::random_ntp(),
-            tests::random_named_string<kafka::group_id>(),
+            tests::random_named_string<sql::group_id>(),
             model::random_producer_identity(),
             model::tx_seq(std::numeric_limits<int64_t>::min()),
             min_duration(),
             model::partition_id(std::numeric_limits<int32_t>::min())),
           cluster::begin_group_tx_request(
             model::random_ntp(),
-            tests::random_named_string<kafka::group_id>(),
+            tests::random_named_string<sql::group_id>(),
             model::random_producer_identity(),
             model::tx_seq(std::numeric_limits<int64_t>::max()),
             max_duration(),

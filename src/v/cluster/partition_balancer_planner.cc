@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cluster/partition_balancer_planner.h"
@@ -1309,8 +1309,8 @@ size_t partition_balancer_planner::calculate_full_disk_partition_move_priority(
      * largest one (the same as all other partitions)
      */
     if (
-      p.ntp().ns == model::kafka_internal_namespace
-      || p.ntp().tp.topic == model::kafka_consumer_offsets_topic) {
+      p.ntp().ns == model::sql_internal_namespace
+      || p.ntp().tp.topic == model::sql_consumer_offsets_topic) {
         static constexpr size_t range
           = priority_tiers::min_default_priority - 1
             - priority_tiers::min_internal_partition_priority;

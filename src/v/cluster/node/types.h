@@ -27,7 +27,7 @@ namespace cluster::node {
 //
 //  Node-local state. Includes things like:
 //  - Current free resources (disk).
-//  - Software versions (OS, redpanda, etc.).
+//  - Software versions (OS, funes, etc.).
 //
 
 using application_version = named_type<ss::sstring, struct version_number_tag>;
@@ -37,7 +37,7 @@ using application_version = named_type<ss::sstring, struct version_number_tag>;
  */
 struct local_state
   : serde::envelope<local_state, serde::version<3>, serde::compat_version<0>> {
-    application_version redpanda_version;
+    application_version funes_version;
     cluster_version logical_version{invalid_version};
     std::chrono::milliseconds uptime;
 

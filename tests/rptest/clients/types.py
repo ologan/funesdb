@@ -29,11 +29,11 @@ class TopicSpec:
     PROPERTY_SEGMENT_SIZE = "segment.bytes"
     PROPERTY_RETENTION_BYTES = "retention.bytes"
     PROPERTY_RETENTION_TIME = "retention.ms"
-    PROPERTY_DATA_POLICY_FUNCTION_NAME = "redpanda.datapolicy.function.name"
-    PROPERTY_DATA_POLICY_SCRIPT_NAME = "redpanda.datapolicy.script.name"
+    PROPERTY_DATA_POLICY_FUNCTION_NAME = "funes.datapolicy.function.name"
+    PROPERTY_DATA_POLICY_SCRIPT_NAME = "funes.datapolicy.script.name"
     PROPERTY_RETENTION_LOCAL_TARGET_BYTES = "retention.local.target.bytes"
     PROPERTY_RETENTION_LOCAL_TARGET_MS = "retention.local.target.ms"
-    PROPERTY_REMOTE_DELETE = "redpanda.remote.delete"
+    PROPERTY_REMOTE_DELETE = "funes.remote.delete"
     PROPERTY_SEGMENT_MS = "segment.ms"
 
     class CompressionTypes(str, Enum):
@@ -64,15 +64,15 @@ class TopicSpec:
         RECORD_NAME = "RecordNameStrategy"
         TOPIC_RECORD_NAME = "TopicRecordNameStrategy"
 
-    PROPERTY_RECORD_KEY_SCHEMA_ID_VALIDATION = "redpanda.key.schema.id.validation"
-    PROPERTY_RECORD_KEY_SUBJECT_NAME_STRATEGY = "redpanda.key.subject.name.strategy"
-    PROPERTY_RECORD_VALUE_SCHEMA_ID_VALIDATION = "redpanda.value.schema.id.validation"
-    PROPERTY_RECORD_VALUE_SUBJECT_NAME_STRATEGY = "redpanda.value.subject.name.strategy"
+    PROPERTY_RECORD_KEY_SCHEMA_ID_VALIDATION = "funes.key.schema.id.validation"
+    PROPERTY_RECORD_KEY_SUBJECT_NAME_STRATEGY = "funes.key.subject.name.strategy"
+    PROPERTY_RECORD_VALUE_SCHEMA_ID_VALIDATION = "funes.value.schema.id.validation"
+    PROPERTY_RECORD_VALUE_SUBJECT_NAME_STRATEGY = "funes.value.subject.name.strategy"
 
     class SubjectNameStrategyCompat(str, Enum):
-        TOPIC_NAME = "io.confluent.kafka.serializers.subject.TopicNameStrategy"
-        RECORD_NAME = "io.confluent.kafka.serializers.subject.RecordNameStrategy"
-        TOPIC_RECORD_NAME = "io.confluent.kafka.serializers.subject.TopicRecordNameStrategy"
+        TOPIC_NAME = "io.confluent.sql.serializers.subject.TopicNameStrategy"
+        RECORD_NAME = "io.confluent.sql.serializers.subject.RecordNameStrategy"
+        TOPIC_RECORD_NAME = "io.confluent.sql.serializers.subject.TopicRecordNameStrategy"
 
     PROPERTY_RECORD_KEY_SCHEMA_ID_VALIDATION_COMPAT = "confluent.key.schema.validation"
     PROPERTY_RECORD_KEY_SUBJECT_NAME_STRATEGY_COMPAT = "confluent.key.subject.name.strategy"
@@ -93,10 +93,10 @@ class TopicSpec:
                  segment_bytes=None,
                  retention_bytes=None,
                  retention_ms=None,
-                 redpanda_datapolicy=None,
-                 redpanda_remote_read=None,
-                 redpanda_remote_write=None,
-                 redpanda_remote_delete=None,
+                 funes_datapolicy=None,
+                 funes_remote_read=None,
+                 funes_remote_write=None,
+                 funes_remote_delete=None,
                  segment_ms=None,
                  max_message_bytes=None,
                  record_key_schema_id_validation=None,
@@ -118,10 +118,10 @@ class TopicSpec:
         self.segment_bytes = segment_bytes
         self.retention_bytes = retention_bytes
         self.retention_ms = retention_ms
-        self.redpanda_datapolicy = redpanda_datapolicy
-        self.redpanda_remote_read = redpanda_remote_read
-        self.redpanda_remote_write = redpanda_remote_write
-        self.redpanda_remote_delete = redpanda_remote_delete
+        self.funes_datapolicy = funes_datapolicy
+        self.funes_remote_read = funes_remote_read
+        self.funes_remote_write = funes_remote_write
+        self.funes_remote_delete = funes_remote_delete
         self.segment_ms = segment_ms
         self.max_message_bytes = max_message_bytes
         self.record_key_schema_id_validation = record_key_schema_id_validation

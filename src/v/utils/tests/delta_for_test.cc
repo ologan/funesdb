@@ -485,7 +485,7 @@ auto get_characterization_data() -> std::span<const deltafor_datapoint> {{
     return characterization_data;
 }}
 )cpp",
-      redpanda_version(),
+      funes_version(),
       fmt::join(
         to_save | std::views::transform(deltafor_datapoint_printer), ",\n"));
 }

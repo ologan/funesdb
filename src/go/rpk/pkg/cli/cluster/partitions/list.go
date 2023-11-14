@@ -54,10 +54,10 @@ func newListPartitionMovementsCommand(fs afero.Fs, p *config.Params) *cobra.Comm
 					continue
 				}
 				for _, r := range response {
-					isKafkaNs := len(nt) == 1 && r.Ns == "kafka" && r.Topic == t
+					isSQLNs := len(nt) == 1 && r.Ns == "sql" && r.Topic == t
 					isInternalNs := len(nt) == 2 && r.Ns == nt[0] && r.Topic == nt[1]
 
-					if isKafkaNs || isInternalNs {
+					if isSQLNs || isInternalNs {
 						if len(partitions) == 0 || contains(partitions, strconv.Itoa(r.PartitionID)) {
 							filteredResponse = append(filteredResponse, r)
 						}
@@ -178,11 +178,11 @@ const helpListMovement = `Show ongoing partition movements.
 
 By default this command lists all the ongoing partition movements in the cluster.
 Topics can be specified to print the move status of specific topics. By default,
-this command assumes the "kafka" namespace, but you can use a "namespace/" to
+this command assumes the "sql" namespace, but you can use a "namespace/" to
 specify internal namespaces.
 
     rpk cluster partitions move-status
-    rpk cluster partitions move-status foo bar kafka_internal/tx
+    rpk cluster partitions move-status foo bar sql_internal/tx
 
 The "--partition / -p" flag can be used with topics to additional filter
 requested partitions:

@@ -13,4 +13,4 @@ function(add_go_dependency NAME MAIN_SRC)
   install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${NAME} DESTINATION bin)
 endfunction(add_go_dependency)
 
-add_go_dependency(kafka-request-generator kafka-request-generator.go)
+add_go_dependency(sql-request-generator sql-request-generator.go)

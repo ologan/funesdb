@@ -17,7 +17,7 @@ PROP_NEW_VALUE = 9999999
 class SetLogSegmentMsMinConfig(PWorkload):
     def __init__(self, ctx) -> None:
         self.ctx = ctx
-        self.admin = Admin(self.ctx.redpanda)
+        self.admin = Admin(self.ctx.funes)
 
     def get_earliest_applicable_release(self):
         # version before updating log_segment_ms_min from 60s to 10min

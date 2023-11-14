@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/topic_manifest.h"
@@ -114,7 +114,7 @@ struct topic_manifest_handler
                 _revision_id = model::initial_revision_id{i};
             } else if (_key == "segment_size") {
                 // NOTE: segment size and retention bytes are unsigned, but
-                // older versions of Redpanda could serialize them as negative.
+                // older versions of Funes could serialize them as negative.
                 // Just leave them empty.
                 _properties.segment_size = std::nullopt;
             } else if (_key == "retention_bytes") {

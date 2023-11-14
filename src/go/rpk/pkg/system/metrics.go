@@ -48,10 +48,10 @@ type stat struct {
 	stime uint64
 }
 
-var errRedpandaDown = errors.New("the local redpanda process isn't running")
+var errFunesDown = errors.New("the local funes process isn't running")
 
 func GatherMetrics(
-	fs afero.Fs, timeout time.Duration, y *config.RedpandaYaml,
+	fs afero.Fs, timeout time.Duration, y *config.FunesYaml,
 ) (*Metrics, error) {
 	var err, errs error
 	metrics := &Metrics{}
@@ -64,7 +64,7 @@ func GatherMetrics(
 	pidStr, err := utils.ReadEnsureSingleLine(fs, y.PIDFile())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return metrics, errRedpandaDown
+			return metrics, errFunesDown
 		}
 		errs = multierror.Append(errs, err)
 		return metrics, errs
@@ -75,7 +75,7 @@ func GatherMetrics(
 		return metrics, errs
 	}
 
-	metrics.CPUPercentage, err = redpandaCPUPercentage(fs, pid, timeout)
+	metrics.CPUPercentage, err = funesCPUPercentage(fs, pid, timeout)
 	if err != nil {
 		errs = multierror.Append(errs, err)
 	}
@@ -90,7 +90,7 @@ func GatherMetrics(
 	return metrics, errs
 }
 
-func redpandaCPUPercentage(
+func funesCPUPercentage(
 	fs afero.Fs, pid int, timeout time.Duration,
 ) (float64, error) {
 	clktck, err := sysconf.Sysconf(sysconf.SC_CLK_TCK)
@@ -147,9 +147,9 @@ func readStat(fs afero.Fs, pid int) (*stat, error) {
 	}, nil
 }
 
-func getFreeDiskSpaceMB(y *config.RedpandaYaml) (float64, error) {
+func getFreeDiskSpaceMB(y *config.FunesYaml) (float64, error) {
 	var stat syscall.Statfs_t
-	err := syscall.Statfs(y.Redpanda.Directory, &stat)
+	err := syscall.Statfs(y.Funes.Directory, &stat)
 	if err != nil {
 		return 0, err
 	}
@@ -158,6 +158,6 @@ func getFreeDiskSpaceMB(y *config.RedpandaYaml) (float64, error) {
 	return float64(freeSpaceBytes) / 1024.0 / 1024.0, nil
 }
 
-func IsErrRedpandaDown(err error) bool {
-	return errors.Is(err, errRedpandaDown)
+func IsErrFunesDown(err error) bool {
+	return errors.Is(err, errFunesDown)
 }

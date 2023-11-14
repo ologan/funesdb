@@ -32,7 +32,7 @@ constexpr std::string_view diagnostics_header() {
 }
 
 constexpr std::string_view confluence_reference() {
-    return "If you work at Redpanda please refer to "
+    return "If you work at Funes please refer to "
            "https://vectorizedio.atlassian.net/l/cp/iuEMd2NN\n";
 }
 

@@ -157,15 +157,15 @@ std::string tx_errc_category::message(int c) const {
     return fmt::format("{{{}}}", static_cast<tx_errc>(c));
 }
 
-kafka_stages::kafka_stages(
-  ss::future<> enq, ss::future<result<kafka_result>> offset_future)
+sql_stages::sql_stages(
+  ss::future<> enq, ss::future<result<sql_result>> offset_future)
   : request_enqueued(std::move(enq))
   , replicate_finished(std::move(offset_future)) {}
 
-kafka_stages::kafka_stages(raft::errc ec)
+sql_stages::sql_stages(raft::errc ec)
   : request_enqueued(ss::now())
   , replicate_finished(
-      ss::make_ready_future<result<kafka_result>>(make_error_code(ec))){};
+      ss::make_ready_future<result<sql_result>>(make_error_code(ec))){};
 
 bool topic_properties::is_compacted() const {
     if (!cleanup_policy_bitflags) {
@@ -201,7 +201,7 @@ bool topic_properties::requires_remote_erase() const {
     // A topic requires remote erase if it matches all of:
     // * Using tiered storage
     // * Not a read replica
-    // * Has redpanda.remote.delete=true
+    // * Has funes.remote.delete=true
     auto mode = shadow_indexing.value_or(model::shadow_indexing_mode::disabled);
     return mode != model::shadow_indexing_mode::disabled
            && !read_replica.value_or(false) && remote_delete;
@@ -1077,7 +1077,7 @@ operator<<(std::ostream& o, const set_topic_partitions_disabled_cmd_data& r) {
 
 std::ostream& operator<<(
   std::ostream& o, const feature_update_license_update_cmd_data& fulu) {
-    fmt::print(o, "{{redpanda_license {}}}", fulu.redpanda_license);
+    fmt::print(o, "{{funes_license {}}}", fulu.funes_license);
     return o;
 }
 
@@ -2032,11 +2032,11 @@ adl<cluster::incremental_topic_updates>::from(iobuf_parser& in) {
         updates.record_key_schema_id_validation_compat
           = adl<cluster::property_update<std::optional<bool>>>{}.from(in);
         updates.record_key_subject_name_strategy = adl<cluster::property_update<
-          std::optional<pandaproxy::schema_registry::subject_name_strategy>>>{}
+          std::optional<funesproxy::schema_registry::subject_name_strategy>>>{}
                                                      .from(in);
         updates.record_key_subject_name_strategy_compat
           = adl<cluster::property_update<std::optional<
-            pandaproxy::schema_registry::subject_name_strategy>>>{}
+            funesproxy::schema_registry::subject_name_strategy>>>{}
               .from(in);
         updates.record_value_schema_id_validation
           = adl<cluster::property_update<std::optional<bool>>>{}.from(in);
@@ -2044,11 +2044,11 @@ adl<cluster::incremental_topic_updates>::from(iobuf_parser& in) {
           = adl<cluster::property_update<std::optional<bool>>>{}.from(in);
         updates.record_value_subject_name_strategy
           = adl<cluster::property_update<std::optional<
-            pandaproxy::schema_registry::subject_name_strategy>>>{}
+            funesproxy::schema_registry::subject_name_strategy>>>{}
               .from(in);
         updates.record_value_subject_name_strategy_compat
           = adl<cluster::property_update<std::optional<
-            pandaproxy::schema_registry::subject_name_strategy>>>{}
+            funesproxy::schema_registry::subject_name_strategy>>>{}
               .from(in);
     }
 

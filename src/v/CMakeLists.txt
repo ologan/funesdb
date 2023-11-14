@@ -7,8 +7,8 @@ add_compile_options(-Wall)
 # When enabled clang-tidy will be invoked along side the compiler, and
 # clang-tidy warnings will be reported as errors.
 #
-option(REDPANDA_RUN_CLANG_TIDY "Enable clang-tidy checks" OFF)
-if(REDPANDA_RUN_CLANG_TIDY)
+option(FUNES_RUN_CLANG_TIDY "Enable clang-tidy checks" OFF)
+if(FUNES_RUN_CLANG_TIDY)
     find_program(CLANG_TIDY_COMMAND clang-tidy
         PATHS ${PROJECT_SOURCE_DIR}/vbuild/llvm/install/bin)
     if(NOT CLANG_TIDY_COMMAND)
@@ -38,25 +38,25 @@ if(REDPANDA_RUN_CLANG_TIDY)
     unset(clang_tidy_checks)
 endif()
 
-# Redpanda's internal build system constructs a Python virtual environment
+# Funes's internal build system constructs a Python virtual environment
 # executable using pex that contains all of the Python build dependencies. If
 # this isn't found, then fall back to the system Python3 interpreter.
-find_program(REDPANDA_PYTHON_EXECUTABLE "kafka-codegen-venv")
+find_program(FUNES_PYTHON_EXECUTABLE "sql-codegen-venv")
 
-if(REDPANDA_PYTHON_EXECUTABLE)
-    add_executable(RedpandaPython::Interpreter IMPORTED)
-    set_property(TARGET RedpandaPython::Interpreter
-        PROPERTY IMPORTED_LOCATION "${REDPANDA_PYTHON_EXECUTABLE}")
+if(FUNES_PYTHON_EXECUTABLE)
+    add_executable(FunesPython::Interpreter IMPORTED)
+    set_property(TARGET FunesPython::Interpreter
+        PROPERTY IMPORTED_LOCATION "${FUNES_PYTHON_EXECUTABLE}")
 else()
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    add_executable(RedpandaPython::Interpreter ALIAS Python3::Interpreter)
-    set(REDPANDA_PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
+    add_executable(FunesPython::Interpreter ALIAS Python3::Interpreter)
+    set(FUNES_PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
 endif()
-message(STATUS "Using Python interpeter: ${REDPANDA_PYTHON_EXECUTABLE}")
+message(STATUS "Using Python interpeter: ${FUNES_PYTHON_EXECUTABLE}")
 
 foreach(PYTHON_DEPENDENCY jsonschema jinja2)
     execute_process(
-        COMMAND ${REDPANDA_PYTHON_EXECUTABLE} -c "import ${PYTHON_DEPENDENCY}"
+        COMMAND ${FUNES_PYTHON_EXECUTABLE} -c "import ${PYTHON_DEPENDENCY}"
         RESULT_VARIABLE EXIT_CODE
         ERROR_QUIET
         OUTPUT_QUIET)
@@ -86,9 +86,9 @@ add_subdirectory(storage)
 add_subdirectory(raft)
 add_subdirectory(cluster)
 add_subdirectory(features)
-add_subdirectory(kafka)
+add_subdirectory(sql)
 add_subdirectory(reflection)
-add_subdirectory(pandaproxy)
+add_subdirectory(funesproxy)
 add_subdirectory(http)
 add_subdirectory(cloud_storage_clients)
 add_subdirectory(archival)
@@ -105,8 +105,8 @@ add_subdirectory(transform)
 
 option(ENABLE_GIT_VERSION "Build with Git metadata" OFF)
 
-# If enabled, the git hash is included in the Redpanda binary, which will
-# require relinking of at least the `redpanda` binary each time the hash
+# If enabled, the git hash is included in the Funes binary, which will
+# require relinking of at least the `funes` binary each time the hash
 # changes (switching branches, creating a new commit, etc).
 # Cannot be used when ENABLE_GIT_VERSION=off.
 option(ENABLE_GIT_HASH "Build with Git hash in metadata" OFF)
@@ -148,7 +148,7 @@ v_cc_library(
 )
 
 # main executables
-add_subdirectory(redpanda)
+add_subdirectory(funes)
 
 
 rp_test(

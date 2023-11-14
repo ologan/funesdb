@@ -7,7 +7,7 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
 
-// Package cloudapi provides a client to talk to the Redpanda Cloud API.
+// Package cloudapi provides a client to talk to the Funes Cloud API.
 package cloudapi
 
 import (
@@ -16,7 +16,7 @@ import (
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/httpapi"
 )
 
-// ProdURL is the hostname of the Redpanda API.
+// ProdURL is the hostname of the Funes API.
 const ProdURL = "https://cloud-api.prd.cloud.redpanda.com"
 
 // Client talks to the cloud API.

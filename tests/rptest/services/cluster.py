@@ -11,7 +11,7 @@ import functools
 import time
 import psutil
 
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 from ducktape.mark.resource import ClusterUseMetadata
 from ducktape.mark._mark import Mark
 
@@ -22,23 +22,23 @@ def cluster(log_allow_list=None,
             **kwargs):
     """
     Drop-in replacement for Ducktape `cluster` that imposes additional
-    redpanda-specific checks and defaults.
+    funes-specific checks and defaults.
 
     These go into a decorator rather than setUp/tearDown methods
     because they may raise errors that we would like to expose
     as test failures.
     """
-    def all_redpandas(test):
+    def all_funess(test):
         """
-        Most tests have a single RedpandaService at self.redpanda, but
+        Most tests have a single FunesService at self.funes, but
         it is legal to create multiple instances, e.g. for read replica tests.
         
         We find all replicas by traversing ducktape's internal service registry.
         """
-        yield test.redpanda
+        yield test.funes
 
         for svc in test.test_context.services:
-            if isinstance(svc, RedpandaService) and svc is not test.redpanda:
+            if isinstance(svc, FunesService) and svc is not test.funes:
                 yield svc
 
     def log_local_load(test_name, logger, t_initial, initial_disk_stats):
@@ -72,45 +72,45 @@ def cluster(log_allow_list=None,
 
         @functools.wraps(f)
         def wrapped(self, *args, **kwargs):
-            # This decorator will only work on test classes that have a RedpandaService,
-            # such as RedpandaTest subclasses
-            assert hasattr(self, 'redpanda')
+            # This decorator will only work on test classes that have a FunesService,
+            # such as FunesTest subclasses
+            assert hasattr(self, 'funes')
 
             t_initial = time.time()
             disk_stats_initial = psutil.disk_io_counters()
             try:
                 r = f(self, *args, **kwargs)
             except:
-                if not hasattr(self, 'redpanda') or self.redpanda is None:
-                    # We failed so early there isn't even a RedpandaService instantiated
+                if not hasattr(self, 'funes') or self.funes is None:
+                    # We failed so early there isn't even a FunesService instantiated
                     raise
 
                 log_local_load(self.test_context.test_name,
-                               self.redpanda.logger, t_initial,
+                               self.funes.logger, t_initial,
                                disk_stats_initial)
 
-                for redpanda in all_redpandas(self):
-                    redpanda.logger.exception(
-                        f"Test failed, doing failure checks on {redpanda.who_am_i()}..."
+                for funes in all_funess(self):
+                    funes.logger.exception(
+                        f"Test failed, doing failure checks on {funes.who_am_i()}..."
                     )
 
                     # Disabled to avoid addr2line hangs
-                    # (https://github.com/redpanda-data/redpanda/issues/5004)
-                    # self.redpanda.decode_backtraces()
+                    # (https://github.com/redpanda-data/funes/issues/5004)
+                    # self.funes.decode_backtraces()
 
-                    redpanda.cloud_storage_diagnostics()
+                    funes.cloud_storage_diagnostics()
 
-                    redpanda.raise_on_crash(log_allow_list=log_allow_list)
+                    funes.raise_on_crash(log_allow_list=log_allow_list)
 
                 raise
             else:
-                if not hasattr(self, 'redpanda') or self.redpanda is None:
-                    # We passed without instantiating a RedpandaService, for example
+                if not hasattr(self, 'funes') or self.funes is None:
+                    # We passed without instantiating a FunesService, for example
                     # in a skipped test
                     return r
 
                 log_local_load(self.test_context.test_name,
-                               self.redpanda.logger, t_initial,
+                               self.funes.logger, t_initial,
                                disk_stats_initial)
 
                 # In debug mode, any test writing too much traffic will impose too much
@@ -118,18 +118,18 @@ def cluster(log_allow_list=None,
                 # post-test check for total bytes written.
                 debug_mode_data_limit = 64 * 1024 * 1024
                 if hasattr(self, 'debug_mode') and self.debug_mode is True:
-                    bytes_written = self.redpanda.estimate_bytes_written()
+                    bytes_written = self.funes.estimate_bytes_written()
                     if bytes_written is not None:
-                        self.redpanda.logger.info(
+                        self.funes.logger.info(
                             f"Estimated bytes written: {bytes_written}")
                         if bytes_written > debug_mode_data_limit:
-                            self.redpanda.logger.error(
+                            self.funes.logger.error(
                                 f"Debug-mode test wrote too much data ({int(bytes_written) // (1024 * 1024)}MiB)"
                             )
 
-                for redpanda in all_redpandas(self):
-                    redpanda.logger.info(
-                        f"Test passed, doing log checks on {redpanda.who_am_i()}..."
+                for funes in all_funess(self):
+                    funes.logger.info(
+                        f"Test passed, doing log checks on {funes.who_am_i()}..."
                     )
                     if check_allowed_error_logs:
                         # Only do log inspections on tests that are otherwise
@@ -137,36 +137,36 @@ def cluster(log_allow_list=None,
                         # shutdown, thereby avoiding having to add the various
                         # gate_closed etc errors to our allow list.
                         # TODO: extend this to cover shutdown logging too, and
-                        # clean up redpanda to not log so many errors on shutdown.
+                        # clean up funes to not log so many errors on shutdown.
                         try:
-                            redpanda.raise_on_bad_logs(
+                            funes.raise_on_bad_logs(
                                 allow_list=log_allow_list)
                         except:
-                            redpanda.cloud_storage_diagnostics()
+                            funes.cloud_storage_diagnostics()
                             raise
 
                     if check_for_storage_usage_inconsistencies:
                         try:
-                            redpanda.raise_on_storage_usage_inconsistency()
+                            funes.raise_on_storage_usage_inconsistency()
                         except:
-                            redpanda.cloud_storage_diagnostics()
+                            funes.cloud_storage_diagnostics()
                             raise
 
-                self.redpanda.validate_controller_log()
+                self.funes.validate_controller_log()
 
-                if self.redpanda.si_settings is not None:
+                if self.funes.si_settings is not None:
                     try:
-                        self.redpanda.maybe_do_internal_scrub()
-                        self.redpanda.stop_and_scrub_object_storage()
+                        self.funes.maybe_do_internal_scrub()
+                        self.funes.stop_and_scrub_object_storage()
                     except:
-                        self.redpanda.cloud_storage_diagnostics()
+                        self.funes.cloud_storage_diagnostics()
                         raise
 
                 # Finally, if the test passed and all post-test checks
                 # also passed, we may trim the logs to INFO level to
                 # save space.
-                for redpanda in all_redpandas(self):
-                    redpanda.trim_logs()
+                for funes in all_funess(self):
+                    funes.trim_logs()
 
                 return r
 

@@ -111,7 +111,7 @@ FIXTURE_TEST(test_feature_table_snapshots, cluster_test_fixture) {
     // Switch on the dummy test features for use in the test.  It is safe
     // to leave this set for the remainder of process lifetime, as other
     // tests should not notice or care that there is an extra feature flag.
-    setenv("__REDPANDA_TEST_FEATURES", "true", 1);
+    setenv("__FUNES_TEST_FEATURES", "true", 1);
 
     // Start up a node normally
     const model::node_id id0{0};

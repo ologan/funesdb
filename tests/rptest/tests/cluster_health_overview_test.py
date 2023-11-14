@@ -11,24 +11,24 @@ import random
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 
 from ducktape.utils.util import wait_until
 
 
-class ClusterHealthOverviewTest(RedpandaTest):
+class ClusterHealthOverviewTest(FunesTest):
     def __init__(self, test_context):
         super(ClusterHealthOverviewTest, self).__init__(
             test_context=test_context,
             num_brokers=5,
             extra_rp_conf={
                 # Work around bug where leadership transfers cause bad health reports
-                # https://github.com/redpanda-data/redpanda/issues/5253
+                # https://github.com/redpanda-data/funes/issues/5253
                 'enable_leader_balancer': False
             })
 
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     def create_topics(self):
         topics = []
@@ -81,15 +81,15 @@ class ClusterHealthOverviewTest(RedpandaTest):
         # stop one node, cluster should become unhealthy with one node down
         # reported and no leaderless partitions
 
-        first_down = random.choice(self.redpanda.nodes)
-        self.redpanda.stop_node(first_down)
+        first_down = random.choice(self.funes.nodes)
+        self.funes.stop_node(first_down)
 
         def one_node_down():
             hov = self.get_health()
             if not hov['is_healthy'] and len(hov['nodes_down']) > 0:
                 # when the health report flips to not healthy, we check that
                 # the expected node is reported as down and unhealthy reasons line up
-                assert [self.redpanda.idx(first_down)] == hov['nodes_down']
+                assert [self.funes.idx(first_down)] == hov['nodes_down']
                 # next check is "in" instead of "==" because we may also have under_replicated_partitions
                 assert 'nodes_down' in hov['unhealthy_reasons']
                 return True
@@ -100,11 +100,11 @@ class ClusterHealthOverviewTest(RedpandaTest):
         # stop another node, cluster should start reporting leaderless
         # partitions with two out of five nodes down
 
-        second_down = random.choice(self.redpanda.nodes)
-        while self.redpanda.idx(second_down) == self.redpanda.idx(first_down):
-            second_down = random.choice(self.redpanda.nodes)
+        second_down = random.choice(self.funes.nodes)
+        while self.funes.idx(second_down) == self.funes.idx(first_down):
+            second_down = random.choice(self.funes.nodes)
 
-        self.redpanda.stop_node(second_down)
+        self.funes.stop_node(second_down)
 
         def two_nodes_down():
             hov = self.get_health()
@@ -121,7 +121,7 @@ class ClusterHealthOverviewTest(RedpandaTest):
         wait_until(two_nodes_down, 30, 2)
 
         # restart both nodes, cluster should be healthy back again
-        self.redpanda.start_node(first_down)
-        self.redpanda.start_node(second_down)
+        self.funes.start_node(first_down)
+        self.funes.start_node(second_down)
 
         self.wait_until_healthy()

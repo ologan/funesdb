@@ -53,7 +53,7 @@ func NewClient(fs afero.Fs, p *config.RpkProfile) (*sr.Client, error) {
 	}
 
 	if p.HasSASLCredentials() {
-		opts = append(opts, sr.BasicAuth(p.KafkaAPI.SASL.User, p.KafkaAPI.SASL.Password))
+		opts = append(opts, sr.BasicAuth(p.SQLAPI.SASL.User, p.SQLAPI.SASL.Password))
 	}
 	return sr.NewClient(opts...)
 }

@@ -43,14 +43,14 @@
       "name": "sanitize",
       "hidden": true,
       "cacheVariables": {
-        "Redpanda_ENABLE_SANITIZERS": "ON"
+        "Funes_ENABLE_SANITIZERS": "ON"
       }
     },
     {
       "name": "coverage-type",
       "hidden": true,
       "cacheVariables": {
-        "Redpanda_ENABLE_COVERAGE": "ON"
+        "Funes_ENABLE_COVERAGE": "ON"
       }
     },
     {

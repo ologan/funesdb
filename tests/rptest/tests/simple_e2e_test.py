@@ -13,7 +13,7 @@ import time
 from rptest.services.failure_injector import FailureInjector, FailureSpec
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.utils.mode_checks import skip_debug_mode
 
@@ -32,7 +32,7 @@ class SimpleEndToEndTest(EndToEndTest):
         are multiple producers and log is evicted
         '''
         # use small segment size to enable log eviction
-        self.start_redpanda(num_nodes=3,
+        self.start_funes(num_nodes=3,
                             extra_rp_conf={
                                 "log_segment_size": 1048576,
                                 "retention_bytes": 5242880,
@@ -57,7 +57,7 @@ class SimpleEndToEndTest(EndToEndTest):
         This test validates if verifiable consumer is exiting early when consumed from unexpected offset
         '''
 
-        self.start_redpanda(num_nodes=3)
+        self.start_funes(num_nodes=3)
 
         spec = TopicSpec(partition_count=1, replication_factor=3)
         self.client().create_topic(spec)
@@ -88,10 +88,10 @@ class SimpleEndToEndTest(EndToEndTest):
         ev = threading.Event()
 
         def inject_failures():
-            fi = FailureInjector(self.redpanda)
+            fi = FailureInjector(self.funes)
             while not ev.is_set():
 
-                node = random.choice(self.redpanda.nodes)
+                node = random.choice(self.funes.nodes)
                 fi.inject_failure(
                     FailureSpec(type=FailureSpec.FAILURE_KILL,
                                 length=0,
@@ -99,7 +99,7 @@ class SimpleEndToEndTest(EndToEndTest):
                 time.sleep(5)
 
         # use small segment size to enable log eviction
-        self.start_redpanda(num_nodes=3,
+        self.start_funes(num_nodes=3,
                             si_settings=SISettings(
                                 test_context=self.test_context,
                                 fast_uploads=True),

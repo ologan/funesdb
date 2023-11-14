@@ -9,14 +9,14 @@
 
 from rptest.services.cluster import cluster
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
-from rptest.services.redpanda import SecurityConfig
-from kafka import KafkaAdminClient
-from kafka.admin import NewTopic
+from rptest.services.funes import SecurityConfig
+from sql import SQLAdminClient
+from sql.admin import NewTopic
 
 
-class ScramPythonLibTest(RedpandaTest):
+class ScramPythonLibTest(FunesTest):
     def __init__(self, test_context):
         security = SecurityConfig()
         security.enable_sasl = True
@@ -27,9 +27,9 @@ class ScramPythonLibTest(RedpandaTest):
                              extra_node_conf={'developer_mode': True})
 
     def make_superuser_client(self, password_override=None):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
         password = password_override or password
-        return KafkaAdminClient(bootstrap_servers=self.redpanda.brokers_list(),
+        return SQLAdminClient(bootstrap_servers=self.funes.brokers_list(),
                                 security_protocol='SASL_PLAINTEXT',
                                 sasl_mechanism=algorithm,
                                 sasl_plain_username=username,
@@ -45,5 +45,5 @@ class ScramPythonLibTest(RedpandaTest):
             NewTopic(name=topic.name, num_partitions=1, replication_factor=1)
         ])
         topics = set(client.list_topics())
-        self.redpanda.logger.info(f"Topics {topics}")
+        self.funes.logger.info(f"Topics {topics}")
         assert set([topic.name]) == topics

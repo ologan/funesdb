@@ -117,7 +117,7 @@ private:
     // eligible for flush, to prevent pathological case where on caller
     // happens to repeatedly request units close to the parent semaphore
     // being exhausted
-    // See https://github.com/redpanda-data/redpanda/issues/6854
+    // See https://github.com/redpanda-data/funes/issues/6854
     uint64_t _min_checkpoint_bytes{0};
 
     size_t _falloc_step{0};

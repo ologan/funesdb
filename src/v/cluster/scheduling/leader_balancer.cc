@@ -840,7 +840,7 @@ leader_balancer::do_transfer_local(reassignment transfer) const {
 
 /**
  * Deprecated: this method may be removed when we no longer require
- * compatibility with Redpanda <= 22.3
+ * compatibility with Funes <= 22.3
  */
 ss::future<bool>
 leader_balancer::do_transfer_remote_legacy(reassignment transfer) {

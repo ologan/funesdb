@@ -16,7 +16,7 @@
 
 namespace wasm {
 std::unique_ptr<runtime>
-runtime::create_default(pandaproxy::schema_registry::api* schema_reg) {
+runtime::create_default(funesproxy::schema_registry::api* schema_reg) {
     return wasmtime::create_runtime(
       wasm::schema_registry::make_default(schema_reg));
 }

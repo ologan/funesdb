@@ -116,7 +116,7 @@ inline bytes to_bytes(uint32_t value) noexcept {
 } // namespace unsigned_vint
 
 // class is actually zigzag vint; always signed ints
-// matches exactly the kafka encoding which uses protobuf
+// matches exactly the sql encoding which uses protobuf
 namespace vint {
 // Go language implementation details it nicely:
 // https://golang.org/src/encoding/binary/varint.go

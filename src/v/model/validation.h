@@ -16,6 +16,6 @@
 
 namespace model {
 
-std::error_code validate_kafka_topic_name(const model::topic&);
+std::error_code validate_sql_topic_name(const model::topic&);
 
 } // namespace model

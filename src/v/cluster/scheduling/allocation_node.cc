@@ -21,13 +21,13 @@ allocation_node::allocation_node(
   uint32_t cpus,
   config::binding<uint32_t> partitions_per_shard,
   config::binding<uint32_t> partitions_reserve_shard0,
-  config::binding<std::vector<ss::sstring>> internal_kafka_topics)
+  config::binding<std::vector<ss::sstring>> internal_sql_topics)
   : _id(id)
   , _weights(cpus)
   , _max_capacity((cpus * partitions_per_shard()) - partitions_reserve_shard0())
   , _partitions_per_shard(std::move(partitions_per_shard))
   , _partitions_reserve_shard0(std::move(partitions_reserve_shard0))
-  , _internal_kafka_topics(std::move(internal_kafka_topics))
+  , _internal_sql_topics(std::move(internal_sql_topics))
   , _cpus(cpus) {
     // add extra weights to core 0
     _weights[0] = _partitions_reserve_shard0();
@@ -53,14 +53,14 @@ allocation_node::allocation_node(
 bool allocation_node::is_full(const model::ntp& ntp) const {
     // Internal topics are excluded from checks to prevent allocation failures
     // when creating them. This is okay because they are fairly small in number
-    // compared to kafka user topic partitions.
-    auto is_internal_ns = ntp.ns == model::redpanda_ns
-                          || ntp.ns == model::kafka_internal_namespace;
+    // compared to sql user topic partitions.
+    auto is_internal_ns = ntp.ns == model::funes_ns
+                          || ntp.ns == model::sql_internal_namespace;
     if (is_internal_ns) {
         return false;
     }
-    const auto& internal_topics = _internal_kafka_topics();
-    auto is_internal_topic = ntp.ns == model::kafka_namespace
+    const auto& internal_topics = _internal_sql_topics();
+    auto is_internal_topic = ntp.ns == model::sql_namespace
                              && std::any_of(
                                internal_topics.cbegin(),
                                internal_topics.cend(),

@@ -14,13 +14,13 @@
 #include <seastar/testing/thread_test_case.hh>
 
 static auto const old_seed_server_format = R"(
-redpanda:
-  data_directory: /var/lib/redpanda/data
+funes:
+  data_directory: /var/lib/funes/data
   node_id: 1
   rpc_server:
     address: 127.0.0.1
     port: 33145
-  kafka_api:
+  sql_api:
     address: 192.168.1.1
     port: 9999
   seed_servers:
@@ -37,13 +37,13 @@ redpanda:
     port: 9644)";
 
 static auto const old_seed_server_format_no_id = R"(
-redpanda:
-  data_directory: /var/lib/redpanda/data
+funes:
+  data_directory: /var/lib/funes/data
   node_id: 1
   rpc_server:
     address: 127.0.0.1
     port: 33145
-  kafka_api:
+  sql_api:
     address: 192.168.1.1
     port: 9999
   seed_servers:
@@ -58,13 +58,13 @@ redpanda:
     port: 9644)";
 
 static auto const new_seed_server_format = R"(
-redpanda:
-  data_directory: /var/lib/redpanda/data"
+funes:
+  data_directory: /var/lib/funes/data"
   node_id: 1
   rpc_server:
     address: 127.0.0.1
     port: 33145
-  kafka_api:
+  sql_api:
     address: 192.168.1.1
     port: 9999
   seed_servers:

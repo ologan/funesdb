@@ -114,7 +114,7 @@ ss::future<> update_broker_client(
 }
 
 model::broker make_self_broker(const config::node_config& node_cfg) {
-    auto kafka_addr = node_cfg.advertised_kafka_api();
+    auto sql_addr = node_cfg.advertised_sql_api();
     auto rpc_addr = node_cfg.advertised_rpc_api();
 
     // Calculate memory size
@@ -122,7 +122,7 @@ model::broker make_self_broker(const config::node_config& node_cfg) {
     uint64_t total_mem = shard_mem.total_memory() * ss::smp::count;
     // If memory is <1GB, we'll return zero.  That case is already
     // handled when reading this field (e.g. in
-    // `partition_allocator::check_cluster_limits`) because earlier redpanda
+    // `partition_allocator::check_cluster_limits`) because earlier funes
     // versions always returned zero here.
     uint32_t total_mem_gb = total_mem >> 30;
 
@@ -141,7 +141,7 @@ model::broker make_self_broker(const config::node_config& node_cfg) {
                                : *node_cfg.node_id();
     return model::broker(
       node_id,
-      kafka_addr,
+      sql_addr,
       rpc_addr,
       node_cfg.rack,
       model::broker_properties{
@@ -255,7 +255,7 @@ cluster::errc map_update_interruption_error_code(std::error_code ec) {
 
 partition_allocation_domain
 get_allocation_domain(const model::topic_namespace_view tp_ns) {
-    if (tp_ns == model::kafka_consumer_offsets_nt) {
+    if (tp_ns == model::sql_consumer_offsets_nt) {
         return partition_allocation_domains::consumer_offsets;
     }
     return partition_allocation_domains::common;
@@ -403,7 +403,7 @@ std::optional<ss::sstring> check_result_configuration(
           new_configuration.properties().cores);
     }
     /**
-     * When cluster member configuration changes Redpanda by default doesn't
+     * When cluster member configuration changes Funes by default doesn't
      * allow the change if a new cluster configuration would have two
      * listeners pointing to the same address. This was in conflict with the
      * logic of join request which didn't execute validation of resulting
@@ -413,16 +413,16 @@ std::optional<ss::sstring> check_result_configuration(
     const bool rpc_address_changed = current_configuration.rpc_address()
                                      != new_configuration.rpc_address();
     std::vector<model::broker_endpoint> changed_endpoints;
-    for (auto& new_ep : new_configuration.kafka_advertised_listeners()) {
+    for (auto& new_ep : new_configuration.sql_advertised_listeners()) {
         auto it = std::find_if(
-          current_configuration.kafka_advertised_listeners().begin(),
-          current_configuration.kafka_advertised_listeners().end(),
+          current_configuration.sql_advertised_listeners().begin(),
+          current_configuration.sql_advertised_listeners().end(),
           [&new_ep](const model::broker_endpoint& ep) {
               return ep.name == new_ep.name;
           });
 
         if (
-          it == current_configuration.kafka_advertised_listeners().end()
+          it == current_configuration.sql_advertised_listeners().end()
           || it->address != new_ep.address) {
             changed_endpoints.push_back(new_ep);
         }
@@ -449,15 +449,15 @@ std::optional<ss::sstring> check_result_configuration(
 
         for (auto& changed_ep : changed_endpoints) {
             auto any_is_the_same = std::any_of(
-              current.broker.kafka_advertised_listeners().begin(),
-              current.broker.kafka_advertised_listeners().end(),
+              current.broker.sql_advertised_listeners().begin(),
+              current.broker.sql_advertised_listeners().end(),
               [&changed_ep](const model::broker_endpoint& ep) {
                   return changed_ep == ep;
               });
-            // error, kafka endpoint would point to the same addresses
+            // error, sql endpoint would point to the same addresses
             if (any_is_the_same) {
                 return fmt::format(
-                  "duplicated kafka advertised endpoint {} with existing node "
+                  "duplicated sql advertised endpoint {} with existing node "
                   "{}",
                   changed_ep,
                   id);

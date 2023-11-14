@@ -46,7 +46,7 @@ absl::flat_hash_set<id> ids(std::initializer_list<int> ids) {
 }
 
 model::topic_namespace topic(ss::sstring t) {
-    return {model::kafka_namespace, model::topic(t)};
+    return {model::sql_namespace, model::topic(t)};
 }
 meta make_meta(const metadata_spec& spec) {
     std::vector<model::topic_namespace> outputs;

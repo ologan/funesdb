@@ -38,7 +38,7 @@ void murmurhash3_x64_128(
 uint32_t murmur2(
   const void* key,
   std::size_t len,
-  // Default Seed is the Kafka partition hashing seed. Since this is the main
+  // Default Seed is the SQL partition hashing seed. Since this is the main
   // intention for this hashing function, we make this the default value
-  // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/utils/Utils.java#L441
+  // https://github.com/apache/sql/blob/trunk/clients/src/main/java/org/apache/sql/common/utils/Utils.java#L441
   uint32_t seed = 0x9747b28c);

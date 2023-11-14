@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/types.h"
@@ -117,12 +117,12 @@ std::ostream&
 operator<<(std::ostream& o, const spillover_manifest_path_components& c) {
     fmt::print(
       o,
-      "{{base: {}, last: {}, base_kafka: {}, next_kafka: {}, base_ts: {}, "
+      "{{base: {}, last: {}, base_sql: {}, next_sql: {}, base_ts: {}, "
       "last_ts: {}}}",
       c.base,
       c.last,
-      c.base_kafka,
-      c.next_kafka,
+      c.base_sql,
+      c.next_sql,
       c.base_ts,
       c.last_ts);
     return o;

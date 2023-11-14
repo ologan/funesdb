@@ -8,15 +8,15 @@
 # by the Apache License, Version 2.0
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
-from rptest.services.redpanda import LoggingConfig
+from rptest.services.funes import LoggingConfig
 from rptest.clients.types import TopicSpec
 from rptest.services.kgo_repeater_service import repeater_traffic
 from rptest.utils.mode_checks import skip_debug_mode
 
 
-class CPUProfilerAdminAPITest(RedpandaTest):
+class CPUProfilerAdminAPITest(FunesTest):
     topics = (TopicSpec(partition_count=30, replication_factor=3), )
 
     def __init__(self, test_context):
@@ -30,13 +30,13 @@ class CPUProfilerAdminAPITest(RedpandaTest):
                 "cpu_profiler_sample_period_ms": 50,
             })
 
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     @cluster(num_nodes=4)
     def test_get_cpu_profile(self):
         # Provide traffic so there is something to sample.
         with repeater_traffic(context=self.test_context,
-                              redpanda=self.redpanda,
+                              funes=self.funes,
                               topic=self.topic,
                               msg_size=4096,
                               workers=1) as repeater:

@@ -27,14 +27,14 @@
 
 namespace model {
 
-constexpr std::string_view kafka_ns_view = "kafka";
+constexpr std::string_view sql_ns_view = "sql";
 
 /**
- * @brief A ktp is an ntp in the kafka namespace.
+ * @brief A ktp is an ntp in the sql namespace.
  *
- * The namespace is implicitly kafka, but for performance reasons, the namespace
+ * The namespace is implicitly sql, but for performance reasons, the namespace
  * is not actually stored. I.e., an instance of this type logically represents
- * the 3-tuple ("kafka", <topic>, <partition>) but only the (<topic>,
+ * the 3-tuple ("sql", <topic>, <partition>) but only the (<topic>,
  * <partition>) part is stored.
  *
  * Avoiding storing the namespace makes creating, copying, hashing and
@@ -45,8 +45,8 @@ constexpr std::string_view kafka_ns_view = "kafka";
  *
  * This class can be compared with an ntp and will be equal if the
  * 3-tuple is equal. Similarly it can be hashed with the same result
- * as an ntp in the kafka namespace. This means you can replace a use
- * of ntp with ktp for topics in the kafka namespace, but still inter-
+ * as an ntp in the sql namespace. This means you can replace a use
+ * of ntp with ktp for topics in the sql namespace, but still inter-
  * operate with ntp objects, e.g., as keys in a hash table (a transparent
  * comparator is needed).
  */
@@ -71,7 +71,7 @@ public:
     /**
      * @brief Construct a new ktp from topic and partition id.
      *
-     * The namespace is implitly "kafka".
+     * The namespace is implitly "sql".
      *
      * @param t the topic for the ktp
      * @param id the partition id for the ktp
@@ -93,7 +93,7 @@ public:
     /**
      * @brief Return the equivalent ntp object.
      *
-     * Returns an ntp object in the kafka namespace, with the
+     * Returns an ntp object in the sql namespace, with the
      * same topic and partition as this object. For any ktp
      * object k, it is always the case that:
      *
@@ -101,15 +101,15 @@ public:
      *
      * This object returns by-value, so in general may perform
      * an allocation for the topic name if it is longer than
-     * the sstring SSO threshold: the "kafka" namespace is
+     * the sstring SSO threshold: the "sql" namespace is
      * smaller than the SSO threshold and won't allocate.
      */
-    ntp to_ntp() const { return {kafka_namespace, tp}; };
+    ntp to_ntp() const { return {sql_namespace, tp}; };
 
     /**
      * @brief Return a topic namespace view corresponding to this object.
      *
-     * Return a topic_namespace_view with kafka as the namespace and
+     * Return a topic_namespace_view with sql as the namespace and
      * this topic.
      *
      * The view points to inside this object, so its lifetime (or at least
@@ -118,7 +118,7 @@ public:
      * Does not allocate as the view simply points to existing objects.
      */
     topic_namespace_view as_tn_view() const {
-        return {kafka_namespace, get_topic()};
+        return {sql_namespace, get_topic()};
     }
 
     /**
@@ -130,7 +130,7 @@ public:
      * @brief Return a topic partition view corresponding to this object.
      *
      * Return a topic_partition_view over this object's topic and partition.
-     * Note that a topic_partition_view does not have an implicit "kafka"
+     * Note that a topic_partition_view does not have an implicit "sql"
      * namespace so this conversion loses some information.
      *
      * The view points inside this object, so its lifetime must be a subset of
@@ -167,11 +167,11 @@ public:
     /**
      * @brief Returns the ktp's namespace as a string_view.
      *
-     * Of course, the namespace is always "kafka", but this method
+     * Of course, the namespace is always "sql", but this method
      * is provided to ease interop with other types which may have
      * variable namespaces.
      */
-    constexpr const std::string_view get_ns() const { return kafka_ns_view; }
+    constexpr const std::string_view get_ns() const { return sql_ns_view; }
 
     /**
      * @brief Compare this object with another ktp.
@@ -186,11 +186,11 @@ public:
      *
      * Although this must compare the namespaces it is still in practice faster
      * than an ntp <-> ntp comparison, because one side of the namespace
-     * comparison the constexpr string "kafka", which leads to very efficient
+     * comparison the constexpr string "sql", which leads to very efficient
      * code generation (an inlined, fixed-size memcmp) for that comparison.
      */
     bool operator==(const ntp& other) const {
-        return tp_equals(other.tp, tp) && kafka_ns_view == other.ns();
+        return tp_equals(other.tp, tp) && sql_ns_view == other.ns();
     }
 
     friend std::ostream& operator<<(std::ostream& os, const ktp& t) {
@@ -232,11 +232,11 @@ struct hash<model::ktp> {
      * @brief The hash specialization for ktp.
      *
      * Compatible with the hash for ntp: a ktp will return the same hash as an
-     * ntp with the same topic, partition and the "kafka" namespace.
+     * ntp with the same topic, partition and the "sql" namespace.
      */
     size_t operator()(const model::ktp& ktp) const {
         return detail::ntp_hash(
-          model::kafka_ns_view, ktp.get_topic()(), ktp.get_partition());
+          model::sql_ns_view, ktp.get_topic()(), ktp.get_partition());
     }
 };
 } // namespace std
@@ -277,7 +277,7 @@ struct ktp_with_hash : public ktp {
     /**
      * @brief Construct a ktp_with_hash from topic and partition id.
      *
-     * The namespace is implitly "kafka" and the hash is calculated at
+     * The namespace is implitly "sql" and the hash is calculated at
      * construction and cached within the object.
      */
     ktp_with_hash(model::topic t, model::partition_id id)

@@ -55,7 +55,7 @@ feature_backend::apply_update(model::record_batch b) {
       },
       [this](feature_update_license_update_cmd update) {
           return _feature_table.invoke_on_all(
-            [license = std::move(update.key.redpanda_license)](
+            [license = std::move(update.key.funes_license)](
               features::feature_table& t) mutable {
                 t.set_license(std::move(license));
             });

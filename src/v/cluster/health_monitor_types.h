@@ -150,7 +150,7 @@ struct node_health_report
     ss::chunked_fifo<topic_status> topics;
 
     /*
-     * nodes running old versions of redpanda will assert that they can decode
+     * nodes running old versions of funes will assert that they can decode
      * a message they receive by requiring the encoded version to be <= to the
      * latest that that node understands.
      *

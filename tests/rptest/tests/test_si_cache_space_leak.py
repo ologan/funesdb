@@ -17,12 +17,12 @@ import time
 
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import SISettings
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import SISettings
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierRandomConsumer
 
 
-class ShadowIndexingCacheSpaceLeakTest(RedpandaTest):
+class ShadowIndexingCacheSpaceLeakTest(FunesTest):
     """
     The test checks that SI cache doesn't exhibit a resource leak.
     In order to do this the test puts pressure to SI cache by settings its
@@ -72,20 +72,20 @@ class ShadowIndexingCacheSpaceLeakTest(RedpandaTest):
         )
 
     def init_producer(self, msg_size, num_messages):
-        self._producer = KgoVerifierProducer(self._ctx, self.redpanda,
+        self._producer = KgoVerifierProducer(self._ctx, self.funes,
                                              self.topic, msg_size,
                                              num_messages,
                                              [self._verifier_node])
 
     def init_consumer(self, msg_size, concurrency):
         self._consumer = KgoVerifierRandomConsumer(
-            self._ctx, self.redpanda, self.topic, msg_size,
+            self._ctx, self.funes, self.topic, msg_size,
             self.rand_consumer_msgs_per_pass, concurrency,
             [self._verifier_node])
 
     def free_nodes(self):
         super().free_nodes()
-        wait_until(lambda: self.redpanda.sockets_clear(self._verifier_node),
+        wait_until(lambda: self.funes.sockets_clear(self._verifier_node),
                    timeout_sec=120,
                    backoff_sec=10)
         self.test_context.cluster.free_single(self._verifier_node)
@@ -103,7 +103,7 @@ class ShadowIndexingCacheSpaceLeakTest(RedpandaTest):
         self._producer.start(clean=False)
 
         def s3_has_some_data():
-            objects = list(self.redpanda.get_objects_from_si())
+            objects = list(self.funes.get_objects_from_si())
             total_size = 0
             for o in objects:
                 total_size += o.content_length
@@ -124,14 +124,14 @@ class ShadowIndexingCacheSpaceLeakTest(RedpandaTest):
                 # files that were deleted by retention previously but
                 # still kept open because they're used by the consumer.
                 #
-                # Do not use an absolute path, because the redpanda data
+                # Do not use an absolute path, because the funes data
                 # directory may have been a symlink & the path in lsof
                 # will be the underlying storage.
                 return "data/cloud_storage_cache" in fname or fname == "(deleted)"
 
             files_count = 0
-            for node in self.redpanda.nodes:
-                files = self.redpanda.lsof_node(node)
+            for node in self.funes.nodes:
+                files = self.funes.lsof_node(node)
                 cache_files = [f for f in files if is_cache_file(f)]
                 for f in cache_files:
                     self.logger.debug(f"Open file: {f}")

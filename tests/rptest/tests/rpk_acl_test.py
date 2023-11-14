@@ -9,14 +9,14 @@
 
 from rptest.services.failure_injector import make_failure_injector, FailureSpec
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool, RpkException
-from rptest.services.redpanda import SecurityConfig
+from rptest.services.funes import SecurityConfig
 from rptest.util import expect_exception
 from ducktape.utils.util import wait_until
 
 
-class RpkACLTest(RedpandaTest):
+class RpkACLTest(FunesTest):
     username = "red"
     password = "panda"
     mechanism = "SCRAM-SHA-256"
@@ -32,14 +32,14 @@ class RpkACLTest(RedpandaTest):
                              extra_rp_conf={'election_timeout_ms': 10000},
                              *args,
                              **kwargs)
-        self._rpk = RpkTool(redpanda=self.redpanda,
+        self._rpk = RpkTool(funes=self.funes,
                             username=self.username,
                             password=self.password,
                             sasl_mechanism=self.mechanism)
-        self.superuser = self.redpanda.SUPERUSER_CREDENTIALS
+        self.superuser = self.funes.SUPERUSER_CREDENTIALS
 
     def _superclient(self):
-        return RpkTool(self.redpanda,
+        return RpkTool(self.funes,
                        username=self.superuser.username,
                        password=self.superuser.password,
                        sasl_mechanism=self.mechanism)
@@ -61,23 +61,23 @@ class RpkACLTest(RedpandaTest):
                                        self.superuser.algorithm)
         described = superclient.acl_list()
         assert 'CREATE' in described, "Failed to modify ACL"
-        assert self.redpanda.search_log_any(
+        assert self.funes.search_log_any(
             ".*Failed waiting on catchup with controller leader.*") is False
 
         # Network partition the leader away from the rest of the cluster
-        with make_failure_injector(self.redpanda) as fi:
+        with make_failure_injector(self.funes) as fi:
             fi.inject_failure(
                 FailureSpec(FailureSpec.FAILURE_ISOLATE,
-                            self.redpanda.controller()))
+                            self.funes.controller()))
 
-            # Timeout must be larger then hardcoded timeout of 5s within redpanda
+            # Timeout must be larger then hardcoded timeout of 5s within funes
             _ = superclient.acl_list(request_timeout_overhead=30)
 
             # Of the other remaining nodes, none can be declared a leader before
             # the election timeout occurs; also the "current" leader is technically
             # stale so it cannot be sure its returning the freshest data either. In
             # all cases the log below should be observed on the node handling the req.
-            assert self.redpanda.search_log_any(
+            assert self.funes.search_log_any(
                 ".*Failed waiting on catchup with controller leader.*") is True
 
     @cluster(num_nodes=3)
@@ -135,7 +135,7 @@ class RpkACLTest(RedpandaTest):
                        timeout_sec=60,
                        backoff_sec=5)
 
-        rpk_two = RpkTool(self.redpanda,
+        rpk_two = RpkTool(self.funes,
                           username=self.username,
                           password=new_password,
                           sasl_mechanism=self.mechanism)

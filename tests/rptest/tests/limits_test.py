@@ -11,13 +11,13 @@ import random
 
 from rptest.clients.default import DefaultClient
 from rptest.clients.rpk import RpkException, RpkTool
-from rptest.services import redpanda
+from rptest.services import funes
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 import string
 
 
@@ -29,14 +29,14 @@ def _message_to_large(e: RpkException):
     return "MESSAGE_TOO_LARGE" in e.stderr
 
 
-class LimitsTest(RedpandaTest):
+class LimitsTest(FunesTest):
     def _rand_string(sz):
         return ''.join(
             random.choice(string.ascii_letters + string.digits)
             for _ in range(sz))
 
     def assert_produce_result(self, topic, size, failure_predicate=None):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def expected_result():
             try:
@@ -51,16 +51,16 @@ class LimitsTest(RedpandaTest):
         wait_until(expected_result, 30, 1)
 
     @cluster(num_nodes=3)
-    def test_kafka_request_max_size(self):
+    def test_sql_request_max_size(self):
         topic = TopicSpec(partition_count=1)
         # create topic
-        DefaultClient(self.redpanda).create_topic(topic)
+        DefaultClient(self.funes).create_topic(topic)
         # produce 512KB message
         self.assert_produce_result(topic.name, 512 * 1024)
         # set request max bytes to 50KB
         new_limit = 50 * 1024
-        rpk = RpkTool(self.redpanda)
-        rpk.cluster_config_set("kafka_request_max_bytes", str(new_limit))
+        rpk = RpkTool(self.funes)
+        rpk.cluster_config_set("sql_request_max_bytes", str(new_limit))
 
         self.assert_produce_result(topic.name,
                                    512 * 1024,
@@ -70,15 +70,15 @@ class LimitsTest(RedpandaTest):
     def test_batch_max_size(self):
         # create topic
         topics = [TopicSpec(name=f"limits-test-{n}") for n in range(3)]
-        DefaultClient(self.redpanda).create_topic(topics)
+        DefaultClient(self.funes).create_topic(topics)
         # produce 512KB message to each topic
         for t in topics:
             self.assert_produce_result(t.name, 128 * 1024)
         # change the default value for batch max bytes
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         new_limit = 50 * 1024
-        rpk = RpkTool(self.redpanda)
-        rpk.cluster_config_set('kafka_batch_max_bytes', str(50 * 1024))
+        rpk = RpkTool(self.funes)
+        rpk.cluster_config_set('sql_batch_max_bytes', str(50 * 1024))
 
         # validate if all topics have a default value set
         for t in topics:

@@ -19,9 +19,9 @@ func NewCommand(fs afero.Fs, p *config.Params, execFn func(string, []string) err
 	cmd := &cobra.Command{
 		Use:     "transform",
 		Aliases: []string{"wasm", "transfrom"}, //nolint:misspell // auto correct a common misspelling
-		Short:   "Develop, deploy and manage Redpanda data transforms",
+		Short:   "Develop, deploy and manage Funes data transforms",
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	cmd.AddCommand(
 		newDeployCommand(fs, p),
 		newDeleteCommand(fs, p),

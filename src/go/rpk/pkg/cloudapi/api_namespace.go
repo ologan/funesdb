@@ -21,11 +21,11 @@ type (
 		NameID
 	}
 
-	// Namespaces is a set of Redpanda namespaces.
+	// Namespaces is a set of Funes namespaces.
 	Namespaces []Namespace
 )
 
-// Namespaces returns the list of namespaces in a Redpanda org.
+// Namespaces returns the list of namespaces in a Funes org.
 func (cl *Client) Namespaces(ctx context.Context) (Namespaces, error) {
 	var ns Namespaces
 	err := cl.cl.Get(ctx, namespacePath, nil, &ns)

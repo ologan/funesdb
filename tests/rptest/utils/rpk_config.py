@@ -11,18 +11,18 @@ import os
 import tempfile
 import yaml
 
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 
 def read_rpk_cfg(node):
     with tempfile.TemporaryDirectory() as d:
-        node.account.copy_from(RedpandaService.RPK_CONFIG_FILE, d)
+        node.account.copy_from(FunesService.RPK_CONFIG_FILE, d)
         with open(os.path.join(d, 'rpk.yaml')) as f:
             return yaml.full_load(f.read())
 
 
-def read_redpanda_cfg(node):
+def read_funes_cfg(node):
     with tempfile.TemporaryDirectory() as d:
-        node.account.copy_from(RedpandaService.NODE_CONFIG_FILE, d)
-        with open(os.path.join(d, 'redpanda.yaml')) as f:
+        node.account.copy_from(FunesService.NODE_CONFIG_FILE, d)
+        with open(os.path.join(d, 'funes.yaml')) as f:
             return yaml.full_load(f.read())

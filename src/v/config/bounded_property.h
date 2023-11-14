@@ -240,7 +240,7 @@ private:
 
         // If we somehow are applying an invalid value, clamp it
         // to the valid range.  This may happen if the value was
-        // set in an earlier version of redpanda with looser bounds,
+        // set in an earlier version of funes with looser bounds,
         // or if we are dealing with a value set directly in our store
         // rather than via admin API.
 

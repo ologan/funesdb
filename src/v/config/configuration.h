@@ -25,7 +25,7 @@
 #include "model/metadata.h"
 #include "model/timestamp.h"
 #include "net/unresolved_address.h"
-#include "pandaproxy/schema_registry/schema_id_validation.h"
+#include "funesproxy/schema_registry/schema_id_validation.h"
 
 #include <seastar/core/sstring.hh>
 #include <seastar/net/inet_address.hh>
@@ -38,7 +38,7 @@
 
 namespace config {
 
-/// Redpanda configuration
+/// Funes configuration
 ///
 /// All application modules depend on configuration. The configuration module
 /// can not depend on any other module to prevent cyclic dependencies.
@@ -97,7 +97,7 @@ struct configuration final : public config_store {
     bounded_property<size_t> raft_recovery_concurrency_per_shard;
     property<std::optional<size_t>> raft_replica_max_pending_flush_bytes;
     property<std::chrono::milliseconds> raft_flush_timer_interval_ms;
-    // Kafka
+    // SQL
     property<bool> enable_usage;
     bounded_property<size_t> usage_num_windows;
     bounded_property<std::chrono::seconds> usage_window_width_interval_sec;
@@ -109,7 +109,7 @@ struct configuration final : public config_store {
     property<std::chrono::milliseconds> quota_manager_gc_sec;
     bounded_property<uint32_t> target_quota_byte_rate;
     property<std::optional<uint32_t>> target_fetch_quota_byte_rate;
-    bounded_property<std::optional<uint32_t>> kafka_admin_topic_api_rate;
+    bounded_property<std::optional<uint32_t>> sql_admin_topic_api_rate;
     property<std::optional<ss::sstring>> cluster_id;
     property<bool> disable_metrics;
     property<bool> disable_public_metrics;
@@ -144,24 +144,24 @@ struct configuration final : public config_store {
     property<size_t> fetch_max_bytes;
     property<bool> use_fetch_scheduler_group;
     property<std::chrono::milliseconds> metadata_status_wait_timeout_ms;
-    property<std::chrono::seconds> kafka_tcp_keepalive_idle_timeout_seconds;
-    property<std::chrono::seconds> kafka_tcp_keepalive_probe_interval_seconds;
-    property<uint32_t> kafka_tcp_keepalive_probes;
-    bounded_property<std::optional<int64_t>> kafka_connection_rate_limit;
-    property<std::vector<ss::sstring>> kafka_connection_rate_limit_overrides;
-    // same as transactional.id.expiration.ms in kafka
+    property<std::chrono::seconds> sql_tcp_keepalive_idle_timeout_seconds;
+    property<std::chrono::seconds> sql_tcp_keepalive_probe_interval_seconds;
+    property<uint32_t> sql_tcp_keepalive_probes;
+    bounded_property<std::optional<int64_t>> sql_connection_rate_limit;
+    property<std::vector<ss::sstring>> sql_connection_rate_limit_overrides;
+    // same as transactional.id.expiration.ms in sql
     property<std::chrono::milliseconds> transactional_id_expiration_ms;
     bounded_property<uint64_t> max_concurrent_producer_ids;
     bounded_property<uint64_t> max_transactions_per_coordinator;
     property<bool> enable_idempotence;
     property<bool> enable_transactions;
     property<uint32_t> abort_index_segment_size;
-    // same as log.retention.ms in kafka
+    // same as log.retention.ms in sql
     retention_duration_property log_retention_ms;
     property<std::chrono::milliseconds> log_compaction_interval_ms;
     property<bool> log_disable_housekeeping_for_tests;
     property<bool> log_compaction_use_sliding_window;
-    // same as retention.size in kafka - TODO: size not implemented
+    // same as retention.size in sql - TODO: size not implemented
     property<std::optional<size_t>> retention_bytes;
     property<int32_t> group_topic_partitions;
     bounded_property<int16_t> default_topic_replication;
@@ -181,7 +181,7 @@ struct configuration final : public config_store {
     property<int32_t> default_topic_partitions;
     property<bool> disable_batch_cache;
     property<std::chrono::milliseconds> raft_election_timeout_ms;
-    property<std::chrono::milliseconds> kafka_group_recovery_timeout_ms;
+    property<std::chrono::milliseconds> sql_group_recovery_timeout_ms;
     property<std::chrono::milliseconds> replicate_append_timeout_ms;
     property<std::chrono::milliseconds> recovery_append_timeout_ms;
     property<size_t> raft_replicate_batch_window_size;
@@ -199,8 +199,8 @@ struct configuration final : public config_store {
     property<bool> enable_pid_file;
     property<std::chrono::milliseconds> kvstore_flush_interval;
     property<size_t> kvstore_max_segment_size;
-    property<std::chrono::milliseconds> max_kafka_throttle_delay_ms;
-    property<size_t> kafka_max_bytes_per_fetch;
+    property<std::chrono::milliseconds> max_sql_throttle_delay_ms;
+    property<size_t> sql_max_bytes_per_fetch;
     property<std::chrono::milliseconds> raft_io_timeout_ms;
     property<std::chrono::milliseconds> join_retry_timeout_ms;
     property<std::chrono::milliseconds> raft_timeout_now_timeout_ms;
@@ -232,18 +232,18 @@ struct configuration final : public config_store {
     property<ss::sstring> sasl_kerberos_principal;
     property<std::vector<ss::sstring>> sasl_kerberos_principal_mapping;
     bounded_property<std::optional<std::chrono::milliseconds>>
-      kafka_sasl_max_reauth_ms;
-    property<std::optional<bool>> kafka_enable_authorization;
+      sql_sasl_max_reauth_ms;
+    property<std::optional<bool>> sql_enable_authorization;
     property<std::optional<std::vector<ss::sstring>>>
-      kafka_mtls_principal_mapping_rules;
-    property<bool> kafka_enable_partition_reassignment;
+      sql_mtls_principal_mapping_rules;
+    property<bool> sql_enable_partition_reassignment;
     property<std::chrono::milliseconds>
       controller_backend_housekeeping_interval_ms;
     property<std::chrono::milliseconds> node_management_operation_timeout_ms;
-    property<uint32_t> kafka_request_max_bytes;
-    property<uint32_t> kafka_batch_max_bytes;
-    property<std::vector<ss::sstring>> kafka_nodelete_topics;
-    property<std::vector<ss::sstring>> kafka_noproduce_topics;
+    property<uint32_t> sql_request_max_bytes;
+    property<uint32_t> sql_batch_max_bytes;
+    property<std::vector<ss::sstring>> sql_nodelete_topics;
+    property<std::vector<ss::sstring>> sql_noproduce_topics;
 
     // Compaction controller
     property<std::chrono::milliseconds> compaction_ctrl_update_interval_ms;
@@ -254,17 +254,17 @@ struct configuration final : public config_store {
     property<int16_t> compaction_ctrl_max_shares;
     property<std::optional<size_t>> compaction_ctrl_backlog_size;
     property<std::chrono::milliseconds> members_backend_retry_ms;
-    property<std::optional<uint32_t>> kafka_connections_max;
-    property<std::optional<uint32_t>> kafka_connections_max_per_ip;
-    property<std::vector<ss::sstring>> kafka_connections_max_overrides;
+    property<std::optional<uint32_t>> sql_connections_max;
+    property<std::optional<uint32_t>> sql_connections_max_per_ip;
+    property<std::vector<ss::sstring>> sql_connections_max_overrides;
     one_or_many_map_property<client_group_quota>
-      kafka_client_group_byte_rate_quota;
+      sql_client_group_byte_rate_quota;
     one_or_many_map_property<client_group_quota>
-      kafka_client_group_fetch_byte_rate_quota;
-    bounded_property<std::optional<int>> kafka_rpc_server_tcp_recv_buf;
-    bounded_property<std::optional<int>> kafka_rpc_server_tcp_send_buf;
-    bounded_property<std::optional<size_t>> kafka_rpc_server_stream_recv_buf;
-    property<bool> kafka_enable_describe_log_dirs_remote_storage;
+      sql_client_group_fetch_byte_rate_quota;
+    bounded_property<std::optional<int>> sql_rpc_server_tcp_recv_buf;
+    bounded_property<std::optional<int>> sql_rpc_server_tcp_send_buf;
+    bounded_property<std::optional<size_t>> sql_rpc_server_stream_recv_buf;
+    property<bool> sql_enable_describe_log_dirs_remote_storage;
 
     // Audit logging
     property<bool> audit_enabled;
@@ -409,18 +409,18 @@ struct configuration final : public config_store {
     one_or_many_property<ss::sstring> superusers;
 
     // kakfa queue depth control: latency ewma
-    property<double> kafka_qdc_latency_alpha;
-    property<std::chrono::milliseconds> kafka_qdc_window_size_ms;
-    property<size_t> kafka_qdc_window_count;
+    property<double> sql_qdc_latency_alpha;
+    property<std::chrono::milliseconds> sql_qdc_window_size_ms;
+    property<size_t> sql_qdc_window_count;
 
     // kakfa queue depth control: queue depth ewma and control
-    property<bool> kafka_qdc_enable;
-    property<double> kafka_qdc_depth_alpha;
-    property<std::chrono::milliseconds> kafka_qdc_max_latency_ms;
-    property<size_t> kafka_qdc_idle_depth;
-    property<size_t> kafka_qdc_min_depth;
-    property<size_t> kafka_qdc_max_depth;
-    property<std::chrono::milliseconds> kafka_qdc_depth_update_ms;
+    property<bool> sql_qdc_enable;
+    property<double> sql_qdc_depth_alpha;
+    property<std::chrono::milliseconds> sql_qdc_max_latency_ms;
+    property<size_t> sql_qdc_idle_depth;
+    property<size_t> sql_qdc_min_depth;
+    property<size_t> sql_qdc_max_depth;
+    property<std::chrono::milliseconds> sql_qdc_depth_update_ms;
     property<size_t> zstd_decompress_workspace_bytes;
     one_or_many_property<ss::sstring> full_raft_configuration_recovery_pattern;
     property<bool> enable_auto_rebalance_on_node_add;
@@ -490,16 +490,16 @@ struct configuration final : public config_store {
       controller_log_accummulation_rps_capacity_configuration_operations;
 
     // node and cluster throughput limiting
-    bounded_property<std::optional<int64_t>> kafka_throughput_limit_node_in_bps;
+    bounded_property<std::optional<int64_t>> sql_throughput_limit_node_in_bps;
     bounded_property<std::optional<int64_t>>
-      kafka_throughput_limit_node_out_bps;
-    bounded_property<std::chrono::milliseconds> kafka_quota_balancer_window;
+      sql_throughput_limit_node_out_bps;
+    bounded_property<std::chrono::milliseconds> sql_quota_balancer_window;
     bounded_property<std::chrono::milliseconds>
-      kafka_quota_balancer_node_period;
-    property<double> kafka_quota_balancer_min_shard_throughput_ratio;
-    bounded_property<int64_t> kafka_quota_balancer_min_shard_throughput_bps;
-    property<std::vector<ss::sstring>> kafka_throughput_controlled_api_keys;
-    property<std::vector<throughput_control_group>> kafka_throughput_control;
+      sql_quota_balancer_node_period;
+    property<double> sql_quota_balancer_min_shard_throughput_ratio;
+    bounded_property<int64_t> sql_quota_balancer_min_shard_throughput_bps;
+    property<std::vector<ss::sstring>> sql_throughput_controlled_api_keys;
+    property<std::vector<throughput_control_group>> sql_throughput_control;
 
     bounded_property<int64_t> node_isolation_heartbeat_timeout;
 
@@ -509,12 +509,12 @@ struct configuration final : public config_store {
     property<std::chrono::seconds> legacy_unsafe_log_warning_interval_sec;
 
     // schema id validation
-    enum_property<pandaproxy::schema_registry::schema_id_validation_mode>
+    enum_property<funesproxy::schema_registry::schema_id_validation_mode>
       enable_schema_id_validation;
-    config::property<size_t> kafka_schema_id_validation_cache_capacity;
+    config::property<size_t> sql_schema_id_validation_cache_capacity;
 
-    bounded_property<double, numeric_bounds> kafka_memory_share_for_fetch;
-    property<size_t> kafka_memory_batch_size_estimate_for_fetch;
+    bounded_property<double, numeric_bounds> sql_memory_share_for_fetch;
+    property<size_t> sql_memory_batch_size_estimate_for_fetch;
     // debug controls
     property<bool> cpu_profiler_enabled;
     bounded_property<std::chrono::milliseconds> cpu_profiler_sample_period_ms;

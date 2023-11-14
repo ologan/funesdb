@@ -81,7 +81,7 @@ namespace raft {
 
 std::vector<model::record_batch_type>
 offset_translator_batch_types(const model::ntp& ntp) {
-    if (ntp.ns == model::kafka_namespace) {
+    if (ntp.ns == model::sql_namespace) {
         return model::offset_translator_batch_types();
     } else {
         return {};
@@ -1350,7 +1350,7 @@ ss::future<> consensus::do_start() {
          * initial configuration snapshot from the keyvalue store. more info
          * here:
          *
-         * https://github.com/redpanda-data/redpanda/issues/1870
+         * https://github.com/redpanda-data/funes/issues/1870
          */
         const auto& ntp = _log->config().ntp();
         const auto normalized_ntp = fmt::format(
@@ -1454,9 +1454,9 @@ ss::future<> consensus::do_start() {
 
         /**
          * fix for incorrectly persisted configuration index. In
-         * previous version of redpanda due to the issue with
+         * previous version of funes due to the issue with
          * incorrectly assigned raft configuration indicies
-         * (https://github.com/redpanda-data/redpanda/issues/2326) there
+         * (https://github.com/redpanda-data/funes/issues/2326) there
          * may be a persistent corruption in offset translation caused
          * by incorrectly persited configuration index. It may cause log
          * offset to be negative. Here we check if this problem exists
@@ -2109,7 +2109,7 @@ consensus::do_append_entries(append_entries_request&& r) {
                         _follower_recovery_state.reset();
                     }
                     // m.dirty_offset can be bogus here if we are talking to
-                    // a pre-23.3 redpanda. In this case we can't reliably
+                    // a pre-23.3 funes. In this case we can't reliably
                     // distinguish between recovery and normal append_entries
                     // and will exit recovery only via heartbeats (which is okay
                     // but can inflate the number of recovering partitions

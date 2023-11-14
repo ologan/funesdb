@@ -144,7 +144,7 @@ public:
     /// not ready, in which case false is returned.
     ///
     /// NOTE: this is incompatible with NTPs where log prefix-truncation is
-    /// managed by log_eviction_stm (such as ordinary kafka partitions) because
+    /// managed by log_eviction_stm (such as ordinary sql partitions) because
     /// log_eviction_stm will write an empty raft snapshot, making restoring
     /// state from the snapshot impossible.
     ss::future<bool> maybe_write_snapshot();

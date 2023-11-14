@@ -122,7 +122,7 @@ struct echo_v2_impl final : echo_v2::echo_service_base<Codec> {
 class rpc_integration_fixture : public rpc_simple_integration_fixture {
 public:
     rpc_integration_fixture()
-      : rpc_simple_integration_fixture(redpanda_rpc_port) {}
+      : rpc_simple_integration_fixture(funes_rpc_port) {}
 
     void register_services() {
         register_service<movistar<rpc::default_message_codec>>();
@@ -130,7 +130,7 @@ public:
         register_service<echo_v2_impl<rpc::default_message_codec>>();
     }
 
-    static constexpr uint16_t redpanda_rpc_port = 32147;
+    static constexpr uint16_t funes_rpc_port = 32147;
 };
 
 FIXTURE_TEST(echo_round_trip, rpc_integration_fixture) {
@@ -301,7 +301,7 @@ FIXTURE_TEST(rpc_abort_from_cache, rpc_integration_fixture) {
 FIXTURE_TEST(echo_round_trip_tls, rpc_integration_fixture) {
     auto creds_builder = config::tls_config(
                            true,
-                           config::key_cert{"redpanda.key", "redpanda.crt"},
+                           config::key_cert{"funes.key", "funes.crt"},
                            "root_certificate_authority.chain_cert",
                            false)
                            .get_credentials_builder()
@@ -370,8 +370,8 @@ FIXTURE_TEST(rpcgen_reload_credentials_integration, rpc_integration_fixture) {
     auto context = ss::make_lw_shared<certificate_reload_ctx>();
     temporary_dir tmp;
     // client credentials
-    auto client_key = tmp.copy_file("redpanda.key", "client.key");
-    auto client_crt = tmp.copy_file("redpanda.crt", "client.crt");
+    auto client_key = tmp.copy_file("funes.key", "client.key");
+    auto client_crt = tmp.copy_file("funes.crt", "client.crt");
     auto client_ca = tmp.copy_file(
       "root_certificate_authority.chain_cert", "ca_client.pem");
     auto client_creds_builder = config::tls_config(
@@ -383,8 +383,8 @@ FIXTURE_TEST(rpcgen_reload_credentials_integration, rpc_integration_fixture) {
                                   .get_credentials_builder()
                                   .get0();
     // server credentials
-    auto server_key = tmp.copy_file("redpanda.other.key", "server.key");
-    auto server_crt = tmp.copy_file("redpanda.other.crt", "server.crt");
+    auto server_key = tmp.copy_file("funes.other.key", "server.key");
+    auto server_crt = tmp.copy_file("funes.other.crt", "server.crt");
     auto server_ca = tmp.copy_file(
       "root_certificate_authority.other.chain_cert", "ca_server.pem");
     auto server_creds_builder = config::tls_config(
@@ -427,8 +427,8 @@ FIXTURE_TEST(rpcgen_reload_credentials_integration, rpc_integration_fixture) {
 
     // fix client credentials and reconnect
     info("replacing files");
-    tmp.copy_file("redpanda.key", "server.key");
-    tmp.copy_file("redpanda.crt", "server.crt");
+    tmp.copy_file("funes.key", "server.key");
+    tmp.copy_file("funes.crt", "server.crt");
     tmp.copy_file("root_certificate_authority.chain_cert", "ca_server.pem");
 
     context->cvar.wait([context] { return context->updated.size() == 3; })
@@ -862,7 +862,7 @@ public:
         _services.push_back(std::make_unique<T>(std::forward<Args>(args)...));
     }
 
-    std::string_view name() const final { return "redpanda erraneous proto"; };
+    std::string_view name() const final { return "funes erraneous proto"; };
 
     ss::future<> apply(ss::lw_shared_ptr<net::connection> conn) final {
         return ss::do_until(
@@ -881,14 +881,14 @@ class erroneous_service_fixture
   : public rpc_fixture_swappable_proto<erroneous_protocol_server> {
 public:
     erroneous_service_fixture()
-      : rpc_fixture_swappable_proto(redpanda_rpc_port) {}
+      : rpc_fixture_swappable_proto(funes_rpc_port) {}
 
     void register_services() {
         register_service<movistar<rpc::default_message_codec>>();
         register_service<echo_impl<rpc::default_message_codec>>();
     }
 
-    static constexpr uint16_t redpanda_rpc_port = 32147;
+    static constexpr uint16_t funes_rpc_port = 32147;
 };
 
 FIXTURE_TEST(unhandled_throw_in_proto_apply, erroneous_service_fixture) {
@@ -910,9 +910,9 @@ FIXTURE_TEST(unhandled_throw_in_proto_apply, erroneous_service_fixture) {
 
 class rpc_sharded_fixture : public rpc_sharded_integration_fixture {
 public:
-    static constexpr uint16_t redpanda_rpc_port = 32147;
+    static constexpr uint16_t funes_rpc_port = 32147;
     rpc_sharded_fixture()
-      : rpc_sharded_integration_fixture(redpanda_rpc_port) {}
+      : rpc_sharded_integration_fixture(funes_rpc_port) {}
 };
 
 FIXTURE_TEST(rpc_add_service, rpc_sharded_fixture) {

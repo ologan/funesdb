@@ -48,29 +48,29 @@ var (
 		"scheduler",
 		"io_queue",
 		"vectorized_internal_rpc",
-		"kafka_rpc",
+		"sql_rpc",
 		"rpc_client",
 		"memory",
 		"raft",
 	}
 	dashboardMap = map[string]*fileSpec{
 		"consumer-metrics": {
-			"Kafka-Consumer-Metrics.json",
-			"Allows for monitoring of Java Kafka consumers, using the Prometheus JMX Exporter and the Kafka Sample Configuration.",
+			"SQL-Consumer-Metrics.json",
+			"Allows for monitoring of Java SQL consumers, using the Prometheus JMX Exporter and the SQL Sample Configuration.",
 			"75c764e38cf52b11191833631c6b641e2e6ccdc42884aedbc655371cb768c08a",
 		},
 		"consumer-offsets": {
-			"Kafka-Consumer-Offsets.json",
+			"SQL-Consumer-Offsets.json",
 			"Metrics and KPIs that provide details of topic consumers and how far they are lagging behind the end of the log.",
 			"44a00385aa95cd7a531634ab7151d5f18c6057fdd48989c0e96d78a6f16eaae9",
 		},
 		"operations": {
-			"Redpanda-Ops-Dashboard.json",
-			"Provides an overview of KPIs for a Redpanda cluster with health indicators. This is suitable for ops or SRE to monitor on a daily or continuous basis.",
+			"Funes-Ops-Dashboard.json",
+			"Provides an overview of KPIs for a Funes cluster with health indicators. This is suitable for ops or SRE to monitor on a daily or continuous basis.",
 			"2974e1fb0be8f428b84f28f9fa665302324b3b2cbb271a2876cafe0089fe55c9",
 		},
 		"topic-metrics": {
-			"Kafka-Topic-Metrics.json",
+			"SQL-Topic-Metrics.json",
 			"Provides throughput, read/write rates, and on-disk sizes of each/all topics.",
 			"6cfbd0d7bb51e2ef0d9b699388ab1e10b1d6ee91176e52594ee196187c1d4ef5",
 		},
@@ -104,10 +104,10 @@ func newGrafanaDashboardCmd(p *config.Params) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "grafana-dashboard",
-		Short: "Generate a Grafana dashboard for redpanda metrics",
-		Long: `Generate Grafana Dashboards for Redpanda Metrics
+		Short: "Generate a Grafana dashboard for funes metrics",
+		Long: `Generate Grafana Dashboards for Funes Metrics
 
-Use this command to generate sample Grafana dashboards for Redpanda metrics. 
+Use this command to generate sample Grafana dashboards for Funes metrics. 
 These dashboards can be imported into a Grafana or Grafana Cloud instance.
 
 To select a specific dashboard, use the '--dashboard' flag followed by the 
@@ -129,7 +129,7 @@ To see a list of all available dashboards, use the '--dashboard help' flag.
 			switch {
 			case dashboard == "legacy":
 				if datasource == "" {
-					out.Die(`Error: required legacy flag "datasource" not set; please set the flag to the redpanda metrics endpoint where rpk should get the metrics metadata. i.e. redpanda_host:9644/public_metrics`)
+					out.Die(`Error: required legacy flag "datasource" not set; please set the flag to the funes metrics endpoint where rpk should get the metrics metadata. i.e. funes_host:9644/public_metrics`)
 				}
 				jsonOut, err := executeGrafanaDashboard(metricsEndpoint, datasource)
 				out.MaybeDie(err, "unable to generate the grafana dashboard: %v", err)
@@ -163,11 +163,11 @@ To see a list of all available dashboards, use the '--dashboard help' flag.
 	metricsEndpointFlag := "metrics-endpoint"
 	deprecatedPrometheusURLFlag := "prometheus-url"
 	for _, flag := range []string{metricsEndpointFlag, deprecatedPrometheusURLFlag} {
-		cmd.Flags().StringVar(&metricsEndpoint, flag, "http://localhost:9644/public_metrics", "The redpanda metrics endpoint where rpk should get the metrics metadata. i.e. redpanda_host:9644/metrics")
+		cmd.Flags().StringVar(&metricsEndpoint, flag, "http://localhost:9644/public_metrics", "The funes metrics endpoint where rpk should get the metrics metadata. i.e. funes_host:9644/metrics")
 	}
 	cmd.Flags().MarkDeprecated(deprecatedPrometheusURLFlag, fmt.Sprintf("Deprecated flag. Use --%v instead", metricsEndpointFlag))
 	cmd.Flags().StringVar(&datasource, "datasource", "", "The name of the Prometheus datasource as configured in your grafana instance.")
-	cmd.Flags().StringVar(&jobName, "job-name", "redpanda", "The prometheus job name by which to identify the redpanda nodes")
+	cmd.Flags().StringVar(&jobName, "job-name", "funes", "The prometheus job name by which to identify the funes nodes")
 	cmd.Flags().MarkHidden("datasource")
 	cmd.Flags().MarkHidden("job-name")
 	cmd.Flags().MarkHidden("metrics-endpoint")
@@ -179,8 +179,8 @@ To see a list of all available dashboards, use the '--dashboard help' flag.
 
 	// We install the Admin Flags in case TLS is enabled in the metric endpoint.
 	p.InstallAdminFlags(cmd)
-	// And the kafka flags in case basic authentication is used too.
-	p.InstallKafkaFlags(cmd)
+	// And the sql flags in case basic authentication is used too.
+	p.InstallSQLFlags(cmd)
 	// Then we hide all these flags, so it doesn't show in the help text.
 	cmd.PersistentFlags().VisitAll(func(flag *pflag.Flag) {
 		cmd.PersistentFlags().MarkHidden(flag.Name)
@@ -258,7 +258,7 @@ func buildGrafanaDashboard(
 	rowSet.addCachePerformancePanels(metricFamilies, datasource)
 	rows := rowSet.finalize(lastY)
 	return graf.Dashboard{
-		Title:      "Redpanda",
+		Title:      "Funes",
 		Templating: buildTemplating(datasource),
 		Panels: append(
 			summaryPanels,
@@ -306,9 +306,9 @@ func (rowSet *RowSet) processRows(metricFamilies map[string]*dto.MetricFamily, i
 	for _, name := range names {
 		family := metricFamilies[name]
 		var panel graf.Panel
-		// hack around redpanda_storage_* metrics: these should be gauge
+		// hack around funes_storage_* metrics: these should be gauge
 		// panels but the metrics type come as COUNTER
-		if family.GetType() == dto.MetricType_COUNTER && !strings.HasPrefix(name, "redpanda_storage") {
+		if family.GetType() == dto.MetricType_COUNTER && !strings.HasPrefix(name, "funes_storage") {
 			panel = newCounterPanel(family, isPublicMetrics, datasource)
 		} else if subtype(family) == "histogram" {
 			panel = newPercentilePanel(family, 0.95, isPublicMetrics, datasource)
@@ -415,7 +415,7 @@ func buildTemplating(datasource string) graf.Templating {
 	}
 }
 
-// buildSummary builds the Summary section of the Redpanda generated grafana
+// buildSummary builds the Summary section of the Funes generated grafana
 // dashboard that uses the /metric endpoint.
 func buildSummary(metricFamilies map[string]*dto.MetricFamily, datasource string) []graf.Panel {
 	maxWidth := 24
@@ -425,7 +425,7 @@ func buildSummary(metricFamilies map[string]*dto.MetricFamily, datasource string
 	panels := []graf.Panel{}
 	y := 0
 
-	summaryText := htmlHeader("Redpanda Summary")
+	summaryText := htmlHeader("Funes Summary")
 	summaryTitle := graf.NewTextPanel(summaryText, "html")
 	summaryTitle.GridPos = graf.GridPos{H: 2, W: maxWidth, X: 0, Y: y}
 	summaryTitle.Transparent = true
@@ -454,18 +454,18 @@ func buildSummary(metricFamilies map[string]*dto.MetricFamily, datasource string
 		Y: y,
 	}
 	partitionCount.Targets = []graf.Target{{
-		Expr:         `count(count by (topic,partition) (vectorized_storage_log_partition_size{namespace="kafka"}))`,
+		Expr:         `count(count by (topic,partition) (vectorized_storage_log_partition_size{namespace="sql"}))`,
 		LegendFormat: "Partition count",
 	}}
 	partitionCount.Transparent = true
 	panels = append(panels, partitionCount)
 	y += partitionCount.GridPos.H
 
-	kafkaFamily, kafkaExists := metricFamilies["vectorized_kafka_rpc_dispatch_handler_latency"]
-	if kafkaExists {
+	sqlFamily, sqlExists := metricFamilies["vectorized_sql_rpc_dispatch_handler_latency"]
+	if sqlExists {
 		width := (maxWidth - (singleStatW * 2)) / percentilesNo
 		for i, p := range percentiles {
-			panel := newPercentilePanel(kafkaFamily, p, false, datasource)
+			panel := newPercentilePanel(sqlFamily, p, false, datasource)
 			panel.GridPos = graf.GridPos{
 				H: panelHeight,
 				W: width,
@@ -533,7 +533,7 @@ func buildSummary(metricFamilies map[string]*dto.MetricFamily, datasource string
 	return panels
 }
 
-// buildPublicMetricsSummary builds the Summary section of the Redpanda
+// buildPublicMetricsSummary builds the Summary section of the Funes
 // generated grafana dashboard that uses the /public_metrics endpoint.
 func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, datasource string) []graf.Panel {
 	maxWidth := 24
@@ -543,7 +543,7 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 	panels := []graf.Panel{}
 	y := 0
 
-	summaryText := htmlHeader("Redpanda Summary")
+	summaryText := htmlHeader("Funes Summary")
 	summaryTitle := graf.NewTextPanel(summaryText, "html")
 	summaryTitle.GridPos = graf.GridPos{H: 2, W: maxWidth, X: 0, Y: y}
 	summaryTitle.Transparent = true
@@ -555,7 +555,7 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 	nodesUp.Datasource = datasource
 	nodesUp.GridPos = graf.GridPos{H: 6, W: singleStatW, X: 0, Y: y}
 	nodesUp.Targets = []graf.Target{{
-		Expr:           `redpanda_cluster_brokers`,
+		Expr:           `funes_cluster_brokers`,
 		Step:           40,
 		IntervalFactor: 1,
 		LegendFormat:   "Nodes Up",
@@ -575,7 +575,7 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 		Y: nodesUp.GridPos.H,
 	}
 	partitionCount.Targets = []graf.Target{{
-		Expr:         "redpanda_cluster_partitions",
+		Expr:         "funes_cluster_partitions",
 		LegendFormat: "Partition count",
 		Instant:      true,
 	}}
@@ -583,20 +583,20 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 	panels = append(panels, partitionCount)
 	y += partitionCount.GridPos.H
 
-	// Latency of Kafka consume/produce requests (p95 - p99)
-	_, kafkaExists := metricFamilies[`redpanda_kafka_request_latency_seconds`]
-	if kafkaExists {
+	// Latency of SQL consume/produce requests (p95 - p99)
+	_, sqlExists := metricFamilies[`funes_sql_request_latency_seconds`]
+	if sqlExists {
 		width := (maxWidth - singleStatW) / percentilesNo
 		for i, p := range percentiles {
 			pTarget := graf.Target{
-				Expr:           fmt.Sprintf(`histogram_quantile(%.2f, sum(rate(redpanda_kafka_request_latency_seconds_bucket{instance=~"$node", redpanda_request="produce"}[$__rate_interval])) by (le, provider, region, instance, namespace, pod))`, p),
+				Expr:           fmt.Sprintf(`histogram_quantile(%.2f, sum(rate(funes_sql_request_latency_seconds_bucket{instance=~"$node", funes_request="produce"}[$__rate_interval])) by (le, provider, region, instance, namespace, pod))`, p),
 				LegendFormat:   "node: {{instance}}",
 				Format:         "time_series",
 				Step:           10,
 				IntervalFactor: 2,
 				RefID:          "A",
 			}
-			pTitle := fmt.Sprintf("Latency of Kafka produce requests (p%.0f) per broker", p*100)
+			pTitle := fmt.Sprintf("Latency of SQL produce requests (p%.0f) per broker", p*100)
 			producePanel := newGraphPanel(pTitle, pTarget, "s", datasource)
 			producePanel.Interval = "1m"
 			producePanel.Lines = true
@@ -611,14 +611,14 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 				Y: y,
 			}
 			cTarget := graf.Target{
-				Expr:           fmt.Sprintf(`histogram_quantile(%.2f, sum(rate(redpanda_kafka_request_latency_seconds_bucket{instance=~"$node", redpanda_request="consume"}[$__rate_interval])) by (le, provider, region, instance, namespace, pod))`, p),
+				Expr:           fmt.Sprintf(`histogram_quantile(%.2f, sum(rate(funes_sql_request_latency_seconds_bucket{instance=~"$node", funes_request="consume"}[$__rate_interval])) by (le, provider, region, instance, namespace, pod))`, p),
 				LegendFormat:   "node: {{instance}}",
 				Format:         "time_series",
 				Step:           10,
 				IntervalFactor: 2,
 				RefID:          "A",
 			}
-			cTitle := fmt.Sprintf("Latency of Kafka consume requests (p%.0f) per broker", p*100)
+			cTitle := fmt.Sprintf("Latency of SQL consume requests (p%.0f) per broker", p*100)
 			consumePanel := newGraphPanel(cTitle, cTarget, "s", datasource)
 			consumePanel.Interval = "1m"
 			consumePanel.Lines = true
@@ -643,12 +643,12 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 	rpcLatencyTitle := graf.NewTextPanel(rpcLatencyText, "html")
 	rpcLatencyTitle.GridPos = graf.GridPos{H: 2, W: maxWidth / 2, X: 0, Y: y}
 	rpcLatencyTitle.Transparent = true
-	rpcFamily, rpcExists := metricFamilies[`redpanda_rpc_request_latency_seconds`]
+	rpcFamily, rpcExists := metricFamilies[`funes_rpc_request_latency_seconds`]
 	if rpcExists {
 		y += rpcLatencyTitle.GridPos.H
 		panels = append(panels, rpcLatencyTitle)
 		for i, p := range percentiles {
-			template := `histogram_quantile(%.2f, sum(rate(%s_bucket{instance=~"$node",redpanda_server="internal"}[$__rate_interval])) by (le, $aggr_criteria))`
+			template := `histogram_quantile(%.2f, sum(rate(%s_bucket{instance=~"$node",funes_server="internal"}[$__rate_interval])) by (le, $aggr_criteria))`
 			expr := fmt.Sprintf(template, p, rpcFamily.GetName())
 			target := graf.Target{
 				Expr:           expr,
@@ -688,11 +688,11 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 	throughputTitle.Transparent = true
 	panels = append(panels, throughputTitle)
 
-	reqBytesFamily, reqBytesExists := metricFamilies["redpanda_kafka_request_bytes_total"]
+	reqBytesFamily, reqBytesExists := metricFamilies["funes_sql_request_bytes_total"]
 	if reqBytesExists {
 		target := graf.Target{
-			Expr:           `sum(rate(redpanda_kafka_request_bytes_total[$__rate_interval])) by (redpanda_request)`,
-			LegendFormat:   "redpanda_request: {{redpanda_request}}",
+			Expr:           `sum(rate(funes_sql_request_bytes_total[$__rate_interval])) by (funes_request)`,
+			LegendFormat:   "funes_request: {{funes_request}}",
 			Format:         "time_series",
 			Step:           10,
 			IntervalFactor: 2,
@@ -706,7 +706,7 @@ func buildPublicMetricsSummary(metricFamilies map[string]*dto.MetricFamily, data
 			X: maxWidth / 2,
 			Y: y,
 		}
-		panel.Title = "Throughput of Kafka produce/consume requests for the cluster"
+		panel.Title = "Throughput of SQL produce/consume requests for the cluster"
 		panels = append(panels, panel)
 	}
 
@@ -796,7 +796,7 @@ func newCounterPanel(m *dto.MetricFamily, isPublicMetrics bool, datasource strin
 	format := "ops"
 	if strings.Contains(m.GetName(), "bytes") {
 		format = "Bps"
-	} else if strings.Contains(m.GetName(), "redpanda_scheduler") {
+	} else if strings.Contains(m.GetName(), "funes_scheduler") {
 		format = "percentunit"
 	}
 	panel := newGraphPanel("Rate - "+m.GetHelp(), target, format, datasource)

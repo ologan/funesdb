@@ -21,7 +21,7 @@ template<>
 struct instance_generator<cluster::init_tm_tx_request> {
     static cluster::init_tm_tx_request random() {
         return cluster::init_tm_tx_request(
-          tests::random_named_string<kafka::transactional_id>(),
+          tests::random_named_string<sql::transactional_id>(),
           tests::random_duration<std::chrono::milliseconds>(),
           tests::random_duration<model::timeout_clock::duration>());
     }

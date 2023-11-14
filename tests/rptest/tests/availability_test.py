@@ -13,7 +13,7 @@ from rptest.clients.default import DefaultClient
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.services.failure_injector import FailureSpec
-from rptest.services.redpanda import make_redpanda_service, CHAOS_LOG_ALLOW_LIST
+from rptest.services.funes import make_funes_service, CHAOS_LOG_ALLOW_LIST
 from rptest.tests.e2e_finjector import EndToEndFinjectorTest
 
 
@@ -35,7 +35,7 @@ class AvailabilityTests(EndToEndFinjectorTest):
 
     @cluster(num_nodes=5, log_allow_list=CHAOS_LOG_ALLOW_LIST)
     def test_availability_when_one_node_failed(self):
-        self.redpanda = make_redpanda_service(
+        self.funes = make_funes_service(
             self.test_context,
             3,
             extra_rp_conf={
@@ -47,12 +47,12 @@ class AvailabilityTests(EndToEndFinjectorTest):
                 "raft_io_timeout_ms": 20000,
             })
 
-        self.redpanda.start()
+        self.funes.start()
         spec = TopicSpec(name="test-topic",
                          partition_count=6,
                          replication_factor=3)
 
-        DefaultClient(self.redpanda).create_topic(spec)
+        DefaultClient(self.funes).create_topic(spec)
         self.topic = spec.name
 
         self.start_producer(1, throughput=10000)
@@ -66,7 +66,7 @@ class AvailabilityTests(EndToEndFinjectorTest):
     @cluster(num_nodes=5, log_allow_list=CHAOS_LOG_ALLOW_LIST)
     def test_recovery_after_catastrophic_failure(self):
 
-        self.redpanda = make_redpanda_service(
+        self.funes = make_funes_service(
             self.test_context,
             3,
             extra_rp_conf={
@@ -78,12 +78,12 @@ class AvailabilityTests(EndToEndFinjectorTest):
                 "raft_io_timeout_ms": 20000,
             })
 
-        self.redpanda.start()
+        self.funes.start()
         spec = TopicSpec(name="test-topic",
                          partition_count=6,
                          replication_factor=3)
 
-        DefaultClient(self.redpanda).create_topic(spec)
+        DefaultClient(self.funes).create_topic(spec)
         self.topic = spec.name
 
         self.start_producer(1, throughput=10000)
@@ -92,13 +92,13 @@ class AvailabilityTests(EndToEndFinjectorTest):
 
         # inject permanent random failure
         f_spec = FailureSpec(random.choice(FailureSpec.FAILURE_TYPES),
-                             random.choice(self.redpanda.nodes[0:1]))
+                             random.choice(self.funes.nodes[0:1]))
 
         self.inject_failure(f_spec)
 
         # inject transient failure on other node
         f_spec = FailureSpec(random.choice(FailureSpec.FAILURE_TYPES),
-                             self.redpanda.nodes[2],
+                             self.funes.nodes[2],
                              length=2.0 if self.scale.local else 15.0)
 
         self.inject_failure(f_spec)

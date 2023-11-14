@@ -370,7 +370,7 @@ struct raft_node {
 
 inline model::ntp node_ntp(raft::group_id gr_id, model::node_id n_id) {
     return model::ntp(
-      model::kafka_namespace,
+      model::sql_namespace,
       model::topic(ssx::sformat("group_{}", gr_id())),
       model::partition_id(n_id()));
 }

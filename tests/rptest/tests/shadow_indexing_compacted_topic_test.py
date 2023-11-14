@@ -3,7 +3,7 @@ import pprint
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, SISettings, make_redpanda_service, LoggingConfig, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, SISettings, make_funes_service, LoggingConfig, get_cloud_storage_type
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.util import wait_until_segments, wait_for_removal_of_n_segments
 from rptest.utils.si_utils import BucketView
@@ -30,16 +30,16 @@ class ShadowIndexingCompactedTopicTest(EndToEndTest):
             group_initial_rebalance_delay=300,
             compacted_log_segment_size=self.segment_size,
         )
-        self.redpanda = make_redpanda_service(context=self.test_context,
+        self.funes = make_funes_service(context=self.test_context,
                                               num_brokers=self.num_brokers,
                                               si_settings=self.si_settings,
                                               extra_rp_conf=extra_rp_conf)
         self.topic = self.topics[0].name
-        self._rpk_client = RpkTool(self.redpanda)
+        self._rpk_client = RpkTool(self.funes)
 
     def setUp(self):
         super().setUp()
-        self.redpanda.start()
+        self.funes.start()
         for topic in self.topics:
             self._rpk_client.create_topic(
                 topic.name, topic.partition_count, topic.replication_factor, {
@@ -55,14 +55,14 @@ class ShadowIndexingCompactedTopicTest(EndToEndTest):
         self.start_producer(throughput=5000, repeating_keys=10)
 
         expected_segment_count = 10
-        wait_until_segments(redpanda=self.redpanda,
+        wait_until_segments(funes=self.funes,
                             topic=self.topic,
                             partition_idx=0,
                             count=expected_segment_count,
                             timeout_sec=300)
 
-        original_snapshot = self.redpanda.storage(
-            all_nodes=True).segments_by_node("kafka", self.topic, 0)
+        original_snapshot = self.funes.storage(
+            all_nodes=True).segments_by_node("sql", self.topic, 0)
 
         for node, node_segments in original_snapshot.items():
             assert len(
@@ -88,14 +88,14 @@ class ShadowIndexingCompactedTopicTest(EndToEndTest):
         self._rpk_client.cluster_config_set("log_compaction_interval_ms",
                                             f'{2000}')
 
-        wait_for_removal_of_n_segments(redpanda=self.redpanda,
+        wait_for_removal_of_n_segments(funes=self.funes,
                                        topic=self.topic,
                                        partition_idx=0,
                                        n=6,
                                        original_snapshot=original_snapshot)
 
         def compacted_segments_uploaded():
-            manifest = BucketView(self.redpanda, topics=self.topics) \
+            manifest = BucketView(self.funes, topics=self.topics) \
                                   .manifest_for_ntp(self.topic,
                                                     partition=0)
             return any(meta['is_compacted']
@@ -106,7 +106,7 @@ class ShadowIndexingCompactedTopicTest(EndToEndTest):
                    backoff_sec=2,
                    err_msg=lambda: f"Compacted segments not uploaded")
 
-        s3_snapshot = BucketView(self.redpanda, topics=self.topics)
+        s3_snapshot = BucketView(self.funes, topics=self.topics)
         s3_snapshot.assert_at_least_n_uploaded_segments_compacted(
             self.topic, partition=0, revision=None, n=1)
         s3_snapshot.assert_segments_replaced(self.topic, partition=0)

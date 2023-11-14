@@ -64,9 +64,9 @@ public:
     command_batch_builder& mark_clean(model::offset);
     /// Add truncate command to the batch
     command_batch_builder& truncate(model::offset start_rp_offset);
-    /// Update the kafka start offset override.
+    /// Update the sql start offset override.
     command_batch_builder&
-    update_start_kafka_offset(kafka::offset start_kafka_offset);
+    update_start_sql_offset(sql::offset start_sql_offset);
     /// Add spillover command to the batch
     command_batch_builder& spillover(const cloud_storage::segment_meta& meta);
     /// Add truncate-archive-init command to the batch
@@ -132,7 +132,7 @@ public:
       ss::lowres_clock::time_point deadline,
       ss::abort_source&);
     ss::future<std::error_code> truncate(
-      kafka::offset start_kafka_offset,
+      sql::offset start_sql_offset,
       ss::lowres_clock::time_point deadline,
       ss::abort_source&);
 
@@ -218,7 +218,7 @@ public:
     model::offset get_last_offset() const;
     model::offset get_archive_start_offset() const;
     model::offset get_archive_clean_offset() const;
-    kafka::offset get_start_kafka_offset() const;
+    sql::offset get_start_sql_offset() const;
 
     // Return list of all segments that has to be
     // removed from S3.
@@ -273,7 +273,7 @@ private:
     struct add_segment_cmd;
     struct truncate_cmd;
     struct update_start_offset_cmd;
-    struct update_start_kafka_offset_cmd;
+    struct update_start_sql_offset_cmd;
     struct cleanup_metadata_cmd;
     struct mark_clean_cmd;
     struct truncate_archive_init_cmd;
@@ -304,7 +304,7 @@ private:
     void apply_truncate_archive_init(const start_offset_with_delta& so);
     void
     apply_truncate_archive_commit(model::offset co, uint64_t bytes_removed);
-    void apply_update_start_kafka_offset(kafka::offset so);
+    void apply_update_start_sql_offset(sql::offset so);
     void apply_reset_metadata();
     void apply_spillover(const spillover_cmd& so);
     void apply_replace_manifest(iobuf);

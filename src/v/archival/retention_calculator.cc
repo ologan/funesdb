@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/retention_calculator.h"
@@ -61,14 +61,14 @@ class offset_based_strategy final : public retention_strategy {
 public:
     static constexpr auto strat_name = "offset_based_retention";
 
-    explicit offset_based_strategy(kafka::offset);
+    explicit offset_based_strategy(sql::offset);
 
     bool done(const cloud_storage::partition_manifest::segment_meta&) override;
 
     ss::sstring name() const override;
 
 private:
-    kafka::offset _highest_offset_to_remove;
+    sql::offset _highest_offset_to_remove;
 };
 
 std::optional<retention_calculator> retention_calculator::factory(
@@ -114,16 +114,16 @@ std::optional<retention_calculator> retention_calculator::factory(
               std::make_unique<time_based_strategy>(oldest_allowed_timestamp));
         }
     }
-    auto start_kafka_override = manifest.get_start_kafka_offset_override();
-    if (start_kafka_override > kafka::offset(0)) {
+    auto start_sql_override = manifest.get_start_sql_offset_override();
+    if (start_sql_override > sql::offset(0)) {
         auto first_seg = manifest.first_addressable_segment();
         if (
           first_seg != manifest.end()
-          && start_kafka_override > first_seg->last_kafka_offset()) {
+          && start_sql_override > first_seg->last_sql_offset()) {
             // The user has passed in a start override via DeleteRecords, and
             // there exists at least one segment below this offset. Remove up
             // to the desired start offset.
-            auto highest_to_remove = start_kafka_override - kafka::offset(1);
+            auto highest_to_remove = start_sql_override - sql::offset(1);
             strats.emplace_back(
               std::make_unique<offset_based_strategy>(highest_to_remove));
         }
@@ -211,14 +211,14 @@ bool time_based_strategy::done(
 
 ss::sstring time_based_strategy::name() const { return strat_name; }
 
-offset_based_strategy::offset_based_strategy(kafka::offset highest_to_remove)
+offset_based_strategy::offset_based_strategy(sql::offset highest_to_remove)
   : _highest_offset_to_remove(highest_to_remove) {}
 
 bool offset_based_strategy::done(
   const cloud_storage::partition_manifest::segment_meta& current_segment_meta) {
     // If the last offset in the segment is above the truncation point, we
     // can't remove it based on offset alone.
-    return current_segment_meta.last_kafka_offset() > _highest_offset_to_remove;
+    return current_segment_meta.last_sql_offset() > _highest_offset_to_remove;
 };
 
 ss::sstring offset_based_strategy::name() const { return strat_name; }

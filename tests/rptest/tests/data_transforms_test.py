@@ -14,7 +14,7 @@ from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 from rptest.services.transform_verifier_service import TransformVerifierProduceConfig, TransformVerifierProduceStatus, TransformVerifierService, TransformVerifierConsumeConfig, TransformVerifierConsumeStatus
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 
 
@@ -26,7 +26,7 @@ class WasmException(Exception):
         return repr(self.message)
 
 
-class DataTransformsTest(RedpandaTest):
+class DataTransformsTest(FunesTest):
     """
     Tests related to WebAssembly powered data transforms
     """
@@ -37,7 +37,7 @@ class DataTransformsTest(RedpandaTest):
               self).__init__(test_context=test_context,
                              extra_rp_conf={'data_transforms_enabled': True})
         self._ctx = test_context
-        self._rpk = RpkTool(self.redpanda)
+        self._rpk = RpkTool(self.funes)
 
     def _deploy_wasm(self, name: str):
         """
@@ -128,7 +128,7 @@ class DataTransformsTest(RedpandaTest):
 
         status = TransformVerifierService.oneshot(
             context=self.test_context,
-            redpanda=self.redpanda,
+            funes=self.funes,
             config=TransformVerifierProduceConfig(
                 bytes_per_second='1MB',
                 max_batch_size='512KB',
@@ -145,7 +145,7 @@ class DataTransformsTest(RedpandaTest):
 
         result = TransformVerifierService.oneshot(
             context=self.test_context,
-            redpanda=self.redpanda,
+            funes=self.funes,
             config=TransformVerifierConsumeConfig(
                 topic=output_topic.name,
                 bytes_per_second='1MB',

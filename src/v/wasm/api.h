@@ -13,7 +13,7 @@
 
 #include "model/record.h"
 #include "model/transform.h"
-#include "pandaproxy/schema_registry/fwd.h"
+#include "funesproxy/schema_registry/fwd.h"
 #include "seastarx.h"
 #include "wasm/fwd.h"
 
@@ -76,7 +76,7 @@ public:
      * Create the default runtime.
      */
     static std::unique_ptr<runtime>
-    create_default(pandaproxy::schema_registry::api*);
+    create_default(funesproxy::schema_registry::api*);
 
     runtime() = default;
     runtime(const runtime&) = delete;

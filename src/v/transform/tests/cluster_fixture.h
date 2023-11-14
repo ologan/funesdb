@@ -19,18 +19,18 @@
  Use create_node_application(node_id) to add nodes to the cluster.
  */
 class WasmClusterFixture : public cluster_test_fixture {
-    fixture_ptr make_redpanda_fixture(
+    fixture_ptr make_funes_fixture(
       model::node_id node_id,
-      int16_t kafka_port,
+      int16_t sql_port,
       int16_t rpc_port,
       int16_t proxy_port,
       int16_t schema_reg_port,
       std::vector<config::seed_server> seeds,
       configure_node_id use_node_id,
       empty_seed_starts_cluster empty_seed_starts_cluster_val) override {
-        return std::make_unique<redpanda_thread_fixture>(
+        return std::make_unique<funes_thread_fixture>(
           node_id,
-          kafka_port,
+          sql_port,
           rpc_port,
           proxy_port,
           schema_reg_port,
@@ -54,7 +54,7 @@ public:
 
     void create_transform_offsets_topic(int num_partitions = 3) {
         create_topic(
-          {model::kafka_internal_namespace, model::transform_offsets_topic},
+          {model::sql_internal_namespace, model::transform_offsets_topic},
           num_partitions);
     }
 };

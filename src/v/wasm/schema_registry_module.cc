@@ -11,8 +11,8 @@
 
 #include "schema_registry_module.h"
 
-#include "pandaproxy/schema_registry/seq_writer.h"
-#include "pandaproxy/schema_registry/types.h"
+#include "funesproxy/schema_registry/seq_writer.h"
+#include "funesproxy/schema_registry/types.h"
 #include "utils/named_type.h"
 #include "vassert.h"
 #include "wasm/ffi.h"
@@ -27,34 +27,34 @@ constexpr serialized_schema_type protobuf = serialized_schema_type(1);
 constexpr serialized_schema_type json = serialized_schema_type(2);
 
 serialized_schema_type
-serialize_schema_type(pandaproxy::schema_registry::schema_type st) {
+serialize_schema_type(funesproxy::schema_registry::schema_type st) {
     switch (st) {
-    case pandaproxy::schema_registry::schema_type::avro:
+    case funesproxy::schema_registry::schema_type::avro:
         return avro;
-    case pandaproxy::schema_registry::schema_type::json:
+    case funesproxy::schema_registry::schema_type::json:
         return json;
-    case pandaproxy::schema_registry::schema_type::protobuf:
+    case funesproxy::schema_registry::schema_type::protobuf:
         return protobuf;
     }
     vassert(false, "unknown schema type: {}", st);
 }
 
-std::optional<pandaproxy::schema_registry::schema_type>
+std::optional<funesproxy::schema_registry::schema_type>
 deserialize_schema_type(serialized_schema_type st) {
     switch (st()) {
     case avro():
-        return pandaproxy::schema_registry::schema_type::avro;
+        return funesproxy::schema_registry::schema_type::avro;
     case json():
-        return pandaproxy::schema_registry::schema_type::json;
+        return funesproxy::schema_registry::schema_type::json;
     case protobuf():
-        return pandaproxy::schema_registry::schema_type::protobuf;
+        return funesproxy::schema_registry::schema_type::protobuf;
     }
     return std::nullopt;
 }
 
 template<typename T>
 void write_encoded_schema_def(
-  const pandaproxy::schema_registry::canonical_schema_definition& def, T* w) {
+  const funesproxy::schema_registry::canonical_schema_definition& def, T* w) {
     w->append(serialize_schema_type(def.type()));
     w->append_with_length(def.raw()());
     w->append(def.refs().size());
@@ -65,9 +65,9 @@ void write_encoded_schema_def(
     }
 }
 
-pandaproxy::schema_registry::unparsed_schema_definition
+funesproxy::schema_registry::unparsed_schema_definition
 read_encoded_schema_def(ffi::reader* r) {
-    using namespace pandaproxy::schema_registry;
+    using namespace funesproxy::schema_registry;
     auto serialized_type = serialized_schema_type(r->read_varint());
     auto type = deserialize_schema_type(serialized_type);
     if (!type.has_value()) {
@@ -89,7 +89,7 @@ read_encoded_schema_def(ffi::reader* r) {
 
 template<typename T>
 void write_encoded_schema_subject(
-  const pandaproxy::schema_registry::subject_schema& schema, T* w) {
+  const funesproxy::schema_registry::subject_schema& schema, T* w) {
     w->append(schema.id());
     w->append(schema.version());
     // not writing the subject because the client should already have it.
@@ -106,7 +106,7 @@ schema_registry_module::schema_registry_module(schema_registry* sr)
   : _sr(sr) {}
 
 ss::future<int32_t> schema_registry_module::get_schema_definition_len(
-  pandaproxy::schema_registry::schema_id schema_id, uint32_t* size_out) {
+  funesproxy::schema_registry::schema_id schema_id, uint32_t* size_out) {
     if (!_sr->is_enabled()) {
         co_return SCHEMA_REGISTRY_NOT_ENABLED;
     }
@@ -123,7 +123,7 @@ ss::future<int32_t> schema_registry_module::get_schema_definition_len(
 }
 
 ss::future<int32_t> schema_registry_module::get_schema_definition(
-  pandaproxy::schema_registry::schema_id schema_id, ffi::array<uint8_t> buf) {
+  funesproxy::schema_registry::schema_id schema_id, ffi::array<uint8_t> buf) {
     if (!_sr->is_enabled()) {
         co_return SCHEMA_REGISTRY_NOT_ENABLED;
     }
@@ -138,14 +138,14 @@ ss::future<int32_t> schema_registry_module::get_schema_definition(
     }
 }
 ss::future<int32_t> schema_registry_module::get_subject_schema_len(
-  pandaproxy::schema_registry::subject sub,
-  pandaproxy::schema_registry::schema_version version,
+  funesproxy::schema_registry::subject sub,
+  funesproxy::schema_registry::schema_version version,
   uint32_t* size_out) {
     if (!_sr->is_enabled()) {
         co_return SCHEMA_REGISTRY_NOT_ENABLED;
     }
 
-    using namespace pandaproxy::schema_registry;
+    using namespace funesproxy::schema_registry;
     try {
         std::optional<schema_version> v = version == invalid_schema_version
                                             ? std::nullopt
@@ -163,13 +163,13 @@ ss::future<int32_t> schema_registry_module::get_subject_schema_len(
 }
 
 ss::future<int32_t> schema_registry_module::get_subject_schema(
-  pandaproxy::schema_registry::subject sub,
-  pandaproxy::schema_registry::schema_version version,
+  funesproxy::schema_registry::subject sub,
+  funesproxy::schema_registry::schema_version version,
   ffi::array<uint8_t> buf) {
     if (!_sr->is_enabled()) {
         co_return SCHEMA_REGISTRY_NOT_ENABLED;
     }
-    using namespace pandaproxy::schema_registry;
+    using namespace funesproxy::schema_registry;
     try {
         std::optional<schema_version> v = version == invalid_schema_version
                                             ? std::nullopt
@@ -186,15 +186,15 @@ ss::future<int32_t> schema_registry_module::get_subject_schema(
 }
 
 ss::future<int32_t> schema_registry_module::create_subject_schema(
-  pandaproxy::schema_registry::subject sub,
+  funesproxy::schema_registry::subject sub,
   ffi::array<uint8_t> buf,
-  pandaproxy::schema_registry::schema_id* out_schema_id) {
+  funesproxy::schema_registry::schema_id* out_schema_id) {
     if (!_sr->is_enabled()) {
         co_return SCHEMA_REGISTRY_NOT_ENABLED;
     }
 
     ffi::reader r(buf);
-    using namespace pandaproxy::schema_registry;
+    using namespace funesproxy::schema_registry;
     try {
         auto unparsed = read_encoded_schema_def(&r);
         *out_schema_id = co_await _sr->create_schema(

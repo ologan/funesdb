@@ -15,7 +15,7 @@ from typing import Optional
 from ducktape.utils.util import wait_until
 from requests.exceptions import HTTPError
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.services.storage import Segment
 
 from ducktape.cluster.remoteaccount import RemoteCommandError
@@ -91,9 +91,9 @@ def wait_until_result(condition, *args, **kwargs):
     return res
 
 
-def segments_count(redpanda, topic, partition_idx):
-    storage = redpanda.storage(scan_cache=False)
-    topic_partitions = storage.partitions("kafka", topic)
+def segments_count(funes, topic, partition_idx):
+    storage = funes.storage(scan_cache=False)
+    topic_partitions = storage.partitions("sql", topic)
 
     return map(
         lambda p: len(p.segments),
@@ -101,13 +101,13 @@ def segments_count(redpanda, topic, partition_idx):
     )
 
 
-def produce_total_bytes(redpanda, topic, bytes_to_produce, acks=-1):
-    kafka_tools = KafkaCliTools(redpanda)
+def produce_total_bytes(funes, topic, bytes_to_produce, acks=-1):
+    sql_tools = SQLCliTools(funes)
 
     def done():
         nonlocal bytes_to_produce
 
-        kafka_tools.produce(topic, 10000, 1024, acks=acks)
+        sql_tools.produce(topic, 10000, 1024, acks=acks)
         bytes_to_produce -= 10000 * 1024
         return bytes_to_produce < 0
 
@@ -117,7 +117,7 @@ def produce_total_bytes(redpanda, topic, bytes_to_produce, acks=-1):
                err_msg="f{bytes_to_produce} bytes still left to produce")
 
 
-def produce_until_segments(redpanda,
+def produce_until_segments(funes,
                            topic,
                            partition_idx,
                            count,
@@ -127,14 +127,14 @@ def produce_until_segments(redpanda,
     """
     Produce into the topic until given number of segments will appear
     """
-    kafka_tools = KafkaCliTools(redpanda)
+    sql_tools = SQLCliTools(funes)
 
     def done():
-        kafka_tools.produce(topic,
+        sql_tools.produce(topic,
                             batch_size,
                             record_size=record_size,
                             acks=acks)
-        topic_partitions = segments_count(redpanda, topic, partition_idx)
+        topic_partitions = segments_count(funes, topic, partition_idx)
         partitions = []
         for p in topic_partitions:
             partitions.append(p >= count)
@@ -146,16 +146,16 @@ def produce_until_segments(redpanda,
                err_msg="Segments were not created")
 
 
-def wait_until_segments(redpanda,
+def wait_until_segments(funes,
                         topic,
                         partition_idx,
                         count,
                         timeout_sec=180):
     def done():
-        topic_partitions = segments_count(redpanda, topic, partition_idx)
-        redpanda.logger.debug(
+        topic_partitions = segments_count(funes, topic, partition_idx)
+        funes.logger.debug(
             f'wait_until_segments: '
-            f'segment count: {list(segments_count(redpanda, topic, partition_idx))}'
+            f'segment count: {list(segments_count(funes, topic, partition_idx))}'
         )
         return all([p >= count for p in topic_partitions])
 
@@ -165,7 +165,7 @@ def wait_until_segments(redpanda,
                err_msg=f"{count} segments were not created")
 
 
-def wait_for_removal_of_n_segments(redpanda, topic: str, partition_idx: int,
+def wait_for_removal_of_n_segments(funes, topic: str, partition_idx: int,
                                    n: int,
                                    original_snapshot: dict[str,
                                                            list[Segment]]):
@@ -173,18 +173,18 @@ def wait_for_removal_of_n_segments(redpanda, topic: str, partition_idx: int,
     Wait until 'n' segments of a partition that are present in the
     provided snapshot are removed by all brokers.
 
-    :param redpanda: redpanda service used by the test
+    :param funes: funes service used by the test
     :param topic: topic to wait on
     :param partition_idx: index of partition to wait on
     :param n: number of removed segments to wait for
     :param original_snapshot: snapshot of segments to compare against
     """
     def segments_removed():
-        current_snapshot = redpanda.storage(all_nodes=True,
+        current_snapshot = funes.storage(all_nodes=True,
                                             scan_cache=False).segments_by_node(
-                                                "kafka", topic, partition_idx)
+                                                "sql", topic, partition_idx)
 
-        redpanda.logger.debug(
+        funes.logger.debug(
             f"Current segment snapshot for topic {topic}: {pprint.pformat(current_snapshot, indent=1)}"
         )
 
@@ -210,7 +210,7 @@ def wait_for_removal_of_n_segments(redpanda, topic: str, partition_idx: int,
                err_msg="Segments were not removed from all nodes")
 
 
-def wait_for_local_storage_truncate(redpanda,
+def wait_for_local_storage_truncate(funes,
                                     topic: str,
                                     *,
                                     target_bytes: int,
@@ -228,16 +228,16 @@ def wait_for_local_storage_truncate(redpanda,
     if timeout_sec is None:
         timeout_sec = 120
 
-    redpanda.logger.debug(
+    funes.logger.debug(
         f"Waiting for local storage to be truncated to {target_bytes} bytes")
 
     sizes: list[int] = []
 
     def is_truncated():
-        storage = redpanda.storage(sizes=True, scan_cache=False)
+        storage = funes.storage(sizes=True, scan_cache=False)
         nonlocal sizes
         sizes = []
-        for node_partition in storage.partitions("kafka", topic):
+        for node_partition in storage.partitions("sql", topic):
             if partition_idx is not None and node_partition.num != partition_idx:
                 continue
 
@@ -246,11 +246,11 @@ def wait_for_local_storage_truncate(redpanda,
 
             total_size = sum(s.size if s.size else 0
                              for s in node_partition.segments.values())
-            redpanda.logger.debug(
+            funes.logger.debug(
                 f"  {topic}/{partition_idx} node {node_partition.node.name} local size {total_size} ({len(node_partition.segments)} segments)"
             )
             for s in node_partition.segments.values():
-                redpanda.logger.debug(
+                funes.logger.debug(
                     f"    {topic}/{partition_idx} node {node_partition.node.name} {s.name} {s.size}"
                 )
 
@@ -268,7 +268,7 @@ def wait_for_local_storage_truncate(redpanda,
                 first_segment_size = first_segment.size if first_segment.size else 0
                 sizes.append(total_size - first_segment_size)
 
-        # The segment which is open for appends will differ in Redpanda's internal
+        # The segment which is open for appends will differ in Funes's internal
         # sizing (exact) vs. what the filesystem reports for a falloc'd file (to the
         # nearest page).  Since our filesystem view may over-estimate the size of
         # the log by a page, adjust the target size by that much.
@@ -349,15 +349,15 @@ def _get_cluster_license(env_var):
 
 
 def get_cluster_license():
-    return _get_cluster_license("REDPANDA_SAMPLE_LICENSE")
+    return _get_cluster_license("FUNES_SAMPLE_LICENSE")
 
 
 def get_second_cluster_license():
-    return _get_cluster_license("REDPANDA_SECOND_SAMPLE_LICENSE")
+    return _get_cluster_license("FUNES_SECOND_SAMPLE_LICENSE")
 
 
 class firewall_blocked:
-    """Temporary firewall barrier that isolates set of redpanda
+    """Temporary firewall barrier that isolates set of funes
     nodes from the ip-address"""
     def __init__(self, nodes, blocked_port, full_block=False):
         self._nodes = nodes
@@ -388,19 +388,19 @@ class firewall_blocked:
             node.account.ssh_output(cmd, allow_fail=False)
 
 
-def search_logs_with_timeout(redpanda, pattern: str, timeout_s: int = 5):
-    wait_until(lambda: redpanda.search_log_any(pattern),
+def search_logs_with_timeout(funes, pattern: str, timeout_s: int = 5):
+    wait_until(lambda: funes.search_log_any(pattern),
                timeout_sec=timeout_s,
                err_msg=f"Failed to find pattern: {pattern}")
 
 
-def wait_for_recovery_throttle_rate(redpanda, new_rate: int):
+def wait_for_recovery_throttle_rate(funes, new_rate: int):
     # Recovery rate activates in the next coordinator tick, wait for it
     # to happen.
     def wait_for_throttle_update():
         def check_throttle_rate(node):
             try:
-                metrics = list(redpanda.metrics(node))
+                metrics = list(funes.metrics(node))
                 family = filter(
                     lambda fam: fam.name ==
                     "vectorized_raft_recovery_partition_movement_assigned_bandwidth",
@@ -414,21 +414,21 @@ def wait_for_recovery_throttle_rate(redpanda, new_rate: int):
                 # and max expected rate as reminder may be assigned to the node missing recovery tokens
                 max_expected_rate = new_rate
                 current_rate = int(sum([m.value for m in shard_rates]))
-                redpanda.logger.debug(
+                funes.logger.debug(
                     f"Node {node.name} has total rate: {current_rate}, expecting value in range: [{min_expected_rate}, {max_expected_rate}]"
                 )
                 return current_rate >= min_expected_rate and current_rate <= max_expected_rate
             except:
-                redpanda.logger.debug(
+                funes.logger.debug(
                     f"Error getting throttle rate for {node}", exc_info=True)
                 return False
 
-        brokers = redpanda._admin.get_brokers()
+        brokers = funes._admin.get_brokers()
         active_brokers = set([b['node_id'] for b in brokers])
         assert active_brokers
         filtered = [
-            n for n in redpanda.started_nodes()
-            if redpanda.node_id(n) in active_brokers
+            n for n in funes.started_nodes()
+            if funes.node_id(n) in active_brokers
         ]
         assert filtered
         return all([check_throttle_rate(n) for n in filtered])
@@ -447,7 +447,7 @@ def ssh_output_stderr(source_service,
     """Runs the command via SSH and captures stdout and stderr, returning it as a byte strings.
     this is a copy/mode of ssh_output, with the intention midterm to upstream it to ducktape
 
-    :param source_service: The service calling this function. used for logging purposes (e.g. redpanda)
+    :param source_service: The service calling this function. used for logging purposes (e.g. funes)
     :param cmd: The remote ssh command.
     :param node: where to run the command
     :param allow_fail: If True, ignore nonzero exit status of the remote command,

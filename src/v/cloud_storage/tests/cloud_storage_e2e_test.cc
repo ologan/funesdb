@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/ntp_archiver_service.h"
@@ -16,9 +16,9 @@
 #include "cloud_storage/tests/s3_imposter.h"
 #include "cluster/health_monitor_frontend.h"
 #include "config/configuration.h"
-#include "kafka/server/tests/produce_consume_utils.h"
+#include "sql/server/tests/produce_consume_utils.h"
 #include "model/fundamental.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/tests/fixture.h"
 #include "test_utils/scoped_config.h"
 
 #include <seastar/core/io_priority_class.hh>
@@ -27,20 +27,20 @@
 
 #include <iterator>
 
-using tests::kafka_consume_transport;
-using tests::kafka_produce_transport;
+using tests::sql_consume_transport;
+using tests::sql_produce_transport;
 using tests::kv_t;
 
 static ss::logger e2e_test_log("e2e_test");
 
 class e2e_fixture
   : public s3_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public enable_cloud_storage_fixture {
 public:
     e2e_fixture()
-      : redpanda_thread_fixture(
-        redpanda_thread_fixture::init_cloud_storage_tag{},
+      : funes_thread_fixture(
+        funes_thread_fixture::init_cloud_storage_tag{},
         httpd_port_number()) {
         // No expectations: tests will PUT and GET organically.
         set_expectations_and_listen({});
@@ -54,11 +54,11 @@ FIXTURE_TEST(test_produce_consume_from_cloud, e2e_fixture) {
     test_local_cfg.get("cloud_storage_disable_upload_loop_for_tests")
       .set_value(true);
     const model::topic topic_name("tapioca");
-    model::ntp ntp(model::kafka_namespace, topic_name, 0);
+    model::ntp ntp(model::sql_namespace, topic_name, 0);
     cluster::topic_properties props;
     props.shadow_indexing = model::shadow_indexing_mode::full;
     props.retention_local_target_bytes = tristate<size_t>(1);
-    add_topic({model::kafka_namespace, topic_name}, 1, props).get();
+    add_topic({model::sql_namespace, topic_name}, 1, props).get();
     wait_for_leader(ntp).get();
 
     // Do some sanity checks that our partition looks the way we expect (has a
@@ -68,7 +68,7 @@ FIXTURE_TEST(test_produce_consume_from_cloud, e2e_fixture) {
     auto& archiver = partition->archiver().value().get();
     BOOST_REQUIRE(archiver.sync_for_tests().get());
 
-    tests::remote_segment_generator gen(make_kafka_client().get(), *partition);
+    tests::remote_segment_generator gen(make_sql_client().get(), *partition);
     BOOST_REQUIRE_EQUAL(3, gen.records_per_batch(3).produce().get());
     BOOST_REQUIRE_EQUAL(2, log->segments().size());
     BOOST_REQUIRE_EQUAL(1, archiver.manifest().size());
@@ -90,7 +90,7 @@ FIXTURE_TEST(test_produce_consume_from_cloud, e2e_fixture) {
 
     // Attempt to consume from the beginning of the log. Since our local log
     // has been truncated, this exercises reading from cloud storage.
-    kafka_consume_transport consumer(make_kafka_client().get());
+    sql_consume_transport consumer(make_sql_client().get());
     consumer.start().get();
     auto consumed_records = consumer
                               .consume_from_partition(
@@ -119,12 +119,12 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
     test_local_cfg.get("retention_local_strict").set_value(true);
 
     const model::topic topic_name("tapioca");
-    model::ntp ntp(model::kafka_namespace, topic_name, 0);
+    model::ntp ntp(model::sql_namespace, topic_name, 0);
     cluster::topic_properties props;
     BOOST_REQUIRE(props.is_compacted() == false);
     props.shadow_indexing = model::shadow_indexing_mode::full;
     props.retention_local_target_bytes = tristate<size_t>(1);
-    add_topic({model::kafka_namespace, topic_name}, 1, props).get();
+    add_topic({model::sql_namespace, topic_name}, 1, props).get();
     wait_for_leader(ntp).get();
 
     // Do some sanity checks that our partition looks the way we expect (has a
@@ -135,7 +135,7 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
     BOOST_REQUIRE(archiver_ref.has_value());
     auto& archiver = archiver_ref.value().get();
 
-    kafka_produce_transport producer(make_kafka_client().get());
+    sql_produce_transport producer(make_sql_client().get());
     producer.start().get();
 
     // Produce to partition until the manifest is large enough to trigger
@@ -187,15 +187,15 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
 
     const auto& local_manifest = partition->archival_meta_stm()->manifest();
     auto so = local_manifest.get_start_offset();
-    auto ko = local_manifest.get_start_kafka_offset();
+    auto ko = local_manifest.get_start_sql_offset();
     auto archive_so = local_manifest.get_archive_start_offset();
-    auto archive_ko = local_manifest.get_archive_start_kafka_offset();
+    auto archive_ko = local_manifest.get_archive_start_sql_offset();
     auto archive_clean = local_manifest.get_archive_clean_offset();
 
     vlog(
       e2e_test_log.info,
-      "new start offset: {}, new start kafka offset: {}, archive start offset: "
-      "{}, archive start kafka offset: {}, "
+      "new start offset: {}, new start sql offset: {}, archive start offset: "
+      "{}, archive start sql offset: {}, "
       "archive clean offset: {}",
       so,
       ko,
@@ -250,8 +250,8 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
     BOOST_REQUIRE(model::next_offset(last.get_last_offset()) == so);
     BOOST_REQUIRE(first.get_start_offset().has_value());
     BOOST_REQUIRE(first.get_start_offset().value() == archive_so);
-    BOOST_REQUIRE(first.get_start_kafka_offset().has_value());
-    BOOST_REQUIRE(first.get_start_kafka_offset().value() == archive_ko);
+    BOOST_REQUIRE(first.get_start_sql_offset().has_value());
+    BOOST_REQUIRE(first.get_start_sql_offset().value() == archive_ko);
 
     model::offset expected_so = archive_so;
     for (const auto& [key, m] : spillover_manifests) {
@@ -262,7 +262,7 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
 
     // Consume from start offset of the partition (data available in the STM).
     vlog(e2e_test_log.info, "Consuming from the partition");
-    kafka_consume_transport consumer(make_kafka_client().get());
+    sql_consume_transport consumer(make_sql_client().get());
     consumer.start().get();
     std::vector<kv_t> consumed_records;
     auto next_offset = archive_ko;
@@ -271,7 +271,7 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
                      .consume_from_partition(
                        topic_name,
                        model::partition_id(0),
-                       kafka::offset_cast(next_offset))
+                       sql::offset_cast(next_offset))
                      .get();
         vlog(e2e_test_log.debug, "{} records consumed", tmp.size());
         std::copy(tmp.begin(), tmp.end(), std::back_inserter(consumed_records));
@@ -293,9 +293,9 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
     const auto timeout = 10s;
     auto deadline = ss::lowres_clock::now() + timeout;
     ss::abort_source as;
-    vlog(e2e_test_log.debug, "Truncating log up to kafka offset {}", new_so);
+    vlog(e2e_test_log.debug, "Truncating log up to sql offset {}", new_so);
     auto truncation_result = partition->archival_meta_stm()
-                               ->truncate(kafka::offset(new_so), deadline, as)
+                               ->truncate(sql::offset(new_so), deadline, as)
                                .get();
     if (!truncation_result) {
         vlog(
@@ -306,16 +306,16 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
 
     consumed_records.clear();
     auto last_offset = next_offset - model::offset(1);
-    next_offset = kafka::offset(new_so);
+    next_offset = sql::offset(new_so);
     while (next_offset < last_offset) {
         auto tmp = consumer
                      .consume_from_partition(
                        topic_name,
                        model::partition_id(0),
-                       kafka::offset_cast(next_offset))
+                       sql::offset_cast(next_offset))
                      .get();
         std::copy(tmp.begin(), tmp.end(), std::back_inserter(consumed_records));
-        next_offset += kafka::offset((int64_t)tmp.size());
+        next_offset += sql::offset((int64_t)tmp.size());
         vlog(
           e2e_test_log.debug,
           "{} records consumed, next offset: {}, target: {}",
@@ -338,13 +338,13 @@ FIXTURE_TEST(test_produce_consume_from_cloud_with_spillover, e2e_fixture) {
 
 class cloud_storage_manual_e2e_test
   : public s3_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public enable_cloud_storage_fixture {
 public:
     static constexpr auto segs_per_spill = 10;
     cloud_storage_manual_e2e_test()
-      : redpanda_thread_fixture(
-        redpanda_thread_fixture::init_cloud_storage_tag{},
+      : funes_thread_fixture(
+        funes_thread_fixture::init_cloud_storage_tag{},
         httpd_port_number()) {
         // No expectations: tests will PUT and GET organically.
         set_expectations_and_listen({});
@@ -367,7 +367,7 @@ public:
           .set_value(std::optional<size_t>{});
 
         topic_name = model::topic("tapioca");
-        ntp = model::ntp(model::kafka_namespace, topic_name, 0);
+        ntp = model::ntp(model::sql_namespace, topic_name, 0);
 
         // Create a tiered storage topic with very little local retention.
         cluster::topic_properties props;
@@ -375,7 +375,7 @@ public:
         props.retention_local_target_bytes = tristate<size_t>(1);
         props.cleanup_policy_bitflags
           = model::cleanup_policy_bitflags::deletion;
-        add_topic({model::kafka_namespace, topic_name}, 1, props).get();
+        add_topic({model::sql_namespace, topic_name}, 1, props).get();
         wait_for_leader(ntp).get();
         partition = app.partition_manager.local().get(ntp).get();
         log = partition->log();
@@ -393,10 +393,10 @@ public:
 namespace {
 
 ss::future<bool> check_consume_from_beginning(
-  kafka::client::transport client,
+  sql::client::transport client,
   const model::topic& topic_name,
   ss::gate& gate) {
-    kafka_consume_transport consumer(std::move(client));
+    sql_consume_transport consumer(std::move(client));
     co_await consumer.start();
     int iters = 0;
     while (iters == 0 || !gate.is_closed()) {
@@ -426,7 +426,7 @@ FIXTURE_TEST(test_consume_during_spillover, cloud_storage_manual_e2e_test) {
     test_local_cfg.get("fetch_max_bytes").set_value(size_t{10});
     const auto records_per_seg = 5;
     const auto num_segs = 40;
-    tests::remote_segment_generator gen(make_kafka_client().get(), *partition);
+    tests::remote_segment_generator gen(make_sql_client().get(), *partition);
     auto total_records = gen.num_segments(num_segs)
                            .batches_per_segment(records_per_seg)
                            .produce()
@@ -435,12 +435,12 @@ FIXTURE_TEST(test_consume_during_spillover, cloud_storage_manual_e2e_test) {
 
     ss::gate g;
 
-    std::vector<kafka::client::transport> clients;
+    std::vector<sql::client::transport> clients;
     std::vector<ss::future<bool>> checks;
     clients.reserve(10);
     checks.reserve(10);
     for (int i = 0; i < 10; i++) {
-        clients.emplace_back(make_kafka_client().get());
+        clients.emplace_back(make_sql_client().get());
     }
     for (auto& client : clients) {
         checks.push_back(
@@ -483,17 +483,17 @@ FIXTURE_TEST(
 
     // test topic
     const model::topic topic_name("tapioca");
-    model::ntp ntp(model::kafka_namespace, topic_name, 0);
+    model::ntp ntp(model::sql_namespace, topic_name, 0);
     cluster::topic_properties props;
     props.shadow_indexing = model::shadow_indexing_mode::full;
     props.cleanup_policy_bitflags = model::cleanup_policy_bitflags::deletion;
     props.segment_size = 64_KiB;
     props.retention_local_target_bytes = tristate<size_t>(1);
-    add_topic({model::kafka_namespace, topic_name}, 1, props, 2).get();
+    add_topic({model::sql_namespace, topic_name}, 1, props, 2).get();
 
     // figuring out the leader is useful for constructing the producer. the
     // follower is just the "other" node.
-    redpanda_thread_fixture* fx_l = nullptr;
+    funes_thread_fixture* fx_l = nullptr;
     RPTEST_REQUIRE_EVENTUALLY(10s, [&] {
         cluster::partition* prt_a
           = app.partition_manager.local().get(ntp).get();
@@ -515,7 +515,7 @@ FIXTURE_TEST(
 
     auto prt_l = fx_l->app.partition_manager.local().get(ntp);
 
-    kafka_produce_transport producer(fx_l->make_kafka_client().get());
+    sql_produce_transport producer(fx_l->make_sql_client().get());
     producer.start().get();
 
     auto get_reclaimable = [&]() -> std::optional<std::vector<size_t>> {
@@ -533,7 +533,7 @@ FIXTURE_TEST(
                     if (
                       topic.tp_ns
                       != model::topic_namespace_view(
-                        model::kafka_namespace, topic_name)) {
+                        model::sql_namespace, topic_name)) {
                         continue;
                     }
                     for (auto partition : topic.partitions) {

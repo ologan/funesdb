@@ -1,5 +1,5 @@
-from confluent_kafka import Producer, Consumer, KafkaException, KafkaError
-from confluent_kafka import TopicPartition, OFFSET_BEGINNING
+from confluent_sql import Producer, Consumer, SQLException, SQLError
+from confluent_sql import TopicPartition, OFFSET_BEGINNING
 import random
 
 import time
@@ -21,7 +21,7 @@ class SyncProducer:
 
     def on_delivery(self, err, msg):
         if err is not None:
-            raise KafkaException(err)
+            raise SQLException(err)
         self.last_msg = msg
 
     def produce(self, topic, partition, key, value, timeout_s):
@@ -34,9 +34,9 @@ class SyncProducer:
         self.producer.flush(timeout_s)
         msg = self.last_msg
         if msg == None:
-            raise KafkaException(KafkaError(KafkaError._MSG_TIMED_OUT))
+            raise SQLException(SQLError(SQLError._MSG_TIMED_OUT))
         if msg.error() != None:
-            raise KafkaException(msg.error())
+            raise SQLException(msg.error())
         assert msg.offset() != None
         return msg.offset()
 
@@ -69,7 +69,7 @@ class LogReader:
         begin = time.time()
         while True:
             if time.time() - begin > timeout_s:
-                raise KafkaException(KafkaError(KafkaError._TIMED_OUT))
+                raise SQLException(SQLError(SQLError._TIMED_OUT))
             for msg in self.stream:
                 offset = msg.offset()
                 value = msg.value().decode('utf-8')
@@ -125,20 +125,20 @@ class PingPong:
                                                value=value,
                                                timeout_s=timeout_s)
                 break
-            except KafkaException as e:
+            except SQLException as e:
                 if count > retries:
                     raise
-                if e.args[0].code() == KafkaError._MSG_TIMED_OUT:
+                if e.args[0].code() == SQLError._MSG_TIMED_OUT:
                     pass
-                elif e.args[0].code() == KafkaError._TIMED_OUT:
+                elif e.args[0].code() == SQLError._TIMED_OUT:
                     pass
                 else:
                     raise
                 random.shuffle(self.brokers)
                 bootstrap = ",".join(self.brokers)
                 # recreating a producer to overcome this issue
-                # https://github.com/confluentinc/confluent-kafka-python/issues/1335
-                # once it's fixed we should rely on the internal confluent_kafka's
+                # https://github.com/confluentinc/confluent-sql-python/issues/1335
+                # once it's fixed we should rely on the internal confluent_sql's
                 # ability to retry the init_producer_id request
                 self.producer = SyncProducer(bootstrap)
                 self.producer.init()

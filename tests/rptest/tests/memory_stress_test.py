@@ -13,11 +13,11 @@ from ducktape.mark import ok_to_fail, parametrize
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
 from rptest.services.kaf_consumer import KafConsumer
-from rptest.services.redpanda import ResourceSettings
+from rptest.services.funes import ResourceSettings
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.services.rpk_producer import RpkProducer
 from rptest.services.verifiable_consumer import VerifiableConsumer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.mode_checks import skip_debug_mode
 
 
@@ -27,12 +27,12 @@ class Consumers(Enum):
     VERIFIABLE = 3
 
 
-class MemoryStressTest(RedpandaTest):
+class MemoryStressTest(FunesTest):
     """
-    Try various ways to reach out-of-memory condition in a broker via Kafka API
+    Try various ways to reach out-of-memory condition in a broker via SQL API
     """
     def setUp(self):
-        # Override parent setUp so that we don't start redpanda until each test,
+        # Override parent setUp so that we don't start funes until each test,
         # enabling each test case to customize its ResourceSettings
         pass
 
@@ -48,20 +48,20 @@ class MemoryStressTest(RedpandaTest):
         Exhaust memory by consuming from too many partitions in a single Fetch
         API request.
         """
-        # memory_mb does not work with debug redpanda build, therefore the test
-        # only makes sense with release redpanda, hence @skip_debug_mode
-        self.redpanda.set_resource_settings(
+        # memory_mb does not work with debug funes build, therefore the test
+        # only makes sense with release funes, hence @skip_debug_mode
+        self.funes.set_resource_settings(
             ResourceSettings(memory_mb=512, num_cpus=1))
-        self.redpanda.set_seed_servers(self.redpanda.nodes)
-        self.redpanda.add_extra_rp_conf({
-            "kafka_batch_max_bytes":
+        self.funes.set_seed_servers(self.funes.nodes)
+        self.funes.add_extra_rp_conf({
+            "sql_batch_max_bytes":
             10 * 1024 * 1024,
-            "kafka_memory_share_for_fetch":
+            "sql_memory_share_for_fetch":
             memory_share_for_fetch
         })
-        self.redpanda.start(omit_seeds_on_idx_one=False)
+        self.funes.start(omit_seeds_on_idx_one=False)
 
-        # the maximum message size that does not make redpanda OOM with all
+        # the maximum message size that does not make funes OOM with all
         # the other params as they are is 64 MiB
         msg_size = 1024 * 1024
         partition_count = 400
@@ -81,7 +81,7 @@ class MemoryStressTest(RedpandaTest):
             f"produce_timeout={produce_timeout}")
 
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                msg_size=msg_size,
                                msg_count=msg_count,
@@ -101,14 +101,14 @@ class MemoryStressTest(RedpandaTest):
                 if consumer_type == Consumers.RPK:
                     consumers.append(
                         RpkConsumer(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     self.topic,
                                     fetch_max_bytes=1024 * 1024 * 3,
                                     num_msgs=msg_count))
                 elif consumer_type == Consumers.KAF:
                     consumers.append(
                         KafConsumer(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     self.topic,
                                     offset_for_read="oldest",
                                     num_records=msg_count))
@@ -117,7 +117,7 @@ class MemoryStressTest(RedpandaTest):
                         consumers.append(
                             VerifiableConsumer(self.test_context,
                                                1,
-                                               self.redpanda,
+                                               self.funes,
                                                self.topic,
                                                "verifiable-group",
                                                max_messages=msg_count))
@@ -132,8 +132,8 @@ class MemoryStressTest(RedpandaTest):
             for consumer in consumers:
                 consumer.free()
 
-        # TBD: for faster detection of redpanda crash, have a check in all
-        # redpanda nodes that the process is still alive and abort the test
+        # TBD: for faster detection of funes crash, have a check in all
+        # funes nodes that the process is still alive and abort the test
         # if it is not
 
         # TBD: add librdkafa based consumer

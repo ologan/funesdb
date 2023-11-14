@@ -7,7 +7,7 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
 
-// Package selftest contains commands to talk to the Redpanda's admin self_test
+// Package selftest contains commands to talk to the Funes's admin self_test
 // endpoints.
 package selftest
 
@@ -20,7 +20,7 @@ import (
 func NewSelfTestCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "self-test",
-		Short: "Start, stop and query runs of Redpanda self-test through the Admin API listener",
+		Short: "Start, stop and query runs of Funes self-test through the Admin API listener",
 		Args:  cobra.ExactArgs(0),
 	}
 	p.InstallAdminFlags(cmd)

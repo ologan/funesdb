@@ -2,18 +2,18 @@ import os
 from pathlib import Path
 
 import subprocess
-from kafka import KafkaAdminClient
-from kafka import KafkaConsumer
-from kafka.admin.new_topic import NewTopic
-from kafka import TopicPartition
-from kafka import OffsetAndMetadata
+from sql import SQLAdminClient
+from sql import SQLConsumer
+from sql.admin.new_topic import NewTopic
+from sql import TopicPartition
+from sql import OffsetAndMetadata
 from jproperties import Properties
 import logging
 
 logger = logging.getLogger('cg-recovery-tool')
 
 
-def read_offsets(admin: KafkaAdminClient):
+def read_offsets(admin: SQLAdminClient):
 
     groups_dict = {}
     groups = admin.list_consumer_groups()
@@ -48,7 +48,7 @@ def seek_to_file(path, cfg, dry_run):
             if i == 0:
                 group = l.strip()
                 if not dry_run:
-                    consumer = KafkaConsumer(group_id=group, **cfg)
+                    consumer = SQLConsumer(group_id=group, **cfg)
                 logger.info(f"seeking group {group} to file {path}")
                 continue
             if l == "":
@@ -77,7 +77,7 @@ def seek_all(config, path, dry_run):
 
 
 def query_offsets(offsets_path, cfg):
-    admin = KafkaAdminClient(**cfg)
+    admin = SQLAdminClient(**cfg)
 
     current_offsets = read_offsets(admin)
     path = Path(offsets_path)
@@ -93,7 +93,7 @@ def query_offsets(offsets_path, cfg):
 
 
 def recreate_topic(partitions, replication_factor, cfg):
-    admin = KafkaAdminClient(**cfg)
+    admin = SQLAdminClient(**cfg)
     logger.info('removing __consumer_offsets topic')
 
     admin.delete_topics(["__consumer_offsets"])
@@ -115,7 +115,7 @@ def main():
 
     def generate_options():
         parser = argparse.ArgumentParser(
-            description='Redpanda group recovery tool')
+            description='Funes group recovery tool')
         parser.add_argument('--cfg',
                             type=str,
                             help='config file path',

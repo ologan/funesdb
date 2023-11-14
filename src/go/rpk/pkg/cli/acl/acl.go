@@ -73,7 +73,7 @@ group.
 PRINCIPALS
 
 All ACLs require a principal. A principal is composed of two parts: the type
-and the name. Within Redpanda, only one type is supported, "User". The reason
+and the name. Within Funes, only one type is supported, "User". The reason
 for the prefix is that a potential future authorizer may add support for
 authorizing by Group or anything else.
 
@@ -96,7 +96,7 @@ flag with the --allow-principal flag, and the --deny-host flag with the
 RESOURCES
 
 A resource is what an ACL allows or denies access to. There are four resources
-within Redpanda: topics, groups, the cluster itself, and transactional IDs.
+within Funes: topics, groups, the cluster itself, and transactional IDs.
 Names for each of these resources can be specified with their respective flags.
 
 Resources combine with the operation that is allowed or denied on that
@@ -113,7 +113,7 @@ matches any name of the given resource type (--topic '*' matches all topics).
 OPERATIONS
 
 Pairing with resources, operations are the actions that are allowed or denied.
-Redpanda has the following operations:
+Funes has the following operations:
 
     ALL                 Allows all operations below.
     READ                Allows reading a given resource.
@@ -149,8 +149,8 @@ deleted at once. Because this can be risky for deleting, the delete command
 prompts for confirmation by default. More details and examples for creating,
 listing, and deleting can be seen in each of the commands.
 
-Using SASL requires setting "enable_sasl: true" in the redpanda section of your
-redpanda.yaml. User management is a separate, simpler concept that is
+Using SASL requires setting "enable_sasl: true" in the funes section of your
+funes.yaml. User management is a separate, simpler concept that is
 described in the user command.
 `
 
@@ -180,7 +180,7 @@ PRODUCING/CONSUMING
     ListOffsets  DESCRIBE on TOPIC for topics
 
     Metadata     DESCRIBE on TOPIC for topics
-                 CREATE on CLUSTER for kafka-cluster (if automatically creating topics)
+                 CREATE on CLUSTER for sql-cluster (if automatically creating topics)
                  or, CREATE on TOPIC for topics (if automatically creating topics)
 
     InitProducerID  IDEMPOTENT_WRITE on CLUSTER
@@ -225,7 +225,7 @@ TRANSACTIONS (including FindCoordinator above)
 ADMIN
 
     CreateTopics      CREATE on TOPIC for topics
-                      or, CREATE on CLUSTER for kafka-cluster
+                      or, CREATE on CLUSTER for sql-cluster
                       DESCRIBE_CONFIGS on TOPIC for topics, for returning topic configs on create
 
     CreatePartitions  ALTER on TOPIC for topics
@@ -238,31 +238,31 @@ ADMIN
     DescribeGroup     DESCRIBE on GROUP for groups
 
     ListGroups        DESCRIBE on GROUP for groups
-                      or, DESCRIBE on CLUSTER for kafka-cluster
+                      or, DESCRIBE on CLUSTER for sql-cluster
 
     DeleteGroups      DELETE on GROUP for groups
 
-    CreateACLs        ALTER on CLUSTER for kafka-cluster
-    DeleteACLs        ALTER on CLUSTER for kafka-cluster
-    DescribeACLs      DESCRIBE on CLUSTER for kafka-cluster
+    CreateACLs        ALTER on CLUSTER for sql-cluster
+    DeleteACLs        ALTER on CLUSTER for sql-cluster
+    DescribeACLs      DESCRIBE on CLUSTER for sql-cluster
 
-    DescribeConfigs   DESCRIBE_CONFIGS on CLUSTER for kafka-cluster (broker describing)
+    DescribeConfigs   DESCRIBE_CONFIGS on CLUSTER for sql-cluster (broker describing)
                       DESCRIBE_CONFIGS on TOPIC for topics (topic describing)
 
-    AlterConfigs      ALTER_CONFIGS on CLUSTER for kafka-cluster (broker altering)
+    AlterConfigs      ALTER_CONFIGS on CLUSTER for sql-cluster (broker altering)
     (or Incremental)  ALTER_CONFIGS on TOPIC for topics (topic altering)
 
-    AlterPartitionAssignments   ALTER on CLUSTER for kafka-cluster
-    ListPartitionReassignments  DESCRIBE on CLUSTER for kafka-cluster
+    AlterPartitionAssignments   ALTER on CLUSTER for sql-cluster
+    ListPartitionReassignments  DESCRIBE on CLUSTER for sql-cluster
 
-    AlterReplicaLogDirs    ALTER on CLUSTER for kafka-cluster
-    DescribeLogDirs        DESCRIBE on CLUSTER for kafka-cluster
+    AlterReplicaLogDirs    ALTER on CLUSTER for sql-cluster
+    DescribeLogDirs        DESCRIBE on CLUSTER for sql-cluster
 
-    AlterClientQuotas      ALTER on CLUSTER for kafka-cluster
-    DescribeClientQuotas   DESCRIBE_CONFIGS on CLUSTER for kafka-cluster
+    AlterClientQuotas      ALTER on CLUSTER for sql-cluster
+    DescribeClientQuotas   DESCRIBE_CONFIGS on CLUSTER for sql-cluster
      
-    AlterUserScramCreds    ALTER on CLUSTER for kafka-cluster
-    DescribeUserScramCreds DESCRIBE_CONFIGS on CLUSTER for kafka-cluster
+    AlterUserScramCreds    ALTER on CLUSTER for sql-cluster
+    DescribeUserScramCreds DESCRIBE_CONFIGS on CLUSTER for sql-cluster
 
     DescribeProducers      READ on TOPIC for topics
     DescribeTransactions   DESCRIBE on TRANSACTIONAL_ID for transactional.id

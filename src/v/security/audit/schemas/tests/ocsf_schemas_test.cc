@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "json/json.h"
@@ -34,7 +34,7 @@ namespace sa = security::audit;
 
 static const sa::user default_user{
   .domain = "redpanda.com",
-  .name = "redpanda-user",
+  .name = "funes-user",
   .type_id = sa::user::type::user,
   .uid = "none"};
 
@@ -42,7 +42,7 @@ static const ss::sstring default_user_ser{
   R"(
 {
 "domain": "redpanda.com",
-"name": "redpanda-user",
+"name": "funes-user",
 "type_id": 1,
 "uid": "none"
 }
@@ -64,26 +64,26 @@ static const ss::sstring authz_success_ser{
 })"};
 
 static const sa::api api_create_topic{
-  .operation = "create_topic", .service = {.name = "kafka rpc"}};
+  .operation = "create_topic", .service = {.name = "sql rpc"}};
 
 static const ss::sstring api_create_topic_ser{
   R"(
 {
   "operation": "create_topic",
   "service": {
-    "name": "kafka rpc"
+    "name": "sql rpc"
   }
 })"};
 
-static const sa::network_endpoint rp_kafka_endpoint{
-  .addr{"1.1.1.1", 9092}, .svc_name = "kafka", .uid = "cluster1"};
+static const sa::network_endpoint rp_sql_endpoint{
+  .addr{"1.1.1.1", 9092}, .svc_name = "sql", .uid = "cluster1"};
 
-static const ss::sstring rp_kafka_endpoint_ser{
+static const ss::sstring rp_sql_endpoint_ser{
   R"(
 {
   "ip": "1.1.1.1",
   "port": 9092,
-  "svc_name": "kafka",
+  "svc_name": "sql",
   "uid": "cluster1"
 }
 )"};
@@ -99,13 +99,13 @@ static const ss::sstring resource_detail_ser{
 }
 )"};
 
-static const sa::network_endpoint client_kafka_endpoint{
+static const sa::network_endpoint client_sql_endpoint{
   .intermediate_ips = {"2.2.2.2", "3.3.3.3"},
   .addr{"1.1.1.2", 9092},
   .name = "rpk",
 };
 
-static const ss::sstring client_kafka_endpoint_ser{
+static const ss::sstring client_sql_endpoint_ser{
   R"(
 {
   "intermediate_ips": ["2.2.2.2", "3.3.3.3"],
@@ -121,7 +121,7 @@ static const sa::api_activity_unmapped unmapped {
       .host = "*",
       .op = "CREATE",
       .permission_type = "ALLOW",
-      .principal = "User:redpanda-user",
+      .principal = "User:funes-user",
     },
     .resource = {
       .name = "topic1",
@@ -139,7 +139,7 @@ static const ss::sstring unmapped_ser{
       "host": "*",
       "op": "CREATE",
       "permission_type": "ALLOW",
-      "principal": "User:redpanda-user"
+      "principal": "User:funes-user"
     },
     "resource": {
       "name": "topic1",
@@ -154,10 +154,10 @@ static const ss::sstring metadata_ser{
   R"(
 {
   "product": {
-    "name": "Redpanda",
+    "name": "Funes",
     "vendor_name": "Redpanda Data, Inc.",
     "version": ")"
-  + ss::sstring{redpanda_git_version()} + R"("
+  + ss::sstring{funes_git_version()} + R"("
   },
   "version": "1.0.0"
 }
@@ -167,10 +167,10 @@ static const ss::sstring metadata_cloud_profile_ser{
   R"(
 {
   "product": {
-    "name": "Redpanda",
+    "name": "Funes",
     "vendor_name": "Redpanda Data, Inc.",
     "version": ")"
-  + ss::sstring{redpanda_git_version()} + R"("
+  + ss::sstring{funes_git_version()} + R"("
   },
   "profiles": ["cloud"],
   "version": "1.0.0"
@@ -210,7 +210,7 @@ static const ss::sstring test_http_request_ser{
 static const sa::product test_product{
   .name = "test-product",
   .vendor_name = ss::sstring{sa::vendor_name},
-  .version = ss::sstring{redpanda_git_version()},
+  .version = ss::sstring{funes_git_version()},
   .feature = sa::feature{.name = "test-feature"}};
 
 static const ss::sstring test_product_ser{
@@ -223,7 +223,7 @@ static const ss::sstring test_product_ser{
   "vendor_name": ")"
   + ss::sstring{sa::vendor_name} + R"(",
   "version": ")"
-  + ss::sstring{redpanda_git_version()} + R"("
+  + ss::sstring{funes_git_version()} + R"("
 }
 )"};
 
@@ -237,8 +237,8 @@ static const ss::sstring test_service_ser{
   )"};
 
 BOOST_AUTO_TEST_CASE(validate_api_activity) {
-    auto dst_endpoint = rp_kafka_endpoint;
-    auto src_endpoint = client_kafka_endpoint;
+    auto dst_endpoint = rp_sql_endpoint;
+    auto src_endpoint = client_sql_endpoint;
     auto now = sa::timestamp_t{
       std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch())
@@ -280,13 +280,13 @@ BOOST_AUTO_TEST_CASE(validate_api_activity) {
       + api_create_topic_ser + R"(,
     "cloud": { "provider": "" },
     "dst_endpoint": )"
-      + rp_kafka_endpoint_ser + R"(,
+      + rp_sql_endpoint_ser + R"(,
     "http_request": )"
       + test_http_request_ser + R"(,
     "resources": [)"
       + resource_detail_ser + R"(],
     "src_endpoint": )"
-      + client_kafka_endpoint_ser + R"(,
+      + client_sql_endpoint_ser + R"(,
     "status_id": 1,
     "unmapped": )"
       + unmapped_ser + R"(
@@ -296,8 +296,8 @@ BOOST_AUTO_TEST_CASE(validate_api_activity) {
 }
 
 BOOST_AUTO_TEST_CASE(validate_authentication_sasl_scram) {
-    auto dst_endpoint = rp_kafka_endpoint;
-    auto src_endpoint = client_kafka_endpoint;
+    auto dst_endpoint = rp_sql_endpoint;
+    auto src_endpoint = client_sql_endpoint;
     auto now = sa::timestamp_t{
       std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch())
@@ -333,13 +333,13 @@ BOOST_AUTO_TEST_CASE(validate_authentication_sasl_scram) {
 "auth_protocol": "SCRAM-SHA256",
 "auth_protocol_id": 99,
 "dst_endpoint": )"
-      + rp_kafka_endpoint_ser + R"(,
+      + rp_sql_endpoint_ser + R"(,
 "is_cleartext": false,
 "is_mfa": true,
 "service": )"
       + test_service_ser + R"(,
 "src_endpoint": )"
-      + client_kafka_endpoint_ser + R"(,
+      + client_sql_endpoint_ser + R"(,
 "status_id": 1,
 "user": )"
       + default_user_ser + R"(
@@ -350,8 +350,8 @@ BOOST_AUTO_TEST_CASE(validate_authentication_sasl_scram) {
 }
 
 BOOST_AUTO_TEST_CASE(validate_authentication_kerberos) {
-    auto dst_endpoint = rp_kafka_endpoint;
-    auto src_endpoint = client_kafka_endpoint;
+    auto dst_endpoint = rp_sql_endpoint;
+    auto src_endpoint = client_sql_endpoint;
     auto now = sa::timestamp_t{
       std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch())
@@ -386,13 +386,13 @@ BOOST_AUTO_TEST_CASE(validate_authentication_kerberos) {
 "activity_id": 1,
 "auth_protocol_id": 2,
 "dst_endpoint": )"
-      + rp_kafka_endpoint_ser + R"(,
+      + rp_sql_endpoint_ser + R"(,
 "is_cleartext": true,
 "is_mfa": false,
 "service": )"
       + test_service_ser + R"(,
 "src_endpoint": )"
-      + client_kafka_endpoint_ser + R"(,
+      + client_sql_endpoint_ser + R"(,
 "status_id": 2,
 "status_detail": "Failure",
 "user": )"
@@ -483,8 +483,8 @@ BOOST_AUTO_TEST_CASE(validate_api_activity_hash) {
     {
         size_t hash1 = 0, hash2 = 0;
         {
-            auto dst_endpoint = rp_kafka_endpoint;
-            auto src_endpoint = client_kafka_endpoint;
+            auto dst_endpoint = rp_sql_endpoint;
+            auto src_endpoint = client_sql_endpoint;
             auto now = sa::timestamp_t{1};
             auto api_act = sa::api_activity{
               sa::api_activity::activity_id::create,
@@ -502,8 +502,8 @@ BOOST_AUTO_TEST_CASE(validate_api_activity_hash) {
             hash1 = api_act.key();
         }
         {
-            auto dst_endpoint = rp_kafka_endpoint;
-            auto src_endpoint = client_kafka_endpoint;
+            auto dst_endpoint = rp_sql_endpoint;
+            auto src_endpoint = client_sql_endpoint;
             std::vector<sa::resource_detail> resources{resource_detail};
             auto now = sa::timestamp_t{2};
             auto api_act = sa::api_activity{
@@ -533,8 +533,8 @@ BOOST_AUTO_TEST_CASE(validate_api_activity_hash) {
     {
         size_t hash1 = 0, hash2 = 0;
         {
-            auto dst_endpoint = rp_kafka_endpoint;
-            auto src_endpoint = client_kafka_endpoint;
+            auto dst_endpoint = rp_sql_endpoint;
+            auto src_endpoint = client_sql_endpoint;
             auto now = sa::timestamp_t{3};
             auto api_act = sa::api_activity{
               sa::api_activity::activity_id::create,
@@ -552,8 +552,8 @@ BOOST_AUTO_TEST_CASE(validate_api_activity_hash) {
             hash1 = api_act.key();
         }
         {
-            auto dst_endpoint = rp_kafka_endpoint;
-            auto src_endpoint = client_kafka_endpoint;
+            auto dst_endpoint = rp_sql_endpoint;
+            auto src_endpoint = client_sql_endpoint;
             auto now = sa::timestamp_t{4};
             auto api_act = sa::api_activity{
               sa::api_activity::activity_id::create,
@@ -628,10 +628,10 @@ BOOST_AUTO_TEST_CASE(validate_authn_hash) {
         auto authn1 = sa::authentication(
           sa::authentication::activity_id::logon,
           "SCRAM-SHA256",
-          rp_kafka_endpoint,
+          rp_sql_endpoint,
           sa::authentication::used_cleartext::no,
           sa::authentication::used_mfa::no,
-          client_kafka_endpoint,
+          client_sql_endpoint,
           test_service,
           sa::severity_id::informational,
           sa::authentication::status_id::success,
@@ -641,10 +641,10 @@ BOOST_AUTO_TEST_CASE(validate_authn_hash) {
         auto authn2 = sa::authentication(
           sa::authentication::activity_id::logon,
           "SCRAM-SHA256",
-          rp_kafka_endpoint,
+          rp_sql_endpoint,
           sa::authentication::used_cleartext::no,
           sa::authentication::used_mfa::no,
-          client_kafka_endpoint,
+          client_sql_endpoint,
           test_service,
           sa::severity_id::informational,
           sa::authentication::status_id::success,
@@ -667,10 +667,10 @@ BOOST_AUTO_TEST_CASE(validate_authn_hash) {
         auto authn1 = sa::authentication(
           sa::authentication::activity_id::logon,
           sa::authentication::auth_protocol_id::kerberos,
-          rp_kafka_endpoint,
+          rp_sql_endpoint,
           sa::authentication::used_cleartext::no,
           sa::authentication::used_mfa::no,
-          client_kafka_endpoint,
+          client_sql_endpoint,
           test_service,
           sa::severity_id::informational,
           sa::authentication::status_id::failure,
@@ -680,10 +680,10 @@ BOOST_AUTO_TEST_CASE(validate_authn_hash) {
         auto authn2 = sa::authentication(
           sa::authentication::activity_id::logon,
           "SCRAM-SHA256",
-          rp_kafka_endpoint,
+          rp_sql_endpoint,
           sa::authentication::used_cleartext::no,
           sa::authentication::used_mfa::no,
-          client_kafka_endpoint,
+          client_sql_endpoint,
           test_service,
           sa::severity_id::informational,
           sa::authentication::status_id::failure,

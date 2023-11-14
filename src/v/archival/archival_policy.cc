@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/archival_policy.h"
@@ -174,24 +174,24 @@ archival_policy::lookup_result archival_policy::find_segment(
     }
 
     if (!closed) {
-        auto kafka_start_offset = ot_state.from_log_offset(start_offset);
-        auto kafka_lso = ot_state.from_log_offset(
+        auto sql_start_offset = ot_state.from_log_offset(start_offset);
+        auto sql_lso = ot_state.from_log_offset(
           model::next_offset(adjusted_lso));
-        if (kafka_start_offset >= kafka_lso) {
+        if (sql_start_offset >= sql_lso) {
             // If timeboxed uploads are enabled and there is no producer
             // activity, we can get into a nasty loop where we upload a segment,
             // add an archival metadata batch, upload a segment containing that
             // batch, add another archival metadata batch, etc. This leads to
             // lots of small segments that don't contain data being uploaded. To
-            // avoid it, we check that kafka (translated) offset increases.
+            // avoid it, we check that sql (translated) offset increases.
             vlog(
               archival_log.debug,
               "Upload policy for {}: can't find candidate, only non-data "
-              "batches to upload (kafka start_offset: {}, kafka "
+              "batches to upload (sql start_offset: {}, sql "
               "last_stable_offset: {})",
               _ntp,
-              kafka_start_offset,
-              kafka_lso);
+              sql_start_offset,
+              sql_lso);
             return {};
         }
     }

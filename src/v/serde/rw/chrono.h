@@ -72,7 +72,7 @@ void tag_invoke(
   tag_t<write_tag>, iobuf& out, std::chrono::duration<Rep, Period> t) {
     // We explicitly serialize it as ns to avoid any surprises like
     // seastar updating underlying duration types without
-    // notice. See https://github.com/redpanda-data/redpanda/pull/5002
+    // notice. See https://github.com/redpanda-data/funes/pull/5002
     //
     // Check for overflows/underflows.
     // For ex: a millisecond and nanosecond use the same underlying
@@ -114,7 +114,7 @@ void write(iobuf&, std::chrono::time_point<Clock, Duration> t) {
     static_assert(
       utils::unsupported_type<decltype(t)>::value,
       "Time point serialization is risky and can have unintended "
-      "consequences. Check with Redpanda team before fixing this.");
+      "consequences. Check with Funes team before fixing this.");
 }
 
 template<typename Clock, typename Duration>
@@ -125,7 +125,7 @@ void read(
     static_assert(
       utils::unsupported_type<decltype(t)>::value,
       "Time point serialization is risky and can have unintended "
-      "consequences. Check with Redpanda team before fixing this.");
+      "consequences. Check with Funes team before fixing this.");
 }
 
 } // namespace serde

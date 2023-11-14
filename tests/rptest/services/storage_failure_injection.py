@@ -56,7 +56,7 @@ class Operation(str, Enum):
 class NTP:
     topic: str
     partition: int
-    namespace: str = "kafka"
+    namespace: str = "sql"
 
 
 @dataclass

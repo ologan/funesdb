@@ -64,7 +64,7 @@ struct broker_properties
     uint32_t available_memory_gb;
     uint32_t available_disk_gb;
     std::vector<ss::sstring> mount_paths;
-    // key=value properties in /etc/redpanda/machine_properties.yaml
+    // key=value properties in /etc/funes/machine_properties.yaml
     std::unordered_map<ss::sstring, ss::sstring> etc_props;
 
     bool operator==(const broker_properties& other) const {
@@ -164,9 +164,9 @@ struct broker_endpoint final
  * active - when node joins the cluster it is automatically assigned to active
  *          state, active is a default cluster member state
  *
- * draining - in this state redpanda started to drain all existing partition
+ * draining - in this state funes started to drain all existing partition
  *            replicas from given node, node is no longer accepting new
- *            partitions, but can still handle Kafka requests
+ *            partitions, but can still handle SQL requests
  *
  * removed - after node is drained and it has no replicas assigned it is finally
  *           marked as removed, at the same time the node is no longer cluster
@@ -196,25 +196,25 @@ public:
 
     broker(
       node_id id,
-      std::vector<broker_endpoint> kafka_advertised_listeners,
+      std::vector<broker_endpoint> sql_advertised_listeners,
       net::unresolved_address rpc_address,
       std::optional<rack_id> rack,
       broker_properties props) noexcept
       : _id(id)
-      , _kafka_advertised_listeners(std::move(kafka_advertised_listeners))
+      , _sql_advertised_listeners(std::move(sql_advertised_listeners))
       , _rpc_address(std::move(rpc_address))
       , _rack(std::move(rack))
       , _properties(std::move(props)) {}
 
     broker(
       node_id id,
-      net::unresolved_address kafka_advertised_listener,
+      net::unresolved_address sql_advertised_listener,
       net::unresolved_address rpc_address,
       std::optional<rack_id> rack,
       broker_properties props) noexcept
       : broker(
         id,
-        {broker_endpoint(std::move(kafka_advertised_listener))},
+        {broker_endpoint(std::move(sql_advertised_listener))},
         std::move(rpc_address),
         std::move(rack),
         std::move(props)) {}
@@ -226,8 +226,8 @@ public:
     const node_id& id() const { return _id; }
 
     const broker_properties& properties() const { return _properties; }
-    const std::vector<broker_endpoint>& kafka_advertised_listeners() const {
-        return _kafka_advertised_listeners;
+    const std::vector<broker_endpoint>& sql_advertised_listeners() const {
+        return _sql_advertised_listeners;
     }
     const net::unresolved_address& rpc_address() const { return _rpc_address; }
     const std::optional<rack_id>& rack() const { return _rack; }
@@ -244,12 +244,12 @@ public:
 
     auto serde_fields() {
         return std::tie(
-          _id, _kafka_advertised_listeners, _rpc_address, _rack, _properties);
+          _id, _sql_advertised_listeners, _rpc_address, _rack, _properties);
     }
 
 private:
     node_id _id;
-    std::vector<broker_endpoint> _kafka_advertised_listeners;
+    std::vector<broker_endpoint> _sql_advertised_listeners;
     net::unresolved_address _rpc_address;
     std::optional<rack_id> _rack;
     broker_properties _properties;
@@ -538,13 +538,13 @@ namespace internal {
  */
 struct broker_v0 {
     model::node_id id;
-    net::unresolved_address kafka_address;
+    net::unresolved_address sql_address;
     net::unresolved_address rpc_address;
     std::optional<rack_id> rack;
     model::broker_properties properties;
 
     model::broker to_v3() const {
-        return model::broker(id, kafka_address, rpc_address, rack, properties);
+        return model::broker(id, sql_address, rpc_address, rack, properties);
     }
 };
 
@@ -615,7 +615,7 @@ struct hash<model::broker> {
     size_t operator()(const model::broker& b) const {
         size_t h = 0;
         boost::hash_combine(h, std::hash<model::node_id>()(b.id()));
-        for (const auto& ep : b.kafka_advertised_listeners()) {
+        for (const auto& ep : b.sql_advertised_listeners()) {
             boost::hash_combine(h, std::hash<model::broker_endpoint>()(ep));
         }
         boost::hash_combine(

@@ -16,12 +16,12 @@ from typing import Callable
 
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import RedpandaService, SISettings, make_redpanda_service
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import FunesService, SISettings, make_funes_service
 from rptest.services.metrics_check import MetricCheck
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from rptest.clients.rpk_remote import RpkRemoteTool
 from rptest.util import (wait_until, segments_count,
                          wait_for_local_storage_truncate)
@@ -31,11 +31,11 @@ from rptest.utils.si_utils import BucketView, NTP
 
 from ducktape.mark import parametrize
 
-from rptest.services.kafka import KafkaServiceAdapter
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.zookeeper import ZookeeperService
+from rptest.services.sql import SQLServiceAdapter
+from sqltest.services.sql import SQLService
+from sqltest.services.zookeeper import ZookeeperService
 from ducktape.mark.resource import cluster as ducktape_cluster
-from kafkatest.version import V_3_0_0
+from sqltest.version import V_3_0_0
 from ducktape.tests.test import Test
 from rptest.clients.default import DefaultClient
 from rptest.utils.mode_checks import skip_debug_mode
@@ -57,8 +57,8 @@ class BaseTimeQuery:
 
         if cloud_storage:
             for k, v in {
-                    'redpanda.remote.read': True,
-                    'redpanda.remote.write': True,
+                    'funes.remote.read': True,
+                    'funes.remote.write': True,
                     'retention.local.target.bytes': local_retention
             }.items():
                 self.client().alter_topic_config(topic.name, k, v)
@@ -80,7 +80,7 @@ class BaseTimeQuery:
         # record having a timestamp 1ms greater than the last.
         producer = KgoVerifierProducer(
             context=self.test_context,
-            redpanda=cluster,
+            funes=cluster,
             topic=topic.name,
             msg_size=record_size,
             msg_count=msg_count,
@@ -121,7 +121,7 @@ class BaseTimeQuery:
             # If using cloud storage, we must wait for some segments
             # to fall out of local storage, to ensure we are really
             # hitting the cloud storage read path when querying.
-            wait_for_local_storage_truncate(redpanda=cluster,
+            wait_for_local_storage_truncate(funes=cluster,
                                             topic=topic.name,
                                             target_bytes=local_retention)
 
@@ -131,9 +131,9 @@ class BaseTimeQuery:
 
         # For when using cloud storage, we expect offsets ahead
         # of this to still hit raft for their timequeries.
-        is_redpanda = isinstance(cluster, RedpandaService)
-        if is_redpanda:
-            admin = Admin(self.redpanda)
+        is_funes = isinstance(cluster, FunesService)
+        if is_funes:
+            admin = Admin(self.funes)
             status = admin.get_partition_cloud_storage_status(topic.name, 0)
             local_start_offset = status["local_log_start_offset"]
 
@@ -166,7 +166,7 @@ class BaseTimeQuery:
         # offset should cause cloud downloads.
         hit_offsets = set()
 
-        kcat = KafkaCat(cluster)
+        kcat = SQLCat(cluster)
         cloud_metrics = None
         local_metrics = None
 
@@ -187,7 +187,7 @@ class BaseTimeQuery:
             ts = e.ts
             o = e.offset
 
-            if is_redpanda and cloud_storage:
+            if is_funes and cloud_storage:
                 cloud_metrics = MetricCheck(
                     self.logger,
                     cluster,
@@ -195,7 +195,7 @@ class BaseTimeQuery:
                     re.compile("vectorized_cloud_storage_.*"),
                     reduce=sum)
 
-            if is_redpanda and not cloud_storage:
+            if is_funes and not cloud_storage:
                 local_metrics = MetricCheck(
                     self.logger,
                     cluster,
@@ -209,7 +209,7 @@ class BaseTimeQuery:
             self.logger.info(f"Time query returned offset {offset}")
             assert offset == o
 
-            if is_redpanda and cloud_storage and o < local_start_offset and o not in hit_offsets and e.expect_read:
+            if is_funes and cloud_storage and o < local_start_offset and o not in hit_offsets and e.expect_read:
                 # The number of bytes downloaded to query this offset is less than log segment size. We cannot rely
                 # on the number of segments downloaded, as chunked read registers each chunk as one segment, and a
                 # number of chunks may be downloaded to query an offset in a segment. The sum of bytes downloaded
@@ -223,7 +223,7 @@ class BaseTimeQuery:
                     "vectorized_cloud_storage_read_path_chunks_hydrated_total",
                     diff_chunks)])
 
-            if is_redpanda and not cloud_storage and not batch_cache and e.expect_read:
+            if is_funes and not cloud_storage and not batch_cache and e.expect_read:
                 # Expect to read at most one segment from disk: this validates that
                 # we are correctly looking up the right segment before seeking to
                 # the exact offset, and not e.g. reading from the start of the log.
@@ -267,7 +267,7 @@ class BaseTimeQuery:
                    backoff_sec=5,
                    err_msg="Start offset did not advance")
 
-        kcat = KafkaCat(cluster)
+        kcat = SQLCat(cluster)
         lwm_before = start_offset()
         offset = kcat.query_offset(topic.name, 0, base_ts)
         lwm_after = start_offset()
@@ -282,7 +282,7 @@ class BaseTimeQuery:
         assert offset <= lwm_after
 
 
-class TimeQueryTest(RedpandaTest, BaseTimeQuery):
+class TimeQueryTest(FunesTest, BaseTimeQuery):
     # We use small segments to enable quickly exercising the
     # lookup of the proper segment for a time index, as well
     # as the lookup of the offset within that segment.
@@ -290,13 +290,13 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
     chunk_size = 1024 * 128
 
     def setUp(self):
-        # Don't start up redpanda yet, because we will need the
+        # Don't start up funes yet, because we will need the
         # test parameter to set cluster configs before starting.
         pass
 
     def set_up_cluster(self, cloud_storage: bool, batch_cache: bool,
                        spillover: bool):
-        self.redpanda.set_extra_rp_conf({
+        self.funes.set_extra_rp_conf({
             # Testing with batch cache disabled is important, because otherwise
             # we won't touch the path in skipping_consumer that applies
             # timestamp bounds
@@ -329,26 +329,26 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
                 # timequery fetching from spillover manifest.
                 si_settings.cloud_storage_spillover_manifest_max_segments = 2
                 si_settings.cloud_storage_housekeeping_interval_ms = 1000
-            self.redpanda.set_si_settings(si_settings)
+            self.funes.set_si_settings(si_settings)
         else:
-            self.redpanda.add_extra_rp_conf(
+            self.funes.add_extra_rp_conf(
                 {'log_segment_size': self.log_segment_size})
 
-        self.redpanda.start()
+        self.funes.start()
 
     def _do_test_timequery(self, cloud_storage: bool, batch_cache: bool,
                            spillover: bool):
         self.set_up_cluster(cloud_storage, batch_cache, spillover)
-        self._test_timequery(cluster=self.redpanda,
+        self._test_timequery(cluster=self.funes,
                              cloud_storage=cloud_storage,
                              batch_cache=batch_cache)
         if spillover:
             # Check that we are actually using the spillover manifest
             def check():
                 try:
-                    bucket = BucketView(self.redpanda)
+                    bucket = BucketView(self.funes)
                     res = bucket.get_spillover_metadata(
-                        ntp=NTP(ns="kafka", topic="tqtopic", partition=0))
+                        ntp=NTP(ns="sql", topic="tqtopic", partition=0))
                     return res is not None and len(res) > 0
                 except:
                     return False
@@ -374,7 +374,7 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
         self.set_up_cluster(cloud_storage=False,
                             batch_cache=False,
                             spillover=spillover)
-        self._test_timequery_below_start_offset(cluster=self.redpanda)
+        self._test_timequery_below_start_offset(cluster=self.funes)
 
     @cluster(num_nodes=4)
     def test_timequery_with_local_gc(self):
@@ -390,7 +390,7 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
         base_ts = 1664453149000
         msg_count = (self.log_segment_size * total_segments) // record_size
 
-        topic, timestamps = self._create_and_produce(self.redpanda, True,
+        topic, timestamps = self._create_and_produce(self.funes, True,
                                                      local_retention, base_ts,
                                                      record_size, msg_count)
 
@@ -416,7 +416,7 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
                 return False
 
         def query_slices(tid):
-            kcat = KafkaCat(self.redpanda)
+            kcat = SQLCat(self.funes)
             while not should_stop.is_set():
                 start_idx = tid * num_offsets_per_thread
                 end_idx = start_idx + num_offsets_per_thread
@@ -432,7 +432,7 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
             try:
                 # Evaluate the futures with list().
                 executor.map(query_slices, range(num_threads))
-                wait_for_local_storage_truncate(redpanda=self.redpanda,
+                wait_for_local_storage_truncate(funes=self.funes,
                                                 topic=topic.name,
                                                 target_bytes=local_retention)
             finally:
@@ -445,7 +445,7 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
         # to know that it was transient when investigating the bug.
         if failed_offsets:
             self.logger.info("Re-issuing queries on failed offsets...")
-            kcat = KafkaCat(self.redpanda)
+            kcat = SQLCat(self.funes)
             for o in failed_offsets:
                 if check_offset(kcat, o):
                     self.logger.info(f"Reproducible failure at {o}")
@@ -455,10 +455,10 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
         assert not any([e > 0 for e in errors])
 
 
-class TimeQueryKafkaTest(Test, BaseTimeQuery):
+class TimeQuerySQLTest(Test, BaseTimeQuery):
     """
     Time queries are one of the less clearly defined aspects of the
-    Kafka protocol, so we run our test procedure against Apache Kafka
+    SQL protocol, so we run our test procedure against Apache SQL
     to establish a baseline behavior to ensure our compatibility.
     """
     log_segment_size = 1024 * 1024
@@ -470,46 +470,46 @@ class TimeQueryKafkaTest(Test, BaseTimeQuery):
                                    num_nodes=1,
                                    version=V_3_0_0)
 
-        self.kafka = KafkaServiceAdapter(
+        self.sql = SQLServiceAdapter(
             self.test_context,
-            KafkaService(self.test_context,
+            SQLService(self.test_context,
                          num_nodes=3,
                          zk=self.zk,
                          version=V_3_0_0))
 
-        self._client = DefaultClient(self.kafka)
+        self._client = DefaultClient(self.sql)
 
     def client(self):
         return self._client
 
     def setUp(self):
         self.zk.start()
-        self.kafka.start()
+        self.sql.start()
 
     def tearDown(self):
         # ducktape handle service teardown automatically, but it is hard
         # to tell what went wrong if one of the services hangs.  Do it
         # explicitly here with some logging, to enable debugging issues
-        # like https://github.com/redpanda-data/redpanda/issues/4270
+        # like https://github.com/redpanda-data/funes/issues/4270
 
-        self.logger.info("Stopping Kafka...")
-        self.kafka.stop()
+        self.logger.info("Stopping SQL...")
+        self.sql.stop()
 
         self.logger.info("Stopping zookeeper...")
         self.zk.stop()
 
     @ducktape_cluster(num_nodes=5)
     def test_timequery(self):
-        self._test_timequery(cluster=self.kafka,
+        self._test_timequery(cluster=self.sql,
                              cloud_storage=False,
                              batch_cache=True)
 
     @ducktape_cluster(num_nodes=5)
     def test_timequery_below_start_offset(self):
-        self._test_timequery_below_start_offset(cluster=self.kafka)
+        self._test_timequery_below_start_offset(cluster=self.sql)
 
 
-class TestReadReplicaTimeQuery(RedpandaTest):
+class TestReadReplicaTimeQuery(FunesTest):
     """Test time queries with read-replica topic."""
 
     log_segment_size = 1024 * 1024
@@ -531,7 +531,7 @@ class TestReadReplicaTimeQuery(RedpandaTest):
         self.rr_cluster = None
 
     def start_read_replica_cluster(self, num_brokers) -> None:
-        self.rr_cluster = make_redpanda_service(self.test_context,
+        self.rr_cluster = make_funes_service(self.test_context,
                                                 num_brokers=num_brokers,
                                                 si_settings=self.rr_settings)
         self.rr_cluster.start(start_si=False)
@@ -540,7 +540,7 @@ class TestReadReplicaTimeQuery(RedpandaTest):
         try:
             rpk_rr_cluster = RpkTool(self.rr_cluster)
             conf = {
-                'redpanda.remote.readreplica':
+                'funes.remote.readreplica':
                 self.si_settings.cloud_storage_bucket,
             }
             rpk_rr_cluster.create_topic(self.topic_name, config=conf)
@@ -556,13 +556,13 @@ class TestReadReplicaTimeQuery(RedpandaTest):
 
         spec = TopicSpec(name=self.topic_name,
                          partition_count=partition_count,
-                         redpanda_remote_write=True,
+                         funes_remote_write=True,
                          replication_factor=3)
 
-        DefaultClient(self.redpanda).create_topic(spec)
+        DefaultClient(self.funes).create_topic(spec)
 
         producer = KgoVerifierProducer(context=self.test_context,
-                                       redpanda=self.redpanda,
+                                       funes=self.funes,
                                        topic=self.topic_name,
                                        msg_size=1024,
                                        msg_count=num_messages,
@@ -609,7 +609,7 @@ class TestReadReplicaTimeQuery(RedpandaTest):
         self.setup_clusters(base_ts, num_messages, 3)
 
         def read_replica_ready():
-            orig = RpkTool(self.redpanda).describe_topic(self.topic_name)
+            orig = RpkTool(self.funes).describe_topic(self.topic_name)
             repl = RpkTool(self.rr_cluster).describe_topic(self.topic_name)
             for o, r in zip(orig, repl):
                 if o.high_watermark > r.high_watermark:
@@ -620,7 +620,7 @@ class TestReadReplicaTimeQuery(RedpandaTest):
                    timeout_sec=200,
                    backoff_sec=3,
                    err_msg="Read replica is not ready")
-        kcat1 = KafkaCat(self.redpanda)
-        kcat2 = KafkaCat(self.rr_cluster)
+        kcat1 = SQLCat(self.funes)
+        kcat2 = SQLCat(self.rr_cluster)
         for ix in range(0, num_messages, 20):
             self.query_timestamp(base_ts + ix, kcat1, kcat2)

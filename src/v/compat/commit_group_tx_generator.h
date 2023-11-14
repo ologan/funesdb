@@ -12,7 +12,7 @@
 
 #include "cluster/types.h"
 #include "compat/generator.h"
-#include "kafka/types.h"
+#include "sql/types.h"
 #include "model/timeout_clock.h"
 #include "test_utils/randoms.h"
 
@@ -25,7 +25,7 @@ struct instance_generator<cluster::commit_group_tx_request> {
           model::random_ntp(),
           model::random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           tests::random_duration<model::timeout_clock::duration>());
     }
     static std::vector<cluster::commit_group_tx_request> limits() { return {}; }

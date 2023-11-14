@@ -13,7 +13,7 @@ from ducktape.utils.util import wait_until
 
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.clients.kcl import KCL
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, SISettings, MetricsEndpoint, make_redpanda_service
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST, SISettings, MetricsEndpoint, make_funes_service
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
@@ -61,7 +61,7 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
         self.epoch_offsets = {}
 
     def start_second_cluster(self) -> None:
-        self.second_cluster = make_redpanda_service(
+        self.second_cluster = make_funes_service(
             self.test_context, num_brokers=3, si_settings=self.rr_settings)
         self.second_cluster.start(start_si=False)
 
@@ -75,7 +75,7 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
         bucket_name = self.si_settings.cloud_storage_bucket
 
         conf = {
-            'redpanda.remote.readreplica': bucket_name,
+            'funes.remote.readreplica': bucket_name,
         }
 
         rpk_dst_cluster.create_topic(self.topic_name, config=conf)
@@ -97,7 +97,7 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
         msg_size = 64
         for _ in range(0, self.num_terms):
             KgoVerifierProducer.oneshot(context=self.test_context,
-                                        redpanda=self.redpanda,
+                                        funes=self.funes,
                                         topic=topic,
                                         msg_size=msg_size,
                                         msg_count=100,
@@ -112,14 +112,14 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
         self.logger.info(
             f"leadership transfer, epoch {res[0]}, high watermark {res[0]}")
 
-        admin = Admin(self.redpanda)
-        leader = admin.get_partition_leader(namespace='kafka',
+        admin = Admin(self.funes)
+        leader = admin.get_partition_leader(namespace='sql',
                                             topic=self.topic_name,
                                             partition=0)
 
         broker_ids = [x['node_id'] for x in admin.get_brokers()]
         transfer_to = random.choice([n for n in broker_ids if n != leader])
-        admin.transfer_leadership_to(namespace="kafka",
+        admin.transfer_leadership_to(namespace="sql",
                                      topic=self.topic_name,
                                      partition=0,
                                      target_id=transfer_to,
@@ -127,7 +127,7 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
 
         admin.await_stable_leader(self.topic_name,
                                   partition=0,
-                                  namespace='kafka',
+                                  namespace='sql',
                                   timeout_s=20,
                                   backoff_s=2,
                                   check=lambda node_id: node_id == transfer_to)
@@ -136,7 +136,7 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
         self.logger.info(
             f"query offset for leader epoch started, RRR={query_rrr}")
 
-        kcl = KCL(self.second_cluster) if query_rrr else KCL(self.redpanda)
+        kcl = KCL(self.second_cluster) if query_rrr else KCL(self.funes)
 
         for epoch, offset in self.epoch_offsets.items():
 
@@ -163,7 +163,7 @@ class OffsetForLeaderEpochReadReplicaTest(EndToEndTest):
 
     @cluster(num_nodes=6, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_offset_for_leader_epoch(self):
-        self.start_redpanda(num_nodes=3)
+        self.start_funes(num_nodes=3)
         self.create_source_topic()
         self.produce(self.topic_name, 1000)
         self.query_offset_for_leader_epoch(False)

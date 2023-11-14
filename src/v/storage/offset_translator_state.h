@@ -21,16 +21,16 @@ namespace storage {
 /// Provides offset translation between raw log offsets and offsets not counting
 /// filtered batches (basically our internal batch types that we write into the
 /// data partitions). This is needed because even though our internal batch
-/// types are filtered out when sent to clients, kafka clients are not prepared
+/// types are filtered out when sent to clients, sql clients are not prepared
 /// for these batches to occupy offset space (see
-/// https://github.com/redpanda-data/redpanda/issues/1184 for details).
+/// https://github.com/redpanda-data/funes/issues/1184 for details).
 ///
 /// It works by maintaining an in-memory map of all filtered batch offsets.
 /// This map allows us to quickly find a delta between the raw log offset and
 /// corresponding translated offset.
 class offset_translator_state {
 public:
-    /// Create an empty translator - the delta between log and kafka offsets is
+    /// Create an empty translator - the delta between log and sql offsets is
     /// always 0
     offset_translator_state(model::ntp ntp)
       : _ntp(std::move(ntp)) {}
@@ -54,17 +54,17 @@ public:
 
     bool empty() const { return _last_offset2batch.empty(); }
 
-    /// Difference between the log offset and the kafka offset.
+    /// Difference between the log offset and the sql offset.
     int64_t delta(model::offset) const;
 
-    /// Returns the difference between the log offset and the Kafka offset one
+    /// Returns the difference between the log offset and the SQL offset one
     /// offset past the input.
     model::offset_delta next_offset_delta(model::offset) const;
 
-    /// Translate log offset into kafka offset.
+    /// Translate log offset into sql offset.
     model::offset from_log_offset(model::offset) const;
 
-    /// Translate kafka offset into log offset.
+    /// Translate sql offset into log offset.
     model::offset to_log_offset(
       model::offset data_offset, model::offset hint = model::offset{}) const;
 
@@ -106,7 +106,7 @@ public:
 
 private:
     // Represents a non-data batch in the log - a batch that contributes to the
-    // difference (aka delta) between log (redpanda) and data (kafka) offset.
+    // difference (aka delta) between log (funes) and data (sql) offset.
     struct batch_info {
         model::offset base_offset;
         // The difference between log and data offsets that we want to find by

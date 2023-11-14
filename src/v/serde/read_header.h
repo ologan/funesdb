@@ -62,24 +62,24 @@ header read_header(iobuf_parser& in, std::size_t const bytes_left_limit) {
           bytes_left_limit));
     }
 
-    if (unlikely(compat_version > Type::redpanda_serde_version)) {
+    if (unlikely(compat_version > Type::funes_serde_version)) {
         throw serde_exception(fmt_with_ctx(
           ssx::sformat,
           "read {}: compat_version={} > {}::version={}",
           type_str<Type>(),
           static_cast<int>(compat_version),
           type_str<T>(),
-          static_cast<int>(Type::redpanda_serde_version)));
+          static_cast<int>(Type::funes_serde_version)));
     }
 
-    if (unlikely(version < Type::redpanda_serde_compat_version)) {
+    if (unlikely(version < Type::funes_serde_compat_version)) {
         throw serde_exception(fmt_with_ctx(
           ssx::sformat,
           "read {}: version={} < {}::compat_version={}",
           type_str<Type>(),
           static_cast<int>(version),
           type_str<T>(),
-          static_cast<int>(Type::redpanda_serde_compat_version)));
+          static_cast<int>(Type::funes_serde_compat_version)));
     }
 
     return header{

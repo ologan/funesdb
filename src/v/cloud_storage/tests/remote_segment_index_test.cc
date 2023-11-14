@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/vectorizedio/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/vectorizedio/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iobuf.h"
@@ -28,7 +28,7 @@
 using namespace cloud_storage;
 
 static const model::ntp test_ntp(
-  model::kafka_namespace, model::topic("test-topic"), model::partition_id(0));
+  model::sql_namespace, model::topic("test-topic"), model::partition_id(0));
 
 BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
     // This value is a power of two - 1 on purpose. This way we
@@ -38,10 +38,10 @@ BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
     // rows + almost full buffer.
     size_t segment_num_batches = 1023;
     model::offset segment_base_rp_offset{1234};
-    kafka::offset segment_base_kaf_offset{1210};
+    sql::offset segment_base_kaf_offset{1210};
 
     std::vector<model::offset> rp_offsets;
-    std::vector<kafka::offset> kaf_offsets;
+    std::vector<sql::offset> kaf_offsets;
     std::vector<size_t> file_offsets;
     std::vector<model::timestamp> timestamps;
     int64_t rp = segment_base_rp_offset();
@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
     for (size_t i = 0; i < segment_num_batches; i++) {
         if (!is_config) {
             rp_offsets.push_back(model::offset(rp));
-            kaf_offsets.push_back(kafka::offset(kaf));
+            kaf_offsets.push_back(sql::offset(kaf));
             file_offsets.push_back(fpos);
             timestamps.push_back(timestamp);
         }
@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
       1000,
       model::timestamp{0xdeadbeef});
     model::offset last;
-    kafka::offset klast;
+    sql::offset klast;
     size_t flast;
     for (size_t i = 0; i < rp_offsets.size(); i++) {
         tmp_index.add(
@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
     BOOST_REQUIRE(!opt_first.has_value());
 
     auto kopt_first = index.find_kaf_offset(
-      segment_base_kaf_offset - kafka::offset(1));
+      segment_base_kaf_offset - sql::offset(1));
     BOOST_REQUIRE(!kopt_first.has_value());
 
     for (unsigned ix = 0; ix < rp_offsets.size(); ix++) {
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
     BOOST_REQUIRE_EQUAL(kaf_last, klast);
     BOOST_REQUIRE_EQUAL(file_last, flast);
 
-    auto kopt_last = index.find_kaf_offset(klast + kafka::offset(1));
+    auto kopt_last = index.find_kaf_offset(klast + sql::offset(1));
     BOOST_REQUIRE_EQUAL(kopt_last->rp_offset, last);
     BOOST_REQUIRE_EQUAL(kopt_last->kaf_offset, klast);
     BOOST_REQUIRE_EQUAL(kopt_last->file_pos, flast);
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(remote_segment_index_search_test) {
 
 SEASTAR_THREAD_TEST_CASE(test_remote_segment_index_builder) {
     static const model::offset base_offset{100};
-    static const kafka::offset kbase_offset{100};
+    static const sql::offset kbase_offset{100};
     std::vector<batch_t> batches;
     for (int i = 0; i < 1000; i++) {
         auto num_records = random_generators::get_int(1, 20);
@@ -176,7 +176,7 @@ SEASTAR_THREAD_TEST_CASE(test_remote_segment_index_builder) {
 
 SEASTAR_THREAD_TEST_CASE(test_remote_segment_build_coarse_index) {
     const model::offset base_offset{100};
-    const kafka::offset kbase_offset{100};
+    const sql::offset kbase_offset{100};
     std::vector<batch_t> batches;
     model::offset expected_base_offset = base_offset, expected_last_offset;
     size_t expected_conf_records = 0;
@@ -217,7 +217,7 @@ SEASTAR_THREAD_TEST_CASE(test_remote_segment_build_coarse_index) {
     BOOST_REQUIRE_EQUAL(stats.last_rp_offset, expected_last_offset);
 
     auto mini_ix = ix.build_coarse_index(100_KiB, "test");
-    absl::btree_map<int64_t, kafka::offset> file_to_koffset;
+    absl::btree_map<int64_t, sql::offset> file_to_koffset;
     std::transform(
       std::make_move_iterator(mini_ix.begin()),
       std::make_move_iterator(mini_ix.end()),
@@ -225,7 +225,7 @@ SEASTAR_THREAD_TEST_CASE(test_remote_segment_build_coarse_index) {
       [](auto pair) { return std::make_pair(pair.second, pair.first); });
 
     // Assert that all entries in the mini-map are approximately as far away as
-    // step size. Additionally all kafka offsets should be ascending.
+    // step size. Additionally all sql offsets should be ascending.
     for (auto it_a = file_to_koffset.cbegin(), it_b = std::next(it_a);
          it_b != file_to_koffset.cend();
          ++it_a, ++it_b) {
@@ -265,7 +265,7 @@ SEASTAR_THREAD_TEST_CASE(
     // the `_offsets` arrays and the `_index` fields are empty, the coarse index
     // is still generated correctly.
     const model::offset base_offset{100};
-    const kafka::offset kbase_offset{100};
+    const sql::offset kbase_offset{100};
 
     std::vector<batch_t> batches;
     // Create only 10 batches, so that the index fields in remote segment index
@@ -302,7 +302,7 @@ SEASTAR_THREAD_TEST_CASE(
     BOOST_REQUIRE_GT(acc.file_offset_array_size(), 0);
 
     auto mini_ix = ix.build_coarse_index(70_KiB, "test");
-    absl::btree_map<int64_t, kafka::offset> file_to_koffset;
+    absl::btree_map<int64_t, sql::offset> file_to_koffset;
     std::transform(
       std::make_move_iterator(mini_ix.begin()),
       std::make_move_iterator(mini_ix.end()),

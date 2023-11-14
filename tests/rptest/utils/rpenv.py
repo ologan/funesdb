@@ -17,7 +17,7 @@ def sample_license():
     Returns the sample license from the env if it exists, asserts if its
     missing and the environment is CI
     """
-    license = os.environ.get("REDPANDA_SAMPLE_LICENSE", None)
+    license = os.environ.get("FUNES_SAMPLE_LICENSE", None)
     if license is None:
         is_ci = os.environ.get("CI", "false")
         assert is_ci == "false"

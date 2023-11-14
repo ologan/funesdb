@@ -15,28 +15,28 @@ from typing import Optional, Callable
 
 from ducktape.cluster.cluster import ClusterNode
 
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import SecurityConfig, TLSProvider, SchemaRegistryConfig, PandaproxyConfig
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import SecurityConfig, TLSProvider, SchemaRegistryConfig, FunesproxyConfig
 from rptest.services.cluster import cluster
 from rptest.services.admin import Admin
-from rptest.services.redpanda import MetricSamples, MetricsEndpoint, RedpandaService
+from rptest.services.funes import MetricSamples, MetricsEndpoint, FunesService
 from rptest.services import tls
-from rptest.tests.pandaproxy_test import User, PandaProxyTLSProvider
+from rptest.tests.funesproxy_test import User, FunesProxyTLSProvider
 from rptest.util import wait_until_result
 
 # Basic configs to enable TLS for internal RPC and Admin API
 RPC_TLS_CONFIG = dict(enabled=True,
                       require_client_auth=True,
-                      key_file=RedpandaService.TLS_SERVER_KEY_FILE,
-                      cert_file=RedpandaService.TLS_SERVER_CRT_FILE,
-                      truststore_file=RedpandaService.TLS_CA_CRT_FILE)
+                      key_file=FunesService.TLS_SERVER_KEY_FILE,
+                      cert_file=FunesService.TLS_SERVER_CRT_FILE,
+                      truststore_file=FunesService.TLS_CA_CRT_FILE)
 
 ADMIN_TLS_CONFIG = dict(name='iplistener',
                         enabled=True,
                         require_client_auth=True,
-                        key_file=RedpandaService.TLS_SERVER_KEY_FILE,
-                        cert_file=RedpandaService.TLS_SERVER_CRT_FILE,
-                        truststore_file=RedpandaService.TLS_CA_CRT_FILE)
+                        key_file=FunesService.TLS_SERVER_KEY_FILE,
+                        cert_file=FunesService.TLS_SERVER_CRT_FILE,
+                        truststore_file=FunesService.TLS_CA_CRT_FILE)
 
 
 class FaketimeTLSProvider(TLSProvider):
@@ -49,8 +49,8 @@ class FaketimeTLSProvider(TLSProvider):
     def ca(self):
         return self.tls.ca
 
-    def create_broker_cert(self, redpanda, node):
-        assert node in redpanda.nodes
+    def create_broker_cert(self, funes, node):
+        assert node in funes.nodes
         return self.tls.create_cert(node.name, faketime=self.broker_faketime)
 
     def create_service_client_cert(self, _, name):
@@ -60,7 +60,7 @@ class FaketimeTLSProvider(TLSProvider):
                                     faketime=self.client_faketime)
 
 
-class TLSMetricsTestBase(RedpandaTest):
+class TLSMetricsTestBase(FunesTest):
     CERT_METRICS: list[str] = [
         'truststore_expires_at_timestamp_seconds',
         'certificate_expires_at_timestamp_seconds',
@@ -86,7 +86,7 @@ class TLSMetricsTestBase(RedpandaTest):
         self.client_faketime = client_faketime
 
         self.security = SecurityConfig()
-        su_username, su_password, su_algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        su_username, su_password, su_algorithm = self.funes.SUPERUSER_CREDENTIALS
         self.admin_user = User(0)
         self.admin_user.username = su_username
         self.admin_user.password = su_password
@@ -94,8 +94,8 @@ class TLSMetricsTestBase(RedpandaTest):
 
         self.schema_registry_config = SchemaRegistryConfig()
         self.schema_registry_config.require_client_auth = True
-        self.pandaproxy_config = PandaproxyConfig()
-        self.pandaproxy_config.require_client_auth = True
+        self.funesproxy_config = FunesproxyConfig()
+        self.funesproxy_config.require_client_auth = True
 
         self.tls = None
 
@@ -103,10 +103,10 @@ class TLSMetricsTestBase(RedpandaTest):
         assert self.tls is not None
 
         self.security.require_client_auth = True
-        self.security.kafka_enable_authorization = True
+        self.security.sql_enable_authorization = True
         self.security.enable_sasl = True
         self.schema_registry_config.authn_method = 'http_basic'
-        self.pandaproxy_config.authn_method = 'http_basic'
+        self.funesproxy_config.authn_method = 'http_basic'
 
         client_cert = self.tls.create_cert(
             socket.gethostname(),
@@ -119,12 +119,12 @@ class TLSMetricsTestBase(RedpandaTest):
             client_faketime=self.client_faketime)
         self.schema_registry_config.client_key = client_cert.key
         self.schema_registry_config.client_crt = client_cert.crt
-        self.pandaproxy_config.client_key = client_cert.key
-        self.pandaproxy_config.client_crt = client_cert.crt
+        self.funesproxy_config.client_key = client_cert.key
+        self.funesproxy_config.client_crt = client_cert.crt
 
-        self.redpanda.set_security_settings(self.security)
-        self.redpanda.set_schema_registry_settings(self.schema_registry_config)
-        self.redpanda.set_pandaproxy_settings(self.pandaproxy_config)
+        self.funes.set_security_settings(self.security)
+        self.funes.set_schema_registry_settings(self.schema_registry_config)
+        self.funes.set_funesproxy_settings(self.funesproxy_config)
 
         super().setUp()
 
@@ -135,7 +135,7 @@ class TLSMetricsTestBase(RedpandaTest):
         endpoint=MetricsEndpoint.METRICS
     ) -> Optional[dict[str, MetricSamples]]:
         def get_metrics_from_node_sync(patterns: list[str]):
-            samples = self.redpanda.metrics_samples(
+            samples = self.funes.metrics_samples(
                 patterns,
                 [node],
                 endpoint,
@@ -177,7 +177,7 @@ class TLSMetricsTest(TLSMetricsTestBase):
         """
         Test presence of certificate metrics
         """
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
         metrics_samples = self._get_metrics_from_node(node, self.CERT_METRICS)
         assert metrics_samples is not None
         assert sorted(metrics_samples.keys()) == sorted(self.CERT_METRICS)
@@ -187,7 +187,7 @@ class TLSMetricsTest(TLSMetricsTestBase):
         """
         Test presense of certificate metrics on public endpoint
         """
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
         metrics_samples = self._get_metrics_from_node(
             node,
             self.CERT_METRICS,
@@ -201,7 +201,7 @@ class TLSMetricsTest(TLSMetricsTestBase):
         """
         Test presense of expected labels on metrics
         """
-        node = self.redpanda.nodes[1]
+        node = self.funes.nodes[1]
         metrics_samples = self._get_metrics_from_node(node, self.CERT_METRICS)
         assert metrics_samples is not None
         metrics = self._unpack_samples(metrics_samples)
@@ -221,7 +221,7 @@ class TLSMetricsTest(TLSMetricsTestBase):
         """
         Test that metrics are successfully enabled for various services.
         """
-        self.redpanda.stop()
+        self.funes.stop()
 
         # Set up TLS for RPC and Admin API (iplistener)
         cfg_overrides = {}
@@ -230,10 +230,10 @@ class TLSMetricsTest(TLSMetricsTestBase):
             cfg_overrides[node] = dict(rpc_server_tls=RPC_TLS_CONFIG,
                                        admin_api_tls=ADMIN_TLS_CONFIG)
 
-        self.redpanda.for_nodes(self.redpanda.nodes, set_cfg)
-        self.redpanda.start(node_config_overrides=cfg_overrides)
+        self.funes.for_nodes(self.funes.nodes, set_cfg)
+        self.funes.start(node_config_overrides=cfg_overrides)
 
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
         metric = self.CERT_METRICS[0]
         metrics_samples = self._get_metrics_from_node(
             node,
@@ -246,7 +246,7 @@ class TLSMetricsTest(TLSMetricsTestBase):
         areas = [v['labels']['area'] for v in vals[metric]]
         self.logger.debug(f"Areas w/ TLS enabled: {areas}")
 
-        assert 'kafka' in areas
+        assert 'sql' in areas
         assert 'schema_registry' in areas
         assert 'rpc' in areas
         assert 'rest_proxy' in areas
@@ -266,7 +266,7 @@ class TLSMetricsTestChain(TLSMetricsTestBase):
         """
         Test various behaviors given a longer chained truststore
         """
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         metrics_samples = self._get_metrics_from_node(node, self.CERT_METRICS)
         assert metrics_samples is not None
@@ -308,7 +308,7 @@ class TLSMetricsTestExpiring(TLSMetricsTestBase):
         """
         Test that metrics detect an expired certificate
         """
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         metric_values = self._unpack_samples(
             self._get_metrics_from_node(node, ['certificate_valid']))

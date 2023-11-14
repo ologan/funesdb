@@ -24,7 +24,7 @@ class smp_groups {
 public:
     static constexpr unsigned default_max_nonlocal_requests = 5000;
     struct config {
-        uint32_t kafka_group_max_non_local_requests
+        uint32_t sql_group_max_non_local_requests
           = default_max_nonlocal_requests;
         uint32_t raft_group_max_non_local_requests
           = default_max_nonlocal_requests;
@@ -39,8 +39,8 @@ public:
     ss::future<> create_groups(config cfg) {
         _raft = co_await create_service_group(
           cfg.raft_group_max_non_local_requests);
-        _kafka = co_await create_service_group(
-          cfg.kafka_group_max_non_local_requests);
+        _sql = co_await create_service_group(
+          cfg.sql_group_max_non_local_requests);
         _cluster = co_await create_service_group(
           cfg.cluster_group_max_non_local_requests);
         _proxy = co_await create_service_group(
@@ -48,12 +48,12 @@ public:
     }
 
     ss::smp_service_group raft_smp_sg() { return *_raft; }
-    ss::smp_service_group kafka_smp_sg() { return *_kafka; }
+    ss::smp_service_group sql_smp_sg() { return *_sql; }
     ss::smp_service_group cluster_smp_sg() { return *_cluster; }
     ss::smp_service_group proxy_smp_sg() { return *_proxy; }
 
     ss::future<> destroy_groups() {
-        return destroy_smp_service_group(*_kafka)
+        return destroy_smp_service_group(*_sql)
           .then([this] { return destroy_smp_service_group(*_raft); })
           .then([this] { return destroy_smp_service_group(*_cluster); })
           .then([this] { return destroy_smp_service_group(*_proxy); });
@@ -94,7 +94,7 @@ private:
     }
 
     std::unique_ptr<ss::smp_service_group> _raft;
-    std::unique_ptr<ss::smp_service_group> _kafka;
+    std::unique_ptr<ss::smp_service_group> _sql;
     std::unique_ptr<ss::smp_service_group> _cluster;
     std::unique_ptr<ss::smp_service_group> _proxy;
 };

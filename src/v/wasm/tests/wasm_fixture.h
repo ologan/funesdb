@@ -13,7 +13,7 @@
 
 #include "model/record.h"
 #include "model/transform.h"
-#include "pandaproxy/schema_registry/types.h"
+#include "funesproxy/schema_registry/types.h"
 #include "serde/rw/rw.h"
 #include "serde/rw/scalar.h"
 #include "test_utils/test.h"
@@ -60,7 +60,7 @@ public:
 
     wasm::engine* engine() { return _engine.get(); }
 
-    std::vector<pandaproxy::schema_registry::subject_schema>
+    std::vector<funesproxy::schema_registry::subject_schema>
     registered_schemas() const;
 
 private:

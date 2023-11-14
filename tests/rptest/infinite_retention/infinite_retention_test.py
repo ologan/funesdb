@@ -20,16 +20,16 @@ from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, \
     KgoVerifierRandomConsumer, KgoVerifierSeqConsumer, \
     KgoVerifierConsumerGroupConsumer
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
 from rptest.utils.si_utils import quiesce_uploads
 
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_monitor import RedpandaMonitor
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_monitor import FunesMonitor
 
-from rptest.services.redpanda import FAILURE_INJECTION_LOG_ALLOW_LIST
+from rptest.services.funes import FAILURE_INJECTION_LOG_ALLOW_LIST
 from rptest.services.storage_failure_injection import BatchType
 
 batchtype_archival_meta = "archival_metadata"
@@ -227,7 +227,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
         }
         super().__init__(test_context, node_prealloc_count=1, *args, **kwargs)
 
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
         self.topics = (TopicSpec(
             retention_ms=self.params.retention_ms,
@@ -254,7 +254,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
     def _create_producer(self):
         return KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             msg_size=self.params.msg_size,
             msg_count=self.params.msg_count,
@@ -265,7 +265,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
 
     def _create_rnd_consumer(self):
         return KgoVerifierRandomConsumer(self.test_context,
-                                         self.redpanda,
+                                         self.funes,
                                          self.topic,
                                          self.params.msg_size,
                                          self.params.consumer_message_count,
@@ -277,7 +277,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
     def _create_seq_consumer(self):
         return KgoVerifierSeqConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             msg_size=self.params.msg_size,
             max_msgs=None,  # consume everything
@@ -290,7 +290,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
     def _create_group_consumer(self):
         return KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             msg_size=self.params.msg_size,
             max_msgs=self.params.msg_count,
@@ -331,9 +331,9 @@ class InfiniteRetentionTest(PreallocNodesTest):
                 time.sleep(self.params.target_stress_start)
                 # restart one with 5 min pause
                 # real world: simulates cluster update
-                for node in self.redpanda.nodes:
+                for node in self.funes.nodes:
                     time.sleep(self.params.target_stress_delay)
-                    self.redpanda.restart_nodes(
+                    self.funes.restart_nodes(
                         [node],
                         start_timeout=self.params.node_start_timeout,
                         stop_timeout=self.params.node_stop_timeout)
@@ -341,7 +341,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
             # Wait for the cluster to recover after final restart,
             # so that subsequent post-stress success conditions
             # can count on their queries succeeding.
-            self.redpanda.wait_until(self.redpanda.healthy,
+            self.funes.wait_until(self.funes.healthy,
                                      timeout_sec=60,
                                      backoff_sec=5)
 
@@ -361,7 +361,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
 
         # Producer should be within a factor of two of the intended byte rate,
         # or something is wrong with the test (running on nodes that can't
-        # keep up?) or with Redpanda (some instability interrupted produce?)
+        # keep up?) or with Funes (some instability interrupted produce?)
         chk.check_byte_rate_respected(actual_byte_rate)
         if not restart_stress:
             chk.check_byte_rate_respected_no_stress(actual_byte_rate)
@@ -369,7 +369,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
         # Read the highest timestamp in local storage
         self.logger.info("Calculating stats for all partitions")
         stats = helpers._calculate_statistic(self.topics, self.rpk,
-                                             self.redpanda)
+                                             self.funes)
 
         # Ensure that all messages made it to topic
         self.logger.info(f"calculated hwm: {stats['hwm']}, "
@@ -397,7 +397,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
 
         # Wait for all uploads to complete: this should take roughly
         # segment_max_upload_interval_sec plus manifest_max_upload_interval_sec
-        quiesce_uploads(self.redpanda, [self.topic],
+        quiesce_uploads(self.funes, [self.topic],
                         timeout_sec=self.params.manifest_upload_interval +
                         self.params.segment_upload_interval +
                         self.params.grace_upload_wait_interval)
@@ -425,11 +425,11 @@ class InfiniteRetentionTest(PreallocNodesTest):
         chk.check_expected_manifest_uploads(stats["manifest_uploads"],
                                             produce_duration)
 
-        # Do all required checks with Redpanda active
+        # Do all required checks with Funes active
         chk.conduct_checks()
 
         # Run rp_storage_tool
-        self.redpanda.stop_and_scrub_object_storage(run_timeout=1800)
+        self.funes.stop_and_scrub_object_storage(run_timeout=1800)
         # Validate checks and generate AssertionError if needed
         if chk.assert_results():
             self.logger.info(chk.get_summary_as_text())
@@ -445,7 +445,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
         self._iterative_retention_flow(rolling_restarts=rolling_restarts)
 
     # Based on
-    # https://github.com/redpanda-data/redpanda/pull/10498/commits
+    # https://github.com/redpanda-data/funes/pull/10498/commits
     @cluster(num_nodes=6,
              log_allow_list=RESTART_LOG_ALLOW_LIST +
              FAILURE_INJECTION_LOG_ALLOW_LIST)
@@ -490,7 +490,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
           - Once all rolling restarts finish, use simple message
             message count check on producer to detect when it is finished
 
-            Note: not using producer wait() here as redpanda service
+            Note: not using producer wait() here as funes service
             in combination with failure injections blocks flow completely
             And test needs only message count
 
@@ -500,8 +500,8 @@ class InfiniteRetentionTest(PreallocNodesTest):
             to consume all messages from start to finish
           - Conduct metrics check (self explanatory names)
           - Do storage scrub
-          - If it is not the last iteration, do redpanda restart
-          - If it is the last, just forcibly stop (kill) redpanda
+          - If it is not the last iteration, do funes restart
+          - If it is the last, just forcibly stop (kill) funes
         - End iteration, loop according to iteration count
         - Calculate all checks added to checks class
         - Log iteration timings
@@ -549,12 +549,12 @@ class InfiniteRetentionTest(PreallocNodesTest):
 
             finject_cfg = helpers._generate_failure_injection_config(
                 self.topic, self.params.partition_count, batchtypes=batchtypes)
-            self.redpanda.set_up_failure_injection(
+            self.funes.set_up_failure_injection(
                 finject_cfg=finject_cfg,
                 enabled=True,
-                nodes=[self.redpanda.nodes[0]],
+                nodes=[self.funes.nodes[0]],
                 tolerate_crashes=True)
-            RedpandaMonitor(self.test_context, self.redpanda).start()
+            FunesMonitor(self.test_context, self.funes).start()
 
         # Log important parameters
         self._log_parameters()
@@ -587,7 +587,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
             producer = self._create_producer()
 
             # Random consumer used in parallel with the producer
-            # this will cause redpanda to occasionally load some data
+            # this will cause funes to occasionally load some data
             # from cloud storage
             rand_consumer = self._create_rnd_consumer()
 
@@ -618,8 +618,8 @@ class InfiniteRetentionTest(PreallocNodesTest):
                 # will be processed by 2 nodes only
                 while producer.produce_status.acked < \
                     self.params.msg_limit_rolling_restart:
-                    self.redpanda.rolling_restart_nodes(
-                        self.redpanda.nodes,
+                    self.funes.rolling_restart_nodes(
+                        self.funes.nodes,
                         start_timeout=self.params.node_start_timeout,
                         stop_timeout=self.params.node_stop_timeout)
                     self.logger.info("End rolling restart cycle")
@@ -628,7 +628,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
 
                 # waiting for cluster to be healthy
                 self.logger.info("Waiting for cluster to become healthy")
-                wait_until(self.redpanda.healthy,
+                wait_until(self.funes.healthy,
                            timeout_sec=180,
                            backoff_sec=1)
 
@@ -673,8 +673,8 @@ class InfiniteRetentionTest(PreallocNodesTest):
                     # Do rolling restart
                     while consumer.consumer_status.validator.total_reads < \
                         self.params.msg_limit_rolling_restart:
-                        self.redpanda.rolling_restart_nodes(
-                            self.redpanda.nodes,
+                        self.funes.rolling_restart_nodes(
+                            self.funes.nodes,
                             start_timeout=self.params.node_start_timeout,
                             stop_timeout=self.params.node_stop_timeout)
                         # Have a small delay to settle down
@@ -711,7 +711,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
             self.logger.info(
                 f"Iteration {iteration}; calculating stats for all partitions")
             stats = helpers._calculate_statistic(self.topics, self.rpk,
-                                                 self.redpanda)
+                                                 self.funes)
             # Ensure that all messages made it to topic
             self.logger.info(f"calculated hwm: {stats['hwm']}, "
                              f"message count: {self.params.msg_count}")
@@ -735,7 +735,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
             scrub_start = time.time()
             # Run 'rp_storage_tool' to check for anomalies
             try:
-                self.redpanda.stop_and_scrub_object_storage(run_timeout=1800)
+                self.funes.stop_and_scrub_object_storage(run_timeout=1800)
             except Exception as exc:
                 self.logger.warn("Exception detected while running scrub")
                 scrub_exceptions += [exc]
@@ -758,17 +758,17 @@ class InfiniteRetentionTest(PreallocNodesTest):
                 # restart nodes
                 self.logger.info("Starting node restart stage")
                 restart_start = time.time()
-                # random_node = random.choice(self.redpanda.nodes)
-                # self.redpanda.remove_local_data(random_node)
+                # random_node = random.choice(self.funes.nodes)
+                # self.funes.remove_local_data(random_node)
 
-                for node in self.redpanda.nodes:
-                    self.redpanda.restart_nodes([node],
+                for node in self.funes.nodes:
+                    self.funes.restart_nodes([node],
                                                 start_timeout=180,
                                                 stop_timeout=180)
 
-                self.redpanda._admin.await_stable_leader("controller",
+                self.funes._admin.await_stable_leader("controller",
                                                          partition=0,
-                                                         namespace='redpanda',
+                                                         namespace='funes',
                                                          timeout_s=120,
                                                          backoff_s=10)
 
@@ -781,7 +781,7 @@ class InfiniteRetentionTest(PreallocNodesTest):
                 iteration_timings["restart"][iteration] = restart_duration
             else:
                 # make sure that we stop all nodes
-                self.redpanda.stop(forced=True)
+                self.funes.stop(forced=True)
 
             self.logger.info(f"Iteration {iteration} completed. Timings are:")
             for k, v in iteration_timings.items():

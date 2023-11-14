@@ -9,7 +9,7 @@
 
 #include "cluster/log_eviction_stm.h"
 #include "raft/tests/raft_group_fixture.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/tests/fixture.h"
 #include "storage/disk_log_impl.h"
 
 #include <boost/test/tools/old/interface.hpp>

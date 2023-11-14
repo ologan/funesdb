@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/vectorizedio/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/vectorizedio/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/remote_segment_index.h"
@@ -20,7 +20,7 @@ namespace cloud_storage {
 
 offset_index::offset_index(
   model::offset initial_rp,
-  kafka::offset initial_kaf,
+  sql::offset initial_kaf,
   int64_t initial_file_pos,
   int64_t file_pos_step,
   model::timestamp initial_time)
@@ -46,7 +46,7 @@ size_t offset_index::estimate_memory_use() const {
 
 void offset_index::add(
   model::offset rp_offset,
-  kafka::offset kaf_offset,
+  sql::offset kaf_offset,
   int64_t file_offset,
   model::timestamp max_timestamp) {
     auto ix = index_mask & _pos++;
@@ -95,7 +95,7 @@ std::
             if (write_buffer.at(i) < upper_bound) {
                 candidate = find_result{
                   .rp_offset = model::offset(_rp_offsets.at(i)),
-                  .kaf_offset = kafka::offset(_kaf_offsets.at(i)),
+                  .kaf_offset = sql::offset(_kaf_offsets.at(i)),
                   .file_pos = _file_offsets.at(i),
                 };
             } else {
@@ -138,7 +138,7 @@ offset_index::find_rp_offset(model::offset upper_bound) {
             _kaf_index.copy());
           auto kaf_offset = _fetch_ix(std::move(kaf_dec), ix);
           vassert(kaf_offset.has_value(), "Inconsistent index state");
-          res.kaf_offset = kafka::offset(*kaf_offset);
+          res.kaf_offset = sql::offset(*kaf_offset);
           foffset_decoder_t file_dec(
             _file_index.get_initial_value(),
             _file_index.get_row_count(),
@@ -151,7 +151,7 @@ offset_index::find_rp_offset(model::offset upper_bound) {
 }
 
 std::optional<offset_index::find_result>
-offset_index::find_kaf_offset(kafka::offset upper_bound) {
+offset_index::find_kaf_offset(sql::offset upper_bound) {
     auto search_result = maybe_find_offset(
       upper_bound, _kaf_index, _kaf_offsets);
     return ss::visit(
@@ -162,7 +162,7 @@ offset_index::find_kaf_offset(kafka::offset upper_bound) {
           find_result res{};
 
           size_t ix = index_result.ix;
-          res.kaf_offset = kafka::offset(index_result.value);
+          res.kaf_offset = sql::offset(index_result.value);
 
           decoder_t rp_dec(
             _rp_index.get_initial_value(),
@@ -225,7 +225,7 @@ offset_index::find_timestamp(model::timestamp upper_bound) {
 
           return offset_index::find_result{
             .rp_offset = model::offset(*rp_offset),
-            .kaf_offset = kafka::offset(*kaf_offset),
+            .kaf_offset = sql::offset(*kaf_offset),
             .file_pos = *file_pos};
       });
 }
@@ -255,16 +255,16 @@ offset_index::coarse_index_t offset_index::build_coarse_index(
       _kaf_index.get_initial_value(),
       _kaf_index.get_row_count(),
       _kaf_index.copy());
-    std::array<int64_t, buffer_depth> kafka_row{};
+    std::array<int64_t, buffer_depth> sql_row{};
 
     coarse_index_t index;
     auto populate_index = [step_size, &index, index_path](
                             const auto& file_offsets,
-                            const auto& kafka_offsets,
+                            const auto& sql_offsets,
                             auto& span_start,
                             auto& span_end) {
-        for (auto it = file_offsets.cbegin(), kit = kafka_offsets.cbegin();
-             it != file_offsets.cend() && kit != kafka_offsets.cend();
+        for (auto it = file_offsets.cbegin(), kit = sql_offsets.cbegin();
+             it != file_offsets.cend() && kit != sql_offsets.cend();
              ++it, ++kit) {
             span_end = *it;
             auto delta = span_end - span_start + 1;
@@ -277,7 +277,7 @@ offset_index::coarse_index_t offset_index::build_coarse_index(
                   span_end,
                   step_size,
                   delta);
-                index[kafka::offset{*kit}] = span_end;
+                index[sql::offset{*kit}] = span_end;
                 span_start = span_end + 1;
             }
         }
@@ -285,10 +285,10 @@ offset_index::coarse_index_t offset_index::build_coarse_index(
 
     size_t start{0};
     size_t end{0};
-    while (file_dec.read(file_row) && kaf_dec.read(kafka_row)) {
-        populate_index(file_row, kafka_row, start, end);
+    while (file_dec.read(file_row) && kaf_dec.read(sql_row)) {
+        populate_index(file_row, sql_row, start, end);
         file_row = {};
-        kafka_row = {};
+        sql_row = {};
     }
 
     populate_index(_file_offsets, _kaf_offsets, start, end);
@@ -355,7 +355,7 @@ void offset_index::from_iobuf(iobuf b) {
     auto num_rows = hdr.num_elements / buffer_depth;
     _pos = hdr.num_elements;
     _initial_rp = model::offset(hdr.base_rp);
-    _initial_kaf = kafka::offset(hdr.base_kaf);
+    _initial_kaf = sql::offset(hdr.base_kaf);
     _initial_file_pos = hdr.base_file;
     std::copy(
       hdr.rp_write_buf.begin(), hdr.rp_write_buf.end(), _rp_offsets.begin());

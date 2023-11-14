@@ -16,7 +16,7 @@ func newBalancerStatusCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short: "Queries cluster for partition balancer status",
 		Long: `Queries cluster for partition balancer status:
 
-If continuous partition balancing is enabled, redpanda will continuously
+If continuous partition balancing is enabled, funes will continuously
 reassign partitions from both unavailable nodes and from nodes using more disk
 space than the configured limit.
 

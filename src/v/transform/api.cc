@@ -18,8 +18,8 @@
 #include "cluster/types.h"
 #include "config/configuration.h"
 #include "features/feature_table.h"
-#include "kafka/server/partition_proxy.h"
-#include "kafka/server/replicated_partition.h"
+#include "sql/server/partition_proxy.h"
+#include "sql/server/replicated_partition.h"
 #include "model/fundamental.h"
 #include "model/namespace.h"
 #include "model/timeout_clock.h"
@@ -75,7 +75,7 @@ public:
 private:
     model::partition_id compute_output_partition() {
         const auto& config = _topic_table->get_topic_cfg({
-          model::kafka_namespace,
+          model::sql_namespace,
           _topic,
         });
         if (!config) {
@@ -94,24 +94,24 @@ private:
 
 class partition_source final : public source {
 public:
-    explicit partition_source(kafka::partition_proxy p)
+    explicit partition_source(sql::partition_proxy p)
       : _partition(std::move(p)) {}
 
     ss::future<> start() final { return ss::now(); }
 
     ss::future<> stop() final { return _gate.close(); }
 
-    kafka::offset latest_offset() final {
+    sql::offset latest_offset() final {
         auto result = _partition.last_stable_offset();
         if (result.has_error()) {
             throw std::runtime_error(
-              kafka::make_error_code(result.error()).message());
+              sql::make_error_code(result.error()).message());
         }
         return model::offset_cast(result.value());
     }
 
     ss::future<model::record_batch_reader>
-    read_batch(kafka::offset offset, ss::abort_source* as) final {
+    read_batch(sql::offset offset, ss::abort_source* as) final {
         auto _ = _gate.hold();
         // There currently no way to abort the call to get the sync start, so
         // instead we wrap the resulting future in our abort source.
@@ -124,13 +124,13 @@ public:
 
         if (result.has_error()) {
             throw std::runtime_error(
-              kafka::make_error_code(result.error()).message());
+              sql::make_error_code(result.error()).message());
         }
         // It's possible to have the local log was truncated due to delete
         // records, retention, etc. In this event, simply resume from the start
         // of the log.
         model::offset start_offset = std::max(
-          result.value(), kafka::offset_cast(offset));
+          result.value(), sql::offset_cast(offset));
         // TODO(rockwood): This is currently an arbitrary value, but we should
         // dynamically update this based on how much memory is available in the
         // transform subsystem.
@@ -152,7 +152,7 @@ private:
     // This gate is only to guard against the case when the abort has fired and
     // there is still a live future that holds a reference to _partition.
     ss::gate _gate;
-    kafka::partition_proxy _partition;
+    sql::partition_proxy _partition;
 };
 
 class registry_adapter : public registry {
@@ -215,7 +215,7 @@ public:
         return _batcher->wait_for_previous_flushes(_key, as);
     }
 
-    ss::future<std::optional<kafka::offset>> load_committed_offset() override {
+    ss::future<std::optional<sql::offset>> load_committed_offset() override {
         auto result = co_await _client->offset_fetch(_key);
         if (result.has_error()) {
             cluster::errc ec = result.error();
@@ -230,7 +230,7 @@ public:
         co_return value->offset;
     }
 
-    ss::future<> commit_offset(kafka::offset offset) override {
+    ss::future<> commit_offset(sql::offset offset) override {
         return _batcher->commit_offset(_key, {.offset = offset});
     }
 
@@ -268,7 +268,7 @@ public:
         if (!engine) {
             throw std::runtime_error("unable to create wasm engine");
         }
-        auto partition = kafka::make_partition_proxy(ntp, *_partition_manager);
+        auto partition = sql::make_partition_proxy(ntp, *_partition_manager);
         if (!partition) {
             throw std::runtime_error("unable to create transform source");
         }
@@ -421,7 +421,7 @@ void service::register_notifications() {
                   partition->ntp(), ntp_leader::no);
                 return;
             }
-            if (partition->ntp().ns != model::kafka_namespace) {
+            if (partition->ntp().ns != model::sql_namespace) {
                 return;
             }
             ntp_leader is_leader = partition && partition->is_elected_leader()
@@ -435,9 +435,9 @@ void service::register_notifications() {
     });
     auto unmanage_notification_id
       = _partition_manager->local().register_unmanage_notification(
-        model::kafka_namespace, [this](model::topic_partition_view tp) {
+        model::sql_namespace, [this](model::topic_partition_view tp) {
             _manager->on_leadership_change(
-              model::ntp(model::kafka_namespace, tp.topic, tp.partition),
+              model::ntp(model::sql_namespace, tp.topic, tp.partition),
               ntp_leader::no);
         });
     _notification_cleanups.emplace_back([this, unmanage_notification_id] {
@@ -448,7 +448,7 @@ void service::register_notifications() {
     // will effectively bootstrap the transform manager.
     auto manage_notification_id
       = _partition_manager->local().register_manage_notification(
-        model::kafka_namespace,
+        model::sql_namespace,
         [this](const ss::lw_shared_ptr<cluster::partition>& p) {
             ntp_leader is_leader = p->is_elected_leader() ? ntp_leader::yes
                                                           : ntp_leader::no;

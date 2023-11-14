@@ -12,7 +12,7 @@
 #include "cluster/logger.h"
 #include "config/configuration.h"
 #include "local_monitor_fixture.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/tests/fixture.h"
 #include "seastarx.h"
 #include "storage/types.h"
 

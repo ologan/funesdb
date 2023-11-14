@@ -11,15 +11,15 @@ import json
 
 from rptest.services.cluster import cluster
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 
 
-class RpkGenerateTest(RedpandaTest):
+class RpkGenerateTest(FunesTest):
     def __init__(self, ctx):
         super(RpkGenerateTest, self).__init__(test_context=ctx)
         self._ctx = ctx
-        self._rpk = RpkTool(self.redpanda)
+        self._rpk = RpkTool(self.funes)
 
     @cluster(num_nodes=3)
     def test_generate_grafana(self):
@@ -30,10 +30,10 @@ class RpkGenerateTest(RedpandaTest):
 
         # dashboard is the dictionary of the current dashboards and their title.
         dashboards = {
-            "operations": "Redpanda Ops Dashboard",
-            "consumer-metrics": "Kafka Consumer",
-            "consumer-offsets": "Kafka Consumer Offsets",
-            "topic-metrics": "Kafka Topic Metrics"
+            "operations": "Funes Ops Dashboard",
+            "consumer-metrics": "SQL Consumer",
+            "consumer-offsets": "SQL Consumer Offsets",
+            "topic-metrics": "SQL Topic Metrics"
         }
         for name, expectedTitle in dashboards.items():
             out = self._rpk.generate_grafana(name)

@@ -287,7 +287,7 @@ static ss::future<segment_set> unsafe_do_recover(
                   ss::remove_file(segment->index().path().string()).get();
               } catch (const std::filesystem::filesystem_error& e) {
                   // Ignore ENOENT on deletion: segments are allowed to
-                  // exist without an index if redpanda shutdown without
+                  // exist without an index if funes shutdown without
                   // a flush.
                   if (e.code() != std::errc::no_such_file_or_directory) {
                       throw;

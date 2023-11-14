@@ -292,7 +292,7 @@ private:
     // to segments: adjacent segment compaction and truncation.  Truncation
     // repeatedly takes+releases segment read locks, and without this extra
     // coarse grained lock, the compaction can happen in between steps.
-    // See https://github.com/redpanda-data/redpanda/issues/7118
+    // See https://github.com/redpanda-data/funes/issues/7118
     mutex _segment_rewrite_lock;
 
     // Bytes written since last time we requested stm snapshot

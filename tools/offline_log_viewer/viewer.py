@@ -11,7 +11,7 @@ from tx_coordinator import TxLog
 import itertools
 from storage import Store
 from kvstore import KvStore
-from kafka import KafkaLog
+from sql import SQLLog
 import logging
 import json
 
@@ -37,7 +37,7 @@ def print_kv_store(store):
     result = {}
 
     for ntp in store.ntps:
-        if ntp.nspace == "redpanda" and ntp.topic == "kvstore":
+        if ntp.nspace == "funes" and ntp.topic == "kvstore":
             logger.info(f"inspecting {ntp}")
             kv = KvStore(ntp)
             kv.decode()
@@ -52,7 +52,7 @@ def print_kv_store(store):
 
 def print_controller(store, bin_dump: bool):
     for ntp in store.ntps:
-        if ntp.nspace == "redpanda" and ntp.topic == "controller":
+        if ntp.nspace == "funes" and ntp.topic == "controller":
             ctrl = ControllerLog(ntp, bin_dump)
             iter_json = json.JSONEncoder(indent=2).iterencode(
                 SerializableGenerator(ctrl))
@@ -60,21 +60,21 @@ def print_controller(store, bin_dump: bool):
                 print(j, end='')
 
 
-def print_kafka(store, topic, headers_only):
+def print_sql(store, topic, headers_only):
     for ntp in store.ntps:
-        if ntp.nspace in ["kafka", "kafka_internal"]:
+        if ntp.nspace in ["sql", "sql_internal"]:
             if topic and ntp.topic != topic:
                 continue
 
             logger.info(f'topic: {ntp.topic}, partition: {ntp.partition}')
-            log = KafkaLog(ntp, headers_only=headers_only)
+            log = SQLLog(ntp, headers_only=headers_only)
             for result in log.decode():
                 logger.info(json.dumps(result, indent=2))
 
 
 def print_groups(store):
     for ntp in store.ntps:
-        if ntp.nspace == "kafka_internal" and ntp.topic == "group":
+        if ntp.nspace == "sql_internal" and ntp.topic == "group":
             l = GroupsLog(ntp)
             l.decode()
             logger.info(json.dumps(l.records, indent=2))
@@ -84,7 +84,7 @@ def print_groups(store):
 def print_consumer_offsets(store):
     records = []
     for ntp in store.ntps:
-        if ntp.nspace == "kafka" and ntp.topic == "__consumer_offsets":
+        if ntp.nspace == "sql" and ntp.topic == "__consumer_offsets":
             l = OffsetsLog(ntp)
             l.decode()
             records.append({
@@ -99,7 +99,7 @@ def print_consumer_offsets(store):
 
 def print_tx_coordinator(store):
     for ntp in store.ntps:
-        if ntp.nspace == "kafka_internal" and ntp.topic == "tx":
+        if ntp.nspace == "sql_internal" and ntp.topic == "tx":
             l = TxLog(ntp)
             for result in l.decode():
                 logger.info(json.dumps(result, indent=2))
@@ -113,24 +113,24 @@ def validate_path(options):
         sys.exit(1)
     if options.force:
         return
-    controller = join(path, "redpanda", "controller")
+    controller = join(path, "funes", "controller")
     if not os.path.exists(controller):
         logger.error(
-            f"Each redpanda data dir should have controller piece but {controller} isn't found"
+            f"Each funes data dir should have controller piece but {controller} isn't found"
         )
         sys.exit(1)
 
 
 def validate_topic(path, topic):
     if topic:
-        topic = join(path, "kafka", topic)
+        topic = join(path, "sql", topic)
         if not os.path.exists(topic):
             logger.error(f"Topic {topic} doesn't exist")
             sys.exit(1)
 
 
 def validate_tx_coordinator(path):
-    tx = join(path, "kafka_internal", "tx")
+    tx = join(path, "sql_internal", "tx")
     if not os.path.exists(tx):
         logger.error(f"tx coordinator dir {tx} doesn't exist")
         sys.exit(1)
@@ -140,7 +140,7 @@ def main():
     import argparse
 
     def generate_options():
-        parser = argparse.ArgumentParser(description='Redpanda log analyzer')
+        parser = argparse.ArgumentParser(description='Funes log analyzer')
         parser.add_argument(
             '--path',
             type=str,
@@ -148,9 +148,9 @@ def main():
         parser.add_argument('--type',
                             type=str,
                             choices=[
-                                'controller', 'kvstore', 'kafka',
+                                'controller', 'kvstore', 'sql',
                                 'consumer_offsets', 'legacy-group',
-                                'kafka_records', 'tx_coordinator'
+                                'sql_records', 'tx_coordinator'
                             ],
                             required=True,
                             help='operation to execute')
@@ -158,7 +158,7 @@ def main():
             '--topic',
             type=str,
             required=False,
-            help='for kafka type, if set, parse only this topic')
+            help='for sql type, if set, parse only this topic')
         parser.add_argument('-v', "--verbose", action="store_true")
         parser.add_argument(
             '--dump',
@@ -184,12 +184,12 @@ def main():
         print_kv_store(store)
     elif options.type == "controller":
         print_controller(store, options.dump)
-    elif options.type == "kafka":
+    elif options.type == "sql":
         validate_topic(options.path, options.topic)
-        print_kafka(store, options.topic, headers_only=True)
-    elif options.type == "kafka_records":
+        print_sql(store, options.topic, headers_only=True)
+    elif options.type == "sql_records":
         validate_topic(options.path, options.topic)
-        print_kafka(store, options.topic, headers_only=False)
+        print_sql(store, options.topic, headers_only=False)
     elif options.type == "legacy-group":
         print_groups(store)
     elif options.type == "consumer_offsets":

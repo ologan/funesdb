@@ -14,7 +14,7 @@ import (
 	"fmt"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -59,8 +59,8 @@ resource names:
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			b, err := a.createDeletionsAndDescribes(false)
@@ -92,7 +92,7 @@ resource names:
 			deleteReqResp(adm, printAllFilters, printDeletionsHeader, b)
 		},
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	a.addDeleteFlags(cmd)
 	cmd.Flags().BoolVarP(&printAllFilters, "print-filters", "f", false, "Print the filters that were requested (failed filters are always printed)")
 	cmd.Flags().BoolVarP(&dry, "dry", "d", false, "Dry run: validate what would be deleted")
@@ -164,7 +164,7 @@ func printDeleteFilters(all bool, results kadm.DeleteACLsResults) {
 			f.Pattern,
 			f.Operation,
 			f.Permission,
-			kafka.ErrMessage(f.Err),
+			sql.ErrMessage(f.Err),
 		})
 	}
 }
@@ -182,7 +182,7 @@ func printDeleteResults(results kadm.DeleteACLsResults) {
 				d.Pattern,
 				d.Operation,
 				d.Permission,
-				kafka.ErrMessage(d.Err),
+				sql.ErrMessage(d.Err),
 			})
 		}
 	}

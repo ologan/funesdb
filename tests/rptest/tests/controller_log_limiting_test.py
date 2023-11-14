@@ -11,7 +11,7 @@ import time
 import json
 from subprocess import CalledProcessError
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.tests.partition_movement import PartitionMovementMixin
 from rptest.tests.mirror_maker_test import MirrorMakerService
@@ -21,9 +21,9 @@ from rptest.clients.types import TopicSpec
 from rptest.clients.default import DefaultClient
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.clients.kcl import RawKCL, KclCreateTopicsRequestTopic
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.services.admin import Admin
-from rptest.services.redpanda import MetricsEndpoint, CHAOS_LOG_ALLOW_LIST
+from rptest.services.funes import MetricsEndpoint, CHAOS_LOG_ALLOW_LIST
 from rptest.services.mirror_maker2 import MirrorMaker2
 from rptest.services.cluster import cluster
 from requests.exceptions import HTTPError
@@ -36,29 +36,29 @@ TOO_MANY_REQUESTS_ERROR_CODE = 89
 TOO_MANY_REQUESTS_HTTP_ERROR_CODE = 429
 
 
-def get_metric(redpanda, metric_type, label):
-    admin = redpanda._admin
-    controller_node = redpanda.get_node(
+def get_metric(funes, metric_type, label):
+    admin = funes._admin
+    controller_node = funes.get_node(
         admin.await_stable_leader(
             topic="controller",
             partition=0,
-            namespace="redpanda",
+            namespace="funes",
         ))
-    metrics = redpanda.metrics_sample(
+    metrics = funes.metrics_sample(
         metric_type,
         nodes=[controller_node],
         metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS).label_filter(
-            {"redpanda_cmd_group": label})
+            {"funes_cmd_group": label})
     assert len(metrics.samples) == 1
     return metrics.samples[0].value
 
 
-def check_metric(redpanda, metric_type, label, value):
-    metric_value = get_metric(redpanda, metric_type, label)
+def check_metric(funes, metric_type, label, value):
+    metric_value = get_metric(funes, metric_type, label)
     assert metric_value == value
 
 
-class TopicOperationsLimitingTest(RedpandaTest):
+class TopicOperationsLimitingTest(FunesTest):
     def __init__(self, *args, **kwargs):
         additional_options = {
             "enable_controller_log_rate_limiting": True,
@@ -68,18 +68,18 @@ class TopicOperationsLimitingTest(RedpandaTest):
                          num_brokers=3,
                          extra_rp_conf=additional_options,
                          **kwargs)
-        self.kcl = RawKCL(self.redpanda)
+        self.kcl = RawKCL(self.funes)
 
     def check_available_metric(self, value):
-        check_metric(self.redpanda, "requests_available_rps",
+        check_metric(self.funes, "requests_available_rps",
                      "topic_operations", value)
 
     def check_dropped_metric(self, value):
-        check_metric(self.redpanda, "requests_dropped", "topic_operations",
+        check_metric(self.funes, "requests_dropped", "topic_operations",
                      value)
 
     def chek_capacity_is_full(self, value):
-        return get_metric(self.redpanda, "requests_available_rps",
+        return get_metric(self.funes, "requests_available_rps",
                           "topic_operations") == value
 
     @cluster(num_nodes=3)
@@ -158,7 +158,7 @@ class TopicOperationsLimitingTest(RedpandaTest):
             assert topic_response['ErrorCode'] == 0
 
 
-class ControllerConfigLimitTest(RedpandaTest):
+class ControllerConfigLimitTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          extra_rp_conf={
@@ -197,7 +197,7 @@ class ControllerConfigLimitTest(RedpandaTest):
         assert success_amount > 0
 
     def check_capcity_is_full(self, capacity):
-        return get_metric(self.redpanda, "requests_available_rps",
+        return get_metric(self.funes, "requests_available_rps",
                           "configuration_operations") == capacity
 
     @cluster(num_nodes=3)
@@ -250,7 +250,7 @@ class ControllerPartitionMovementLimitTest(PartitionMovementMixin,
 
     @cluster(num_nodes=3)
     def test_move_partition_limit(self):
-        self.start_redpanda(num_nodes=3)
+        self.start_funes(num_nodes=3)
 
         topic = TopicSpec(partition_count=3)
         self.client().create_topic(topic)
@@ -263,7 +263,7 @@ class ControllerPartitionMovementLimitTest(PartitionMovementMixin,
             assert 0, "Too Many Requests error must be raised"
 
 
-class ControllerAclsAndUsersLimitTest(RedpandaTest):
+class ControllerAclsAndUsersLimitTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          extra_rp_conf={
@@ -274,12 +274,12 @@ class ControllerAclsAndUsersLimitTest(RedpandaTest):
                          **kwargs)
 
     def check_capacity_is_full(self, capacity):
-        return get_metric(self.redpanda, "requests_available_rps",
+        return get_metric(self.funes, "requests_available_rps",
                           "acls_and_users_operations") == capacity
 
     @cluster(num_nodes=3)
     def test_create_user_limit(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         wait_until(lambda: self.check_capacity_is_full(OPERATIONS_LIMIT),
                    timeout_sec=10,
                    backoff_sec=1)
@@ -287,7 +287,7 @@ class ControllerAclsAndUsersLimitTest(RedpandaTest):
             try:
                 rpk.sasl_create_user(
                     f"testuser_{i}", "password",
-                    self.redpanda.SUPERUSER_CREDENTIALS.algorithm)
+                    self.funes.SUPERUSER_CREDENTIALS.algorithm)
             except RpkException as err:
                 if i >= OPERATIONS_LIMIT:
                     assert 'Too many requests' in err.stderr
@@ -299,7 +299,7 @@ class ControllerAclsAndUsersLimitTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_create_acl_limit(self):
-        client = KafkaCliTools(self.redpanda)
+        client = SQLCliTools(self.funes)
         self.client().alter_broker_config(
             {"rps_limit_acls_and_users_operations": 0}, incremental=True)
         try:
@@ -310,7 +310,7 @@ class ControllerAclsAndUsersLimitTest(RedpandaTest):
             assert 0, "Too Many Requests error must be raised"
 
 
-class ControllerNodeManagementLimitTest(RedpandaTest):
+class ControllerNodeManagementLimitTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          extra_rp_conf={
@@ -321,16 +321,16 @@ class ControllerNodeManagementLimitTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_maintance_mode_limit(self):
-        self.admin = Admin(self.redpanda)
-        admin = self.redpanda._admin
-        controller_node = self.redpanda.get_node(
+        self.admin = Admin(self.funes)
+        admin = self.funes._admin
+        controller_node = self.funes.get_node(
             admin.await_stable_leader(
                 topic="controller",
                 partition=0,
-                namespace="redpanda",
+                namespace="funes",
             ))
         node = next(
-            filter(lambda node: node != controller_node, self.redpanda.nodes))
+            filter(lambda node: node != controller_node, self.funes.nodes))
         self.admin.maintenance_start(node)
         try:
             self.admin.maintenance_stop(node)
@@ -348,8 +348,8 @@ class ControllerLogLimitMirrorMakerTests(MirrorMakerService):
     @cluster(num_nodes=10)
     def test_mirror_maker_with_limits(self):
         # start brokers
-        self.start_brokers(source_type=MirrorMakerService.redpanda_source)
-        target_client = DefaultClient(self.redpanda)
+        self.start_brokers(source_type=MirrorMakerService.funes_source)
+        target_client = DefaultClient(self.funes)
         target_client.alter_broker_config(
             {
                 "enable_controller_log_rate_limiting": True,
@@ -365,7 +365,7 @@ class ControllerLogLimitMirrorMakerTests(MirrorMakerService):
         self.mirror_maker = MirrorMaker2(self.test_context,
                                          num_nodes=1,
                                          source_cluster=self.source_broker,
-                                         target_cluster=self.redpanda)
+                                         target_cluster=self.funes)
         topics = []
         for i in range(0, 50):
             topics.append(TopicSpec(partition_count=3))
@@ -388,8 +388,8 @@ class ControllerLogLimitPartitionBalancerTests(PartitionBalancerService):
 
     @cluster(num_nodes=7, log_allow_list=CHAOS_LOG_ALLOW_LIST)
     def test_partition_balancer_with_limits(self):
-        self.start_redpanda(num_nodes=5)
-        client = DefaultClient(self.redpanda)
+        self.start_funes(num_nodes=5)
+        client = DefaultClient(self.funes)
         client.alter_broker_config(
             {
                 "enable_controller_log_rate_limiting": True,
@@ -409,7 +409,7 @@ class ControllerLogLimitPartitionBalancerTests(PartitionBalancerService):
         self.await_startup()
 
         with self.NodeStopper(self) as ns:
-            node = self.redpanda.nodes[1]
+            node = self.funes.nodes[1]
             ns.make_unavailable(node)
             self.wait_until_ready(expected_unavailable_node=node,
                                   timeout_sec=240)

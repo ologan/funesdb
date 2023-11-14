@@ -10,10 +10,10 @@
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
-import confluent_kafka as ck
-from rptest.tests.redpanda_test import RedpandaTest
+import confluent_sql as ck
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
-from rptest.services.redpanda import DEFAULT_LOG_ALLOW_LIST
+from rptest.services.funes import DEFAULT_LOG_ALLOW_LIST
 import re
 import requests
 from ducktape.utils.util import wait_until
@@ -28,7 +28,7 @@ TIMEOUT_ALLOW_LIST = [
 ]
 
 
-class TxAdminTest(RedpandaTest):
+class TxAdminTest(FunesTest):
     topics = (TopicSpec(partition_count=3, replication_factor=3),
               TopicSpec(partition_count=3, replication_factor=3))
 
@@ -44,7 +44,7 @@ class TxAdminTest(RedpandaTest):
                                  'enable_leader_balancer': False
                              })
 
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     def extract_pid(self, tx):
         return (tx["producer_id"]["id"], tx["producer_id"]["epoch"])
@@ -52,11 +52,11 @@ class TxAdminTest(RedpandaTest):
     @cluster(num_nodes=3)
     def test_simple_get_transaction(self):
         producer1 = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': '0',
         })
         producer2 = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': '1',
         })
         producer1.init_transactions()
@@ -77,7 +77,7 @@ class TxAdminTest(RedpandaTest):
         for topic in self.topics:
             for partition in range(topic.partition_count):
                 txs_info = self.admin.get_transactions(topic.name, partition,
-                                                       "kafka")
+                                                       "sql")
                 assert ('expired_transactions' not in txs_info)
                 if expected_pids == None:
                     expected_pids = set(
@@ -95,11 +95,11 @@ class TxAdminTest(RedpandaTest):
              log_allow_list=DEFAULT_LOG_ALLOW_LIST + TIMEOUT_ALLOW_LIST)
     def test_mark_transaction_expired(self):
         producer1 = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': '0',
         })
         producer2 = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': '1',
         })
         producer1.init_transactions()
@@ -117,7 +117,7 @@ class TxAdminTest(RedpandaTest):
 
         expected_pids = None
 
-        txs_info = self.admin.get_transactions(topic.name, partition, "kafka")
+        txs_info = self.admin.get_transactions(topic.name, partition, "sql")
 
         expected_pids = set(
             map(self.extract_pid, txs_info['active_transactions']))
@@ -131,7 +131,7 @@ class TxAdminTest(RedpandaTest):
                 self.admin.mark_transaction_expired(topic.name, partition, {
                     "id": abort_tx[0],
                     "epoch": abort_tx[1]
-                }, "kafka")
+                }, "sql")
             except requests.exceptions.HTTPError as e:
                 if e.response.status_code != 404:
                     raise
@@ -145,7 +145,7 @@ class TxAdminTest(RedpandaTest):
                            retry_on_exc=True)
 
                 txs_info = self.admin.get_transactions(topic.name, partition,
-                                                       "kafka")
+                                                       "sql")
                 assert ('expired_transactions' not in txs_info)
 
                 assert (len(expected_pids) == len(
@@ -159,7 +159,7 @@ class TxAdminTest(RedpandaTest):
     def test_all_transactions(self):
         tx_id = "0"
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': tx_id,
         })
         producer.init_transactions()
@@ -181,7 +181,7 @@ class TxAdminTest(RedpandaTest):
         assert tx["timeout_ms"] == 60000
 
         for partition in tx["partitions"]:
-            assert partition["ns"] == "kafka"
+            assert partition["ns"] == "sql"
             if partition["topic"] not in expected_partitions:
                 expected_partitions[partition["topic"]] = set()
             expected_partitions[partition["topic"]].add(
@@ -197,7 +197,7 @@ class TxAdminTest(RedpandaTest):
     def test_delete_topic_from_ongoin_tx(self):
         tx_id = "0"
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': tx_id,
         })
         producer.init_transactions()
@@ -213,7 +213,7 @@ class TxAdminTest(RedpandaTest):
         assert len(
             txs_info) == 1, "Should be only one transaction in current time"
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic_name = self.topics[0].name
         rpk.delete_topic(topic_name)
 
@@ -222,7 +222,7 @@ class TxAdminTest(RedpandaTest):
             "transactional_id"] == tx_id, f"Expected transactional_id: {tx_id}, but got {tx['transactional_id']}"
 
         for partition in tx["partitions"]:
-            assert (partition["ns"] == "kafka")
+            assert (partition["ns"] == "sql")
             if partition["topic"] == topic_name:
                 self.admin.delete_partition_from_transaction(
                     tx["transactional_id"], partition["ns"],
@@ -232,7 +232,7 @@ class TxAdminTest(RedpandaTest):
         producer.commit_transaction()
 
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': tx_id,
         })
         producer.init_transactions()
@@ -249,7 +249,7 @@ class TxAdminTest(RedpandaTest):
     def test_delete_non_existent_topic(self):
         tx_id = "0"
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': tx_id,
         })
         producer.init_transactions()
@@ -266,9 +266,9 @@ class TxAdminTest(RedpandaTest):
 
         try:
             self.admin.delete_partition_from_transaction(
-                tx_id, "kafka", error_topic_name, 0, 0)
+                tx_id, "sql", error_topic_name, 0, 0)
         except requests.exceptions.HTTPError as e:
-            assert e.response.text == '{"message": "Can not find partition({kafka/error_topic/0}) in transaction for delete", "code": 400}'
+            assert e.response.text == '{"message": "Can not find partition({sql/error_topic/0}) in transaction for delete", "code": 400}'
 
         producer.commit_transaction()
 
@@ -278,7 +278,7 @@ class TxAdminTest(RedpandaTest):
     def test_delete_non_existent_tid(self):
         tx_id = "0"
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': tx_id,
         })
         producer.init_transactions()
@@ -311,7 +311,7 @@ class TxAdminTest(RedpandaTest):
     def test_delete_non_existent_etag(self):
         tx_id = "0"
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': tx_id,
         })
         producer.init_transactions()

@@ -35,7 +35,7 @@ func (fe *formattedError) Error() string {
 	return fe.s
 }
 
-// clusterConfig represents a redpanda configuration.
+// clusterConfig represents a funes configuration.
 type clusterConfig map[string]any
 
 // A custom unmarshal is needed because go-yaml parse "YYYY-MM-DD" as a full

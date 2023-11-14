@@ -139,7 +139,7 @@ std::vector<std::vector<acl_binding>> acl_store::remove_bindings(
   const std::vector<acl_binding_filter>& filters, bool dry_run) {
     // the pair<filter, size_t> is used to record the index of the filter in the
     // input so that returned set of matching binding is organized in the same
-    // order as the input filters. this is a property needed by the kafka api.
+    // order as the input filters. this is a property needed by the sql api.
     absl::flat_hash_map<
       resource_pattern,
       std::vector<std::pair<acl_binding_filter, size_t>>>
@@ -341,7 +341,7 @@ std::ostream& operator<<(std::ostream& os, const acl_host& host) {
         fmt::print(os, "{{{}}}", *host._addr);
     } else {
         // we can log whatever representation we want for a wildcard host,
-        // but kafka expects "*" as the wildcard representation.
+        // but sql expects "*" as the wildcard representation.
         os << "{{any_host}}";
     }
     return os;

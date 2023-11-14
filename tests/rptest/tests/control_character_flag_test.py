@@ -13,32 +13,32 @@ from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions, ver_string
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_installer import FunesInstaller, wait_for_num_versions, ver_string
+from rptest.tests.funes_test import FunesTest
 
 
-class ControlCharacterPermittedBase(RedpandaTest):
+class ControlCharacterPermittedBase(FunesTest):
     feature_legacy_permit_control_char = 'legacy_permit_unsafe_log_operation'
 
     def __init__(self, test_context, **kwargs):
         super(ControlCharacterPermittedBase,
               self).__init__(test_context=test_context, **kwargs)
-        self._installer = self.redpanda._installer
-        self._admin = Admin(self.redpanda)
+        self._installer = self.funes._installer
+        self._admin = Admin(self.funes)
 
     def setUp(self):
         # handled by test case to support parameterization
         pass
 
-    def _start_redpanda(self):
+    def _start_funes(self):
         super(ControlCharacterPermittedBase, self).setUp()
 
     def _validate_pre_upgrade(self, version):
-        self._installer.install(self.redpanda.nodes, version)
-        self._start_redpanda()
+        self._installer.install(self.funes.nodes, version)
+        self._start_funes()
 
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert ver_string(version) in unique_versions
 
         config = self._admin.get_cluster_config()
@@ -46,10 +46,10 @@ class ControlCharacterPermittedBase(RedpandaTest):
             {self.feature_legacy_permit_control_char})
 
     def _perform_update(self, initial_version, version):
-        self._installer.install(self.redpanda.nodes, version)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self._installer.install(self.funes.nodes, version)
+        self.funes.restart_nodes(self.funes.nodes)
 
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert ver_string(initial_version) not in unique_versions
 
         config = self._admin.get_cluster_config()
@@ -60,7 +60,7 @@ class ControlCharacterPermittedBase(RedpandaTest):
 
 class ControlCharacterPermittedAfterUpgrade(ControlCharacterPermittedBase):
     """
-    When upgrading to Redpanda v23.2.1, a new flag is added that will
+    When upgrading to Funes v23.2.1, a new flag is added that will
     permit the use of strings that have control characters in them.  When this
     flag is set to true, these characters are permitted.  When false, the characters
     are rejected.  In new clusters, those that start at v23.2.1, the flag does
@@ -84,7 +84,7 @@ class ControlCharacterPermittedAfterUpgrade(ControlCharacterPermittedBase):
         # Creates a user with invalid control characters
 
         self._admin.create_user("my\nuser", "password", "SCRAM-SHA-256")
-        self._perform_update(initial_version, RedpandaInstaller.HEAD)
+        self._perform_update(initial_version, FunesInstaller.HEAD)
         # Should still be able to create a user
         self._admin.create_user("my\notheruser", "password", "SCRAM-SHA-256")
         self._admin.patch_cluster_config(
@@ -101,7 +101,7 @@ class ControlCharacterPermittedAfterUpgrade(ControlCharacterPermittedBase):
         """
         Validates that new clusters ignore the flag
         """
-        super(ControlCharacterPermittedAfterUpgrade, self)._start_redpanda()
+        super(ControlCharacterPermittedAfterUpgrade, self)._start_funes()
 
         config = self._admin.get_cluster_config()
         assert config[self.feature_legacy_permit_control_char] is True
@@ -131,7 +131,7 @@ class ControlCharacterNag(ControlCharacterPermittedBase):
                                                   num_brokers=3)
 
     def _has_flag_nag(self):
-        return self.redpanda.search_log_all(
+        return self.funes.search_log_all(
             "You have enabled unsafe log operations")
 
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
@@ -147,7 +147,7 @@ class ControlCharacterNag(ControlCharacterPermittedBase):
         # Nag shouldn't be in logs
         assert not self._has_flag_nag()
 
-        self._perform_update(initial_version, RedpandaInstaller.HEAD)
+        self._perform_update(initial_version, FunesInstaller.HEAD)
 
         assert self._has_flag_nag()
 
@@ -156,7 +156,7 @@ class ControlCharacterNag(ControlCharacterPermittedBase):
         """
         Validates that the nag message is not present when using a fresh cluster
         """
-        super(ControlCharacterNag, self)._start_redpanda()
+        super(ControlCharacterNag, self)._start_funes()
 
         config = self._admin.get_cluster_config()
         assert config[self.feature_legacy_permit_control_char] is True

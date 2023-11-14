@@ -10,7 +10,7 @@
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from ducktape.mark import matrix
-from rptest.services.redpanda import make_redpanda_service
+from rptest.services.funes import make_funes_service
 from ducktape.tests.test import Test
 from rptest.clients.default import DefaultClient
 
@@ -23,22 +23,22 @@ class MetricsTest(Test):
     def __init__(self, test_ctx, *args, **kwargs):
 
         self.ctx = test_ctx
-        self.redpanda = None
+        self.funes = None
         self.client = None
         super(MetricsTest, self).__init__(test_ctx, *args, **kwargs)
 
     def setUp(self):
         pass
 
-    def start_redpanda(self, aggregate_metrics):
+    def start_funes(self, aggregate_metrics):
         rp_conf = BOOTSTRAP_CONFIG.copy()
         rp_conf['aggregate_metrics'] = aggregate_metrics
-        self.redpanda = make_redpanda_service(self.ctx,
+        self.funes = make_funes_service(self.ctx,
                                               num_brokers=3,
                                               extra_rp_conf=rp_conf)
-        self.redpanda.logger.info("Starting Redpanda")
-        self.redpanda.start()
-        self.client = DefaultClient(self.redpanda)
+        self.funes.logger.info("Starting Funes")
+        self.funes.start()
+        self.client = DefaultClient(self.funes)
 
     @staticmethod
     def filter_metrics(metrics):
@@ -55,7 +55,7 @@ class MetricsTest(Test):
 
         """
 
-        self.start_redpanda(aggregate_metrics)
+        self.start_funes(aggregate_metrics)
 
         topic_spec = TopicSpec(name="test",
                                partition_count=100,
@@ -64,19 +64,19 @@ class MetricsTest(Test):
         self.client.create_topic(topic_spec)
 
         metrics_pre_change = self.filter_metrics(
-            self.redpanda.raw_metrics(self.redpanda.nodes[0]).split("\n"))
+            self.funes.raw_metrics(self.funes.nodes[0]).split("\n"))
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"aggregate_metrics": not aggregate_metrics})
 
         metrics_post_change = self.filter_metrics(
-            self.redpanda.raw_metrics(self.redpanda.nodes[0]).split("\n"))
+            self.funes.raw_metrics(self.funes.nodes[0]).split("\n"))
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"aggregate_metrics": aggregate_metrics})
 
         metrics_pre_chanage_again = self.filter_metrics(
-            self.redpanda.raw_metrics(self.redpanda.nodes[0]).split("\n"))
+            self.funes.raw_metrics(self.funes.nodes[0]).split("\n"))
 
         assert len(metrics_pre_change) != len(metrics_post_change)
         assert len(metrics_pre_change) == len(metrics_pre_chanage_again)

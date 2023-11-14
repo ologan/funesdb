@@ -14,7 +14,7 @@ from rptest.tests.prealloc_nodes import PreallocNodesTest
 
 class ArroyoTest(PreallocNodesTest):
     """
-    Run the arroyo test suite against a redpanda cluster in
+    Run the arroyo test suite against a funes cluster in
     a ducktape environment.
 
     The test suite lives here under tests/ in https://github.com/getsentry/arroyo.
@@ -39,13 +39,13 @@ class ArroyoTest(PreallocNodesTest):
         test_node = self.preallocated_nodes[0]
 
         try:
-            env_preamble = f"DEFAULT_BROKERS={self.redpanda.brokers()}"
+            env_preamble = f"DEFAULT_BROKERS={self.funes.brokers()}"
 
             failed = False
             for line in test_node.account.ssh_capture(
                     f"{env_preamble} "
                     f"python3 -m pytest {ArroyoTest.TEST_SUITE_PATH} "
-                    "-k KafkaStreamsTestCase -rf",
+                    "-k SQLStreamsTestCase -rf",
                     combine_stderr=True,
                     allow_fail=False,
                     timeout_sec=120):

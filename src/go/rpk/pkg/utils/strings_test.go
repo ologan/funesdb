@@ -26,7 +26,7 @@ func TestStringInSlice(t *testing.T) {
 		{
 			name:     "it should return true if the slice contains the string",
 			str:      "best",
-			slice:    []string{"redpanda", "is", "the", "best", "there", "is"},
+			slice:    []string{"funes", "is", "the", "best", "there", "is"},
 			expected: true,
 		},
 	}

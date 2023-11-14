@@ -27,14 +27,14 @@ struct deprecated_seq_entry {
 
     struct deprecated_seq_cache_entry {
         int32_t seq{-1};
-        kafka::offset offset;
+        sql::offset offset;
 
         bool operator==(const deprecated_seq_cache_entry&) const = default;
     };
 
     model::producer_identity pid;
     int32_t seq{-1};
-    kafka::offset last_offset{-1};
+    sql::offset last_offset{-1};
     ss::circular_buffer<deprecated_seq_cache_entry> seq_cache;
     model::timestamp::type last_write_timestamp;
 

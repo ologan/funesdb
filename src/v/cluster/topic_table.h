@@ -33,7 +33,7 @@ namespace cluster {
  * Topic table represent all topics configuration and partition assignments.
  * The topic table is copied on each core to minimize cross core communication
  * when requesting topic information. The topics table provides an API for
- * Kafka requests and delta API for controller backend. The delta API allows
+ * SQL requests and delta API for controller backend. The delta API allows
  * backend to wait for changes in topics table. Topics table is update directly
  * from controller_stm. The table is always updated before any actions related
  * with topic creation or deletion are executed.

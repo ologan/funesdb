@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 #include "cloud_storage/remote.h"
 #include "cloud_storage/tests/s3_imposter.h"
@@ -19,8 +19,8 @@
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "model/namespace.h"
-#include "redpanda/application.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/application.h"
+#include "funes/tests/fixture.h"
 #include "security/scram_credential.h"
 #include "security/types.h"
 #include "test_utils/scoped_config.h"
@@ -33,12 +33,12 @@ ss::logger logger("reonciliation_test");
 
 class controller_snapshot_reconciliation_fixture
   : public s3_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public enable_cloud_storage_fixture {
 public:
     controller_snapshot_reconciliation_fixture()
-      : redpanda_thread_fixture(
-        redpanda_thread_fixture::init_cloud_storage_tag{}, httpd_port_number())
+      : funes_thread_fixture(
+        funes_thread_fixture::init_cloud_storage_tag{}, httpd_port_number())
       , raft0(app.partition_manager.local().get(model::controller_ntp)->raft())
       , controller_stm(app.controller->get_controller_stm().local())
       , remote(app.cloud_storage_api.local())
@@ -189,7 +189,7 @@ FIXTURE_TEST(test_reconcile_users, controller_snapshot_reconciliation_fixture) {
 
 FIXTURE_TEST(test_reconcile_acls, controller_snapshot_reconciliation_fixture) {
     cluster::controller_snapshot snap;
-    auto binding = binding_for_user("__pandaproxy");
+    auto binding = binding_for_user("__funesproxy");
     snap.security.acls.emplace_back(binding);
 
     // When the snapshot contains some ACLs, we should see actions.
@@ -212,7 +212,7 @@ FIXTURE_TEST(test_reconcile_acls, controller_snapshot_reconciliation_fixture) {
 FIXTURE_TEST(
   test_reconcile_remote_topics, controller_snapshot_reconciliation_fixture) {
     cluster::controller_snapshot snap;
-    model::topic_namespace tp_ns{model::kafka_namespace, model::topic{"foo"}};
+    model::topic_namespace tp_ns{model::sql_namespace, model::topic{"foo"}};
     auto& tps = snap.topics.topics[tp_ns];
     tps.metadata.configuration.properties = uploadable_topic_properties();
 
@@ -233,7 +233,7 @@ FIXTURE_TEST(
   test_reconcile_non_remote_topics,
   controller_snapshot_reconciliation_fixture) {
     cluster::controller_snapshot snap;
-    model::topic_namespace tp_ns{model::kafka_namespace, model::topic{"foo"}};
+    model::topic_namespace tp_ns{model::sql_namespace, model::topic{"foo"}};
     auto& tps = snap.topics.topics[tp_ns];
     tps.metadata.configuration.properties = non_remote_topic_properties();
 

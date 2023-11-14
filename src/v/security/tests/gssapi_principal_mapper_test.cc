@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "config/property.h"
@@ -63,17 +63,17 @@ static std::array<gssapi_test_record, 4> gssapi_name_test_data{
    "REALM.com",
    "service-name"},
   {"user/host@REALM.com", "user", "host", "REALM.com", "user"},
-  {"redpanda/example.com@REALM.com",
-   "redpanda",
+  {"funes/example.com@REALM.com",
+   "funes",
    "example.com",
    "REALM.com",
-   "redpandadataexample.com"}};
+   "funesdataexample.com"}};
 
 BOOST_DATA_TEST_CASE(test_gssapi_name, bdata::make(gssapi_name_test_data), c) {
     static const std::vector<ss::sstring> rules = {
       "RULE:[1:$1](App\\..*)s/App\\.(.*)/$1/g",
       "RULE:[2:$1](App\\..*)s/App\\.(.*)/$1/g",
-      "RULE:[2:$1data$2](redpanda.*)",
+      "RULE:[2:$1data$2](funes.*)",
       "DEFAULT"};
     static constexpr std::string_view DEFAULT_REALM = "REALM.com";
     BOOST_REQUIRE_NO_THROW(
@@ -206,9 +206,9 @@ BOOST_AUTO_TEST_CASE(test_invalid_index) {
 
 BOOST_AUTO_TEST_CASE(test_only_primary) {
     static const std::vector<ss::sstring> rules = {
-      "RULE:[1:$1data](redpanda.*)", "RULE:[2:$3]"};
+      "RULE:[1:$1data](funes.*)", "RULE:[2:$3]"};
     static constexpr std::string_view DEFAULT_REALM = "REALM.com";
-    static constexpr std::string_view TEST_NAME = "redpanda";
+    static constexpr std::string_view TEST_NAME = "funes";
     BOOST_REQUIRE_NO_THROW(
       auto mapper = gssapi_principal_mapper(
         config::mock_binding(std::vector<ss::sstring>{rules}));

@@ -1,2 +1,2 @@
-kafka-python
+sql-python
 jproperties

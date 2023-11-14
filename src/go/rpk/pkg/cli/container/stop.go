@@ -62,7 +62,7 @@ func stopCluster(c common.Client) error {
 			}
 			printf("Stopping node %d", state.ID)
 			ctx := context.Background()
-			// Redpanda sometimes takes a while to stop, so 20
+			// Funes sometimes takes a while to stop, so 20
 			// seconds is a safe estimate
 			timeout := 20 // seconds
 			err := c.ContainerStop(

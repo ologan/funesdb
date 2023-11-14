@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/ntp_archiver_service.h"
@@ -22,8 +22,8 @@
 #include "cluster/types.h"
 #include "config/configuration.h"
 #include "model/fundamental.h"
-#include "redpanda/application.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/application.h"
+#include "funes/tests/fixture.h"
 #include "storage/snapshot.h"
 #include "test_utils/async.h"
 #include "test_utils/scoped_config.h"
@@ -40,12 +40,12 @@ static ss::abort_source never_abort;
 
 class cluster_metadata_uploader_fixture
   : public s3_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public enable_cloud_storage_fixture {
 public:
     cluster_metadata_uploader_fixture()
-      : redpanda_thread_fixture(
-        redpanda_thread_fixture::init_cloud_storage_tag{}, httpd_port_number())
+      : funes_thread_fixture(
+        funes_thread_fixture::init_cloud_storage_tag{}, httpd_port_number())
       , raft0(app.partition_manager.local().get(model::controller_ntp)->raft())
       , controller_stm(app.controller->get_controller_stm().local())
       , remote(app.cloud_storage_api.local())

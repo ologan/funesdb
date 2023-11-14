@@ -11,12 +11,12 @@ import time
 from ducktape.errors import TimeoutError
 from ducktape.mark import parametrize, matrix, ok_to_fail
 from ducktape.utils.util import wait_until
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.admin import Admin
 from rptest.clients.rpk import RpkTool, ClusterAuthorizationError, RpkException
-from rptest.services.redpanda import SecurityConfig, TLSProvider
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions
+from rptest.services.funes import SecurityConfig, TLSProvider
+from rptest.services.funes_installer import FunesInstaller, wait_for_num_versions
 from rptest.services import tls
 from typing import Optional
 
@@ -29,8 +29,8 @@ class MTLSProvider(TLSProvider):
     def ca(self):
         return self.tls.ca
 
-    def create_broker_cert(self, redpanda, node):
-        assert node in redpanda.nodes
+    def create_broker_cert(self, funes, node):
+        assert node in funes.nodes
         return self.tls.create_cert(node.name)
 
     def create_service_client_cert(self, _, name):
@@ -39,22 +39,22 @@ class MTLSProvider(TLSProvider):
                                     common_name=name)
 
 
-class AccessControlListTest(RedpandaTest):
+class AccessControlListTest(FunesTest):
     password = "password"
     algorithm = "SCRAM-SHA-256"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          num_brokers=3,
-                         skip_if_no_redpanda_log=True,
+                         skip_if_no_funes_log=True,
                          **kwargs)
         self.base_user_cert = None
         self.cluster_describe_user_cert = None
         self.admin_user_cert = None
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     def setUp(self):
-        # Skip starting redpanda, so that test can explicitly start
+        # Skip starting funes, so that test can explicitly start
         # it with custom security settings
         return
 
@@ -77,7 +77,7 @@ class AccessControlListTest(RedpandaTest):
                         expect_fail: bool = False):
         self.security = SecurityConfig()
         self.security.enable_sasl = use_sasl
-        self.security.kafka_enable_authorization = enable_authz
+        self.security.sql_enable_authorization = enable_authz
         self.security.endpoint_authn_method = authn_method
         self.security.require_client_auth = client_auth
 
@@ -106,16 +106,16 @@ class AccessControlListTest(RedpandaTest):
         if self.security.mtls_identity_enabled():
             if principal_mapping_rules is not None:
                 self.security.principal_mapping_rules = principal_mapping_rules
-            self.redpanda.add_extra_rp_conf({
-                'kafka_mtls_principal_mapping_rules':
+            self.funes.add_extra_rp_conf({
+                'sql_mtls_principal_mapping_rules':
                 [self.security.principal_mapping_rules]
             })
 
-        self.redpanda.set_security_settings(self.security)
-        self.redpanda.start(expect_fail=expect_fail)
+        self.funes.set_security_settings(self.security)
+        self.funes.start(expect_fail=expect_fail)
         if expect_fail:
-            # If we got this far without exception, RedpandaService.start
-            # has successfully confirmed that redpanda failed to start.
+            # If we got this far without exception, FunesService.start
+            # has successfully confirmed that funes failed to start.
             return
 
         # base case user is not a superuser and has no configured ACLs
@@ -138,7 +138,7 @@ class AccessControlListTest(RedpandaTest):
 
         # wait for users to propagate to nodes
         def auth_metadata_propagated():
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 users = self.admin.list_users(node=node)
                 if checkpoint_user not in users:
                     return False
@@ -158,11 +158,11 @@ class AccessControlListTest(RedpandaTest):
             else:
                 assert False, f"unknown user {username}"
 
-            return RpkTool(self.redpanda, tls_cert=cert)
+            return RpkTool(self.funes, tls_cert=cert)
 
         # uses base user cert with no explicit permissions. the cert should only
         # participate in tls handshake and not principal extraction.
-        return RpkTool(self.redpanda,
+        return RpkTool(self.funes,
                        username=username,
                        password=self.password,
                        sasl_mechanism=self.algorithm,
@@ -171,13 +171,13 @@ class AccessControlListTest(RedpandaTest):
     def get_super_client(self):
         if self.security.mtls_identity_enabled(
         ) or not self.security.sasl_enabled():
-            return RpkTool(self.redpanda, tls_cert=self.admin_user_cert)
+            return RpkTool(self.funes, tls_cert=self.admin_user_cert)
 
-        username, password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         # uses base user cert with no explicit permissions. the cert should only
         # participate in tls handshake and not principal extraction.
-        return RpkTool(self.redpanda,
+        return RpkTool(self.funes,
                        username=username,
                        password=password,
                        sasl_mechanism=self.algorithm,
@@ -247,13 +247,13 @@ class AccessControlListTest(RedpandaTest):
 
     '''
     The old config style has use_sasl at the top level, which enables
-    authorization. New config style has kafka_enable_authorization at the
+    authorization. New config style has sql_enable_authorization at the
     top-level, with authentication_method on the listener.
 
     Brief param descriptions:
         use_tls - Controls whether tls certs are used
         use_sasl - Controls the value of enable_sasl RP config
-        enable_authz - Controls the value of kafka_enable_authorization RP config
+        enable_authz - Controls the value of sql_enable_authorization RP config
         authn_method - Controls the broker level authentication_method (e.g., mtls_identity)
         client_auth - Controls the value of require_client_auth RP config
     '''
@@ -335,30 +335,30 @@ class AccessControlListTest(RedpandaTest):
 
     # Test mtls identity
     # Principals in use:
-    # * redpanda.service.admin: the default admin client
+    # * funes.service.admin: the default admin client
     # * admin: used for acl bootstrap
     # * cluster_describe: the principal under test
     @cluster(num_nodes=3)
     # DEFAULT: The whole SAN
     @parametrize(rules="DEFAULT", fail=True)
-    #  Match admin, or O (Redpanda)
+    #  Match admin, or O (Funes)
     @parametrize(
         rules=
-        "RULE:^O=Redpanda,CN=(redpanda.service.admin|admin)$/$1/, RULE:^O=([^,]+),CN=(.*?)$/$1/",
+        "RULE:^O=Funes,CN=(funes.service.admin|admin)$/$1/, RULE:^O=([^,]+),CN=(.*?)$/$1/",
         fail=True)
     # Wrong Case
-    @parametrize(rules="RULE:^O=Redpanda,CN=(.*?)$/$1/U", fail=True)
+    @parametrize(rules="RULE:^O=Funes,CN=(.*?)$/$1/U", fail=True)
     # Match CN
-    @parametrize(rules="RULE:^O=Redpanda,CN=(.*?)$/$1/L", fail=False)
+    @parametrize(rules="RULE:^O=Funes,CN=(.*?)$/$1/L", fail=False)
     # Full Match
     @parametrize(
         rules=
-        "RULE:^O=Redpanda,CN=(cluster_describe|redpanda.service.admin|admin)$/$1/",
+        "RULE:^O=Funes,CN=(cluster_describe|funes.service.admin|admin)$/$1/",
         fail=False)
     # Match admin or empty
     @parametrize(
         rules=
-        "RULE:^O=Redpanda,CN=(admin|redpanda.service.admin)$/$1/, RULE:^O=Redpanda,CN=()$/$1/L",
+        "RULE:^O=Funes,CN=(admin|funes.service.admin)$/$1/, RULE:^O=Funes,CN=()$/$1/L",
         fail=True)
     def test_mtls_principal(self, rules=None, fail=False):
         """
@@ -401,15 +401,15 @@ class AccessControlListTest(RedpandaTest):
         # Change the authn method and initiate feature migration
         # with a rolling restart. Do not recreate tls certs.
         self.security.endpoint_authn_method = authn_method
-        self.redpanda.set_security_settings(self.security)
+        self.funes.set_security_settings(self.security)
         self.logger.debug('Initiating rolling restart')
-        self.redpanda.rolling_restart_nodes(self.redpanda.nodes,
+        self.funes.rolling_restart_nodes(self.funes.nodes,
                                             start_timeout=90,
                                             stop_timeout=90)
 
         # Check that the authn_method was set on all brokers
-        pattern = 'Started Kafka API server.*:{' + authn_method + '}.*'
-        assert self.redpanda.search_log_all(pattern)
+        pattern = 'Started SQL API server.*:{' + authn_method + '}.*'
+        assert self.funes.search_log_all(pattern)
 
         # Once restart is complete, check permissions should succeed when authn_method
         # is sasl because the system will validate against SASL/SCRAM creds already stored
@@ -435,32 +435,32 @@ class AccessControlListTest(RedpandaTest):
                 # should fail.
                 pass
 
-        # Change cluster wide configs for kafka_enable_authorization and
-        # kafka_mtls_principal_mapping_rules via the admin api.
+        # Change cluster wide configs for sql_enable_authorization and
+        # sql_mtls_principal_mapping_rules via the admin api.
         # Do not expect a restart.
         #
         # NOTE:
-        # - kafka_enable_authorization overrides sasl in an authorization context
+        # - sql_enable_authorization overrides sasl in an authorization context
         # - authentication_method overrides sasl in an authentication context
-        new_cfg = {'kafka_enable_authorization': True}
+        new_cfg = {'sql_enable_authorization': True}
         if authn_method == 'mtls_identity':
-            new_cfg['kafka_mtls_principal_mapping_rules'] = [
+            new_cfg['sql_mtls_principal_mapping_rules'] = [
                 'RULE:.*CN=([^,]+).*/$1/', 'DEFAULT'
             ]
-        self.redpanda.set_cluster_config(new_cfg)
+        self.funes.set_cluster_config(new_cfg)
 
         # Check that new cluster configs are set
         cluster_cfg = self.admin.get_cluster_config()
-        assert cluster_cfg['kafka_enable_authorization'] == new_cfg[
-            'kafka_enable_authorization']
+        assert cluster_cfg['sql_enable_authorization'] == new_cfg[
+            'sql_enable_authorization']
 
         if authn_method == 'mtls_identity':
-            assert new_cfg['kafka_mtls_principal_mapping_rules'][
-                0] in cluster_cfg['kafka_mtls_principal_mapping_rules']
-            assert new_cfg['kafka_mtls_principal_mapping_rules'][
-                1] in cluster_cfg['kafka_mtls_principal_mapping_rules']
+            assert new_cfg['sql_mtls_principal_mapping_rules'][
+                0] in cluster_cfg['sql_mtls_principal_mapping_rules']
+            assert new_cfg['sql_mtls_principal_mapping_rules'][
+                1] in cluster_cfg['sql_mtls_principal_mapping_rules']
         else:
-            assert cluster_cfg['kafka_mtls_principal_mapping_rules'] == None
+            assert cluster_cfg['sql_mtls_principal_mapping_rules'] == None
 
         self.check_permissions(
             pass_w_base_user=False,
@@ -472,7 +472,7 @@ class AccessControlListTest(RedpandaTest):
 class AccessControlListTestUpgrade(AccessControlListTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
 
     # Test that a cluster configured with enable_sasl can be upgraded
     # from v22.1.x, and still have sasl enabled. See PR 5292.
@@ -482,7 +482,7 @@ class AccessControlListTestUpgrade(AccessControlListTest):
              ])
     def test_upgrade_sasl(self):
         old_version, old_version_str = self.installer.install(
-            self.redpanda.nodes, (22, 1))
+            self.funes.nodes, (22, 1))
         self.prepare_cluster(use_tls=True,
                              use_sasl=True,
                              enable_authz=None,
@@ -495,9 +495,9 @@ class AccessControlListTestUpgrade(AccessControlListTest):
             pass_w_super_user=True,
             err_msg='check_permissions failed before upgrade')
 
-        self.installer.install(self.redpanda.nodes, (22, 2))
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        self.installer.install(self.funes.nodes, (22, 2))
+        self.funes.restart_nodes(self.funes.nodes)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert old_version_str not in unique_versions
 
         self.check_permissions(

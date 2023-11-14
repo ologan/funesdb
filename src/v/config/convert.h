@@ -15,8 +15,8 @@
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "model/timestamp.h"
-#include "pandaproxy/schema_registry/schema_id_validation.h"
-#include "pandaproxy/schema_registry/subject_name_strategy.h"
+#include "funesproxy/schema_registry/schema_id_validation.h"
+#include "funesproxy/schema_registry/subject_name_strategy.h"
 #include "utils/string_switch.h"
 
 #include <boost/lexical_cast.hpp>
@@ -441,8 +441,8 @@ struct convert<model::cloud_storage_chunk_eviction_strategy> {
 };
 
 template<>
-struct convert<pandaproxy::schema_registry::subject_name_strategy> {
-    using type = pandaproxy::schema_registry::subject_name_strategy;
+struct convert<funesproxy::schema_registry::subject_name_strategy> {
+    using type = funesproxy::schema_registry::subject_name_strategy;
 
     static constexpr auto acceptable_values = std::to_array(
       {to_string_view(type::topic_name),
@@ -472,12 +472,12 @@ struct convert<pandaproxy::schema_registry::subject_name_strategy> {
 };
 
 template<>
-struct convert<pandaproxy::schema_registry::schema_id_validation_mode> {
-    using type = pandaproxy::schema_registry::schema_id_validation_mode;
+struct convert<funesproxy::schema_registry::schema_id_validation_mode> {
+    using type = funesproxy::schema_registry::schema_id_validation_mode;
 
     static constexpr auto acceptable_values = std::to_array(
       {to_string_view(type::none),
-       to_string_view(type::redpanda),
+       to_string_view(type::funes),
        to_string_view(type::compat)});
 
     static Node encode(const type& rhs) { return Node(fmt::format("{}", rhs)); }
@@ -493,7 +493,7 @@ struct convert<pandaproxy::schema_registry::schema_id_validation_mode> {
 
         rhs = string_switch<type>(std::string_view{value})
                 .match(to_string_view(type::none), type::none)
-                .match(to_string_view(type::redpanda), type::redpanda)
+                .match(to_string_view(type::funes), type::funes)
                 .match(to_string_view(type::compat), type::compat);
 
         return true;

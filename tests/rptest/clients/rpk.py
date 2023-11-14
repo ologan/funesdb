@@ -248,22 +248,22 @@ class RpkTool:
     Wrapper around rpk.
     """
     def __init__(self,
-                 redpanda,
+                 funes,
                  username: str = None,
                  password: str = None,
                  sasl_mechanism: str = None,
                  tls_cert: Optional[tls.Certificate] = None,
                  tls_enabled: Optional[bool] = None):
-        self._redpanda = redpanda
+        self._funes = funes
         self._username = username
         self._password = password
         self._sasl_mechanism = sasl_mechanism
         self._tls_cert = tls_cert
         self._tls_enabled = tls_enabled
 
-        # if testing redpanda cloud, override with default superuser
-        if hasattr(redpanda, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
-            self._username, self._password, self._sasl_mechanism = redpanda._superuser
+        # if testing funes cloud, override with default superuser
+        if hasattr(funes, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
+            self._username, self._password, self._sasl_mechanism = funes._superuser
             self._tls_enabled = True
 
     def create_topic(self, topic, partitions=1, replicas=None, config=None):
@@ -281,8 +281,8 @@ class RpkTool:
                 self._check_stdout_success(output)
                 return (True, output)
             except RpkException as e:
-                self._redpanda.logger.debug(str(e))
-                if "Kafka replied that the controller broker is -1" in str(e):
+                self._funes.logger.debug(str(e))
+                if "SQL replied that the controller broker is -1" in str(e):
                     return False
                 elif "SASL authentication failed" in str(e):
                     return False
@@ -304,7 +304,7 @@ class RpkTool:
         """
         Helper for topic operations where rpk does not surface errors
         in return codes
-        (https://github.com/redpanda-data/redpanda/issues/3397)
+        (https://github.com/redpanda-data/funes/issues/3397)
         """
 
         lines = output.strip().split("\n")
@@ -326,7 +326,7 @@ class RpkTool:
         cmd = [
             "acl", "create", "--allow-principal", principal, "--operation",
             ",".join(operations), resource, resource_name, "--brokers",
-            self._redpanda.brokers(), "--user", username, "--password",
+            self._funes.brokers(), "--user", username, "--password",
             password, "--sasl-mechanism", mechanism
         ]
         return self._run(cmd)
@@ -342,7 +342,7 @@ class RpkTool:
         cmd = [
             "acl", "create", "--allow-principal", principal, "--operation",
             ",".join(operations), resource, resource_name, "--brokers",
-            self._redpanda.brokers()
+            self._funes.brokers()
         ]
         return self._run(cmd)
 
@@ -357,12 +357,12 @@ class RpkTool:
         cmd = [
             "acl", "delete", "--allow-principal", principal, "--operation",
             ",".join(operations), resource, resource_name, "--no-confirm"
-        ] + self._kafka_conn_settings()
+        ] + self._sql_conn_settings()
         return self._run(cmd)
 
     def _sasl_create_user_cmd(self, new_username, new_password, mechanism):
         cmd = ["acl", "user", "create", new_username]
-        cmd += ["--api-urls", self._redpanda.admin_endpoints()]
+        cmd += ["--api-urls", self._funes.admin_endpoints()]
         cmd += ["--mechanism", mechanism]
 
         if new_password != "":
@@ -392,7 +392,7 @@ class RpkTool:
     def sasl_update_user(self, user, new_password):
         cmd = [
             "acl", "user", "update", user, "--new-password", new_password,
-            "-X", "admin.hosts=" + self._redpanda.admin_endpoints()
+            "-X", "admin.hosts=" + self._funes.admin_endpoints()
         ]
         return self._run(cmd)
 
@@ -524,7 +524,7 @@ class RpkTool:
 
         for column in table.columns:
             if column.name not in expected_columns:
-                self._redpanda.logger.error(
+                self._funes.logger.error(
                     f"Unexpected column: {column.name}")
                 raise RpkException(f"Unexpected column: {column.name}")
             received_columns.add(column.name)
@@ -532,7 +532,7 @@ class RpkTool:
         missing_columns = expected_columns - received_columns
         # sometimes LSO is present, sometimes it isn't
         # same is true for EPOCH:
-        # https://github.com/redpanda-data/redpanda/issues/8381#issuecomment-1403051606
+        # https://github.com/redpanda-data/funes/issues/8381#issuecomment-1403051606
         # LOAD-ERROR is not present if there was no error.
         missing_columns = missing_columns - {
             "LAST-STABLE-OFFSET", "EPOCH", "LOAD-ERROR"
@@ -540,7 +540,7 @@ class RpkTool:
 
         if len(missing_columns) != 0:
             missing_columns = ",".join(missing_columns)
-            self._redpanda.logger.error(f"Missing columns: {missing_columns}")
+            self._funes.logger.error(f"Missing columns: {missing_columns}")
             raise RpkException(f"Missing columns: {missing_columns}")
 
         for row in table.rows:
@@ -785,7 +785,7 @@ class RpkTool:
         while rpk_group is None and attempts != 0:
             rpk_group = try_describe_group(group)
             attempts = attempts - 1
-            # give time for redpanda to end its election
+            # give time for funes to end its election
             if rpk_group is None:
                 time.sleep(0.5)
 
@@ -812,7 +812,7 @@ class RpkTool:
         return [l.split()[1] for l in out.splitlines()[1:]]
 
     def wasm_remove(self, name):
-        cmd = ['wasm', 'remove', name, '--brokers', self._redpanda.brokers()]
+        cmd = ['wasm', 'remove', name, '--brokers', self._funes.brokers()]
         return self._execute(cmd)
 
     def wasm_gen(self, directory):
@@ -877,13 +877,13 @@ class RpkTool:
                    stdin=None,
                    timeout=None,
                    use_schema_registry=False):
-        cmd = [self._rpk_binary(), "topic"] + self._kafka_conn_settings() + cmd
+        cmd = [self._rpk_binary(), "topic"] + self._sql_conn_settings() + cmd
         if use_schema_registry:
             cmd = cmd + self._schema_registry_conn_settings()
         return self._execute(cmd, stdin=stdin, timeout=timeout)
 
     def _run_group(self, cmd, stdin=None, timeout=None):
-        cmd = [self._rpk_binary(), "group"] + self._kafka_conn_settings() + cmd
+        cmd = [self._rpk_binary(), "group"] + self._sql_conn_settings() + cmd
         return self._execute(cmd, stdin=stdin, timeout=timeout)
 
     def _run(self, cmd, stdin=None, timeout=None):
@@ -914,7 +914,7 @@ class RpkTool:
 
         cmd = [
             self._rpk_binary(), 'cluster', 'info', '--brokers',
-            self._redpanda.brokers()
+            self._funes.brokers()
         ]
         output = self._execute(cmd, stdin=None, timeout=timeout)
         parsed = map(_parse_out, output.splitlines())
@@ -924,14 +924,14 @@ class RpkTool:
         if node is None:
             return ",".join([
                 f"{n.account.hostname}:9644"
-                for n in self._redpanda.started_nodes()
+                for n in self._funes.started_nodes()
             ])
         else:
             return f"{node.account.hostname}:9644"
 
     def admin_config_print(self, node):
         return self._execute([
-            self._rpk_binary(), "redpanda", "admin", "config", "print",
+            self._rpk_binary(), "funes", "admin", "config", "print",
             "--host",
             self._admin_host(node)
         ])
@@ -986,7 +986,7 @@ class RpkTool:
         cmd += ['-v']
 
         if log_cmd:
-            self._redpanda.logger.debug("Executing command: %s", cmd)
+            self._funes.logger.debug("Executing command: %s", cmd)
 
         if env is not None:
             env.update(os.environ.copy())
@@ -1006,30 +1006,30 @@ class RpkTool:
                                stdout=output,
                                stderr=stderr)
 
-        self._redpanda.logger.debug(f'\n{output}')
+        self._funes.logger.debug(f'\n{output}')
 
         if p.returncode:
-            self._redpanda.logger.error(stderror)
+            self._funes.logger.error(stderror)
             raise RpkException(
                 'command %s returned %d, output: %s' %
                 (' '.join(cmd) if log_cmd else '[redacted]', p.returncode,
                  output), stderror, p.returncode, output)
         else:
             # Send the verbose output of rpk to debug logger
-            self._redpanda.logger.debug(f"\n{stderror}")
+            self._funes.logger.debug(f"\n{stderror}")
 
         return output
 
     def _rpk_binary(self):
         # NOTE: since this runs on separate nodes from the service, the binary
         # path used by each node may differ from that returned by
-        # redpanda.find_binary(), e.g. if using a RedpandaInstaller.
-        rp_install_path_root = self._redpanda._context.globals.get(
+        # funes.find_binary(), e.g. if using a FunesInstaller.
+        rp_install_path_root = self._funes._context.globals.get(
             "rp_install_path_root", None)
         return f"{rp_install_path_root}/bin/rpk"
 
     def cluster_maintenance_enable(self, node, wait=False):
-        node_id = self._redpanda.node_id(node) if isinstance(
+        node_id = self._funes.node_id(node) if isinstance(
             node, ClusterNode) else node
         cmd = [
             self._rpk_binary(), "--api-urls",
@@ -1041,7 +1041,7 @@ class RpkTool:
         return self._execute(cmd)
 
     def cluster_maintenance_disable(self, node, timeout=None):
-        node_id = self._redpanda.node_id(node) if isinstance(
+        node_id = self._funes.node_id(node) if isinstance(
             node, ClusterNode) else node
         cmd = [
             self._rpk_binary(), "--api-urls",
@@ -1060,7 +1060,7 @@ class RpkTool:
                 # retries.  Drop these lines.
                 return None
 
-            # jerry@garcia:~/src/redpanda$ rpk cluster maintenance status
+            # jerry@garcia:~/src/funes$ rpk cluster maintenance status
             # NODE-ID  ENABLED  FINISHED  ERRORS  PARTITIONS  ELIGIBLE  TRANSFERRING  FAILED
             # 1        false     false     false   0           0         0             0
             line = line.split()
@@ -1099,10 +1099,10 @@ class RpkTool:
         output = self._execute(cmd)
         return list(filter(None, map(parse, output.splitlines())))
 
-    def _kafka_conn_settings(self):
+    def _sql_conn_settings(self):
         flags = [
             "-X",
-            "brokers=" + self._redpanda.brokers(),
+            "brokers=" + self._funes.brokers(),
         ]
         if self._username:
             flags += [
@@ -1144,7 +1144,7 @@ class RpkTool:
             self._rpk_binary(),
             "acl",
             "list",
-        ] + self._kafka_conn_settings()
+        ] + self._sql_conn_settings()
 
         # How long rpk will wait for a response from the broker, default is 5s
         if request_timeout_overhead is not None:
@@ -1173,7 +1173,7 @@ class RpkTool:
             "--operation",
             op,
             "--cluster",
-        ] + self._kafka_conn_settings()
+        ] + self._sql_conn_settings()
         output = self._execute(cmd)
         table = parse_rpk_table(output)
         expected_columns = [
@@ -1202,7 +1202,7 @@ class RpkTool:
         because there are already other ways to get at that.
         """
         cmd = [
-            self._rpk_binary(), '-X', "brokers=" + self._redpanda.brokers(),
+            self._rpk_binary(), '-X', "brokers=" + self._funes.brokers(),
             'cluster', 'metadata'
         ]
         output = self._execute(cmd)
@@ -1297,11 +1297,11 @@ class RpkTool:
         cmd = [
             self._rpk_binary(),
             "--brokers",
-            self._redpanda.brokers(),
+            self._funes.brokers(),
             "group",
             "offset-delete",
             group,
-        ] + self._kafka_conn_settings() + request_args_w_flags
+        ] + self._sql_conn_settings() + request_args_w_flags
 
         # Retry if NOT_COORDINATOR is observed when command exits 1
         return try_offset_delete(retries=5)
@@ -1318,7 +1318,7 @@ class RpkTool:
     def describe_log_dirs(self):
         cmd = [
             self._rpk_binary(), "--brokers",
-            self._redpanda.brokers(), "cluster", "logdirs", "describe"
+            self._funes.brokers(), "cluster", "logdirs", "describe"
         ]
         output = self._execute(cmd)
         lines = output.split("\n")
@@ -1339,7 +1339,7 @@ class RpkTool:
             try:
                 broker, dir, topic, partition, size = tokens[0:5]
             except:
-                self._redpanda.logger.warn(f"Unexpected line format: '{l}'")
+                self._funes.logger.warn(f"Unexpected line format: '{l}'")
                 raise
 
             result.append(
@@ -1376,7 +1376,7 @@ class RpkTool:
             "--offset",
             str(offset),
             "--no-confirm",
-        ] + self._kafka_conn_settings()
+        ] + self._sql_conn_settings()
 
         if len(partitions) > 0:
             cmd += ["--partitions", ",".join([str(x) for x in partitions])]
@@ -1389,7 +1389,7 @@ class RpkTool:
 
         return self._execute(cmd)
 
-    def cloud_byoc_aws_apply(self, redpanda_id, token, extra_flags=[]):
+    def cloud_byoc_aws_apply(self, funes_id, token, extra_flags=[]):
         envs = {
             "RPK_CLOUD_SKIP_VERSION_CHECK": "true",
             "RPK_CLOUD_TOKEN": token
@@ -1397,7 +1397,7 @@ class RpkTool:
 
         cmd = [
             self._rpk_binary(), "cloud", "byoc", "aws", "apply",
-            "--redpanda-id", redpanda_id
+            "--funes-id", funes_id
         ]
 
         if len(extra_flags) > 0:
@@ -1410,7 +1410,7 @@ class RpkTool:
         if node is None:
             return ",".join([
                 f"{n.account.hostname}:8081"
-                for n in self._redpanda.started_nodes()
+                for n in self._funes.started_nodes()
             ])
         else:
             return f"{node.account.hostname}:8081"
@@ -1551,7 +1551,7 @@ class RpkTool:
 
     def _run_wasm(self, rest):
         cmd = [self._rpk_binary(), "transform"]
-        cmd += ["-X", "admin.hosts=" + self._redpanda.admin_endpoints()]
+        cmd += ["-X", "admin.hosts=" + self._funes.admin_endpoints()]
         cmd += rest
         return self._execute(cmd)
 

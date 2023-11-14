@@ -58,7 +58,7 @@ void allocation_state::register_node(
       broker.properties().cores,
       _partitions_per_shard,
       _partitions_reserve_shard0,
-      _internal_kafka_topics);
+      _internal_sql_topics);
 
     if (state == allocation_node::state::decommissioned) {
         node->decommission();
@@ -93,7 +93,7 @@ void allocation_state::update_allocation_nodes(
                 b.properties().cores,
                 _partitions_per_shard,
                 _partitions_reserve_shard0,
-                _internal_kafka_topics));
+                _internal_sql_topics));
         } else {
             it->second->update_core_count(b.properties().cores);
             // node was added back to the cluster
@@ -115,7 +115,7 @@ void allocation_state::upsert_allocation_node(const model::broker& broker) {
             broker.properties().cores,
             _partitions_per_shard,
             _partitions_reserve_shard0,
-            _internal_kafka_topics));
+            _internal_sql_topics));
     } else {
         it->second->update_core_count(broker.properties().cores);
         // node was added back to the cluster

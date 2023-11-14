@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/ntp_archiver_service.h"
@@ -273,7 +273,7 @@ ss::future<> ntp_archiver::start() {
                       _rtclog.error,
                       "Sync loop stopped without an abort being requested. "
                       "Please disable and re-enable "
-                      "redpanda.remote.readreplica "
+                      "funes.remote.readreplica "
                       "the topic in order to restart it.");
                 }
             });
@@ -285,7 +285,7 @@ ss::future<> ntp_archiver::start() {
                     vlog(
                       _rtclog.error,
                       "Upload loop stopped without an abort being requested. "
-                      "Please disable and re-enable redpanda.remote.write "
+                      "Please disable and re-enable funes.remote.write "
                       "the topic in order to restart it.");
                 }
             });
@@ -730,7 +730,7 @@ ss::future<> ntp_archiver::upload_until_term_change() {
 
         if (non_compacted_upload_result.num_succeeded == 0) {
             // The backoff algorithm here is used to prevent high CPU
-            // utilization when redpanda is not receiving any data and there
+            // utilization when funes is not receiving any data and there
             // is nothing to update. Also, we want to limit amount of
             // logging if nothing is uploaded because of bad configuration
             // or some other problem.
@@ -799,7 +799,7 @@ ss::future<cloud_storage::download_result> ntp_archiver::sync_manifest() {
     } else {
         if (m == _parent.archival_meta_stm()->manifest()) {
             // TODO: This can be made more efficient by using a conditional GET:
-            // https://github.com/redpanda-data/redpanda/issues/11776
+            // https://github.com/redpanda-data/funes/issues/11776
             //
             // Then, the GET can be adapted to return the raw buffer, so that we
             // don't go through a deserialize/serialize cycle before writing the
@@ -1391,12 +1391,12 @@ ntp_archiver::make_segment_index(
   retry_chain_logger& ctxlog,
   std::string_view index_path,
   ss::input_stream<char> stream) {
-    auto base_kafka_offset = model::offset_cast(
+    auto base_sql_offset = model::offset_cast(
       _parent.get_offset_translator_state()->from_log_offset(base_rp_offset));
 
     cloud_storage::offset_index ix{
       base_rp_offset,
-      base_kafka_offset,
+      base_sql_offset,
       0,
       cloud_storage::remote_segment_sampling_step_bytes,
       base_timestamp};
@@ -1408,7 +1408,7 @@ ntp_archiver::make_segment_index(
       _ntp,
       std::move(stream),
       ix,
-      base_rp_offset - base_kafka_offset,
+      base_rp_offset - base_sql_offset,
       cloud_storage::remote_segment_sampling_step_bytes,
       std::ref(stats));
 
@@ -2168,7 +2168,7 @@ ss::future<> ntp_archiver::apply_archive_retention() {
         if (res.error() == cloud_storage::error_outcome::shutting_down) {
             vlog(
               _rtclog.debug,
-              "Search for archive retention point failed as Redpanda is "
+              "Search for archive retention point failed as Funes is "
               "shutting down");
         }
         vlog(
@@ -2217,7 +2217,7 @@ ss::future<> ntp_archiver::garbage_collect_archive() {
         if (backlog.error() == cloud_storage::error_outcome::shutting_down) {
             vlog(
               _rtclog.debug,
-              "Skipping archive GC as Redpanda is shutting down");
+              "Skipping archive GC as Funes is shutting down");
             co_return;
         }
 
@@ -2328,7 +2328,7 @@ ss::future<> ntp_archiver::garbage_collect_archive() {
             if (res.error() == cloud_storage::error_outcome::shutting_down) {
                 vlog(
                   _rtclog.debug,
-                  "Stopping archive GC as Redpanda is shutting down");
+                  "Stopping archive GC as Funes is shutting down");
                 co_return;
             }
 

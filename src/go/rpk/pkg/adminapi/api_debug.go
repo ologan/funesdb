@@ -58,7 +58,7 @@ type SelfTestNodeReport struct {
 	Results []SelfTestNodeResult `json:"results,omitempty"`
 }
 
-// DiskcheckParameters describes what parameters redpanda will use when starting the diskcheck benchmark.
+// DiskcheckParameters describes what parameters funes will use when starting the diskcheck benchmark.
 type DiskcheckParameters struct {
 	/// Descriptive name given to test run
 	Name string `json:"name"`
@@ -80,7 +80,7 @@ type DiskcheckParameters struct {
 	Type string `json:"type"`
 }
 
-// NetcheckParameters describes what parameters redpanda will use when starting the netcheck benchmark.
+// NetcheckParameters describes what parameters funes will use when starting the netcheck benchmark.
 type NetcheckParameters struct {
 	/// Descriptive name given to test run
 	Name string `json:"name"`

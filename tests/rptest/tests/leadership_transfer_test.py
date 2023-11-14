@@ -12,16 +12,16 @@ import random
 import time
 
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from ducktape.utils.util import wait_until
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from rptest.util import wait_until_result
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 
-class LeadershipTransferTest(RedpandaTest):
+class LeadershipTransferTest(FunesTest):
     """
     Transfer leadership from one node to another.
     """
@@ -39,7 +39,7 @@ class LeadershipTransferTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_controller_recovery(self):
-        kc = KafkaCat(self.redpanda)
+        kc = SQLCat(self.funes)
 
         # choose a partition and a target node
         partition = self._get_partition(kc)
@@ -64,8 +64,8 @@ class LeadershipTransferTest(RedpandaTest):
         # the leader of the partition.
         partition_id = partition['partition']
 
-        admin = Admin(self.redpanda)
-        admin.partition_transfer_leadership("kafka", self.topic, partition_id,
+        admin = Admin(self.funes)
+        admin.partition_transfer_leadership("sql", self.topic, partition_id,
                                             target_node_id)
 
         def transfer_complete():
@@ -100,15 +100,15 @@ class LeadershipTransferTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_self_transfer(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         for topic in self.topics:
             for partition in range(topic.partition_count):
                 leader = admin.get_partitions(topic, partition)['leader_id']
-                admin.partition_transfer_leadership("kafka", topic, partition,
+                admin.partition_transfer_leadership("sql", topic, partition,
                                                     leader)
 
 
-class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
+class MultiTopicAutomaticLeadershipBalancingTest(FunesTest):
     topics = (
         TopicSpec(partition_count=61, replication_factor=3),
         TopicSpec(partition_count=151, replication_factor=3),
@@ -127,7 +127,7 @@ class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
     def test_topic_aware_rebalance(self):
         def all_partitions_present(nodes: int):
             for t in self.topics:
-                tps = self.redpanda.partitions(t.name)
+                tps = self.funes.partitions(t.name)
                 total_leaders = sum(1 if t.leader else 0 for t in tps)
                 total_nodes = set(t.leader for t in tps if t.leader)
 
@@ -141,7 +141,7 @@ class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
 
         def count_leaders_per_node(topic_name: str):
             leaders_per_node = collections.defaultdict(int)
-            tps = self.redpanda.partitions(topic_name)
+            tps = self.funes.partitions(topic_name)
             for p in tps:
                 if p.leader:
                     leaders_per_node[p.leader] += 1
@@ -150,8 +150,8 @@ class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
 
         def distribution_error():
             nodes = [
-                self.redpanda.node_id(n)
-                for n in self.redpanda.started_nodes()
+                self.funes.node_id(n)
+                for n in self.funes.started_nodes()
             ]
             error = 0.0
             for t in self.topics:
@@ -196,8 +196,8 @@ class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
                    backoff_sec=2,
                    err_msg="Leadership did not stablize")
 
-        node = self.redpanda.nodes[0]
-        self.redpanda.stop_node(node)
+        node = self.funes.nodes[0]
+        self.funes.stop_node(node)
         self.logger.info("stabilization post stop")
         wait_until(lambda: all_partitions_present(2),
                    timeout_sec=30,
@@ -210,11 +210,11 @@ class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
 
         start_timeout = None
         if self.debug_mode:
-            # Due to the high partition count in this test Redpanda
+            # Due to the high partition count in this test Funes
             # can take longer than the default 20s to start on a debug
             # release.
             start_timeout = 60
-        self.redpanda.start_node(node, timeout=start_timeout)
+        self.funes.start_node(node, timeout=start_timeout)
 
         def wait_for_topics_evenly_distributed(improvement_deadline):
             last_update = time.time()
@@ -236,7 +236,7 @@ class MultiTopicAutomaticLeadershipBalancingTest(RedpandaTest):
         wait_for_topics_evenly_distributed(30)
 
 
-class AutomaticLeadershipBalancingTest(RedpandaTest):
+class AutomaticLeadershipBalancingTest(FunesTest):
     # number cores = 3 (default)
     # number nodes = 3 (default)
     # parts per core = 7
@@ -250,7 +250,7 @@ class AutomaticLeadershipBalancingTest(RedpandaTest):
                              extra_rp_conf=extra_rp_conf)
 
     def _get_leaders_by_node(self):
-        kc = KafkaCat(self.redpanda)
+        kc = SQLCat(self.funes)
         md = kc.metadata()
         topic = next(filter(lambda t: t["topic"] == self.topic, md["topics"]))
         leaders = (p["leader"] for p in topic["partitions"])
@@ -261,7 +261,7 @@ class AutomaticLeadershipBalancingTest(RedpandaTest):
         def all_partitions_present(num_nodes, per_node=None):
             leaders = self._get_leaders_by_node()
             for l in leaders:
-                self.redpanda.logger.debug(f"Leaders on {l}: {leaders[l]}")
+                self.funes.logger.debug(f"Leaders on {l}: {leaders[l]}")
             count = sum(leaders[l] for l in leaders)
             total = len(leaders) == num_nodes and count == 63
             if per_node is not None:
@@ -277,8 +277,8 @@ class AutomaticLeadershipBalancingTest(RedpandaTest):
 
         # stop node and wait for all leaders to transfer
         # to another node
-        node = self.redpanda.nodes[0]
-        self.redpanda.stop_node(node)
+        node = self.funes.nodes[0]
+        self.funes.stop_node(node)
         wait_until(lambda: all_partitions_present(2),
                    timeout_sec=30,
                    backoff_sec=2,
@@ -291,13 +291,13 @@ class AutomaticLeadershipBalancingTest(RedpandaTest):
         # sanity check -- the node we stopped shouldn't be a leader for any
         # partition after the sleep above as releection should have taken place
         leaders = self._get_leaders_by_node()
-        assert self.redpanda.node_id(node) not in leaders
+        assert self.funes.node_id(node) not in leaders
 
         # restart the stopped node and wait for 15 (out of 21) leaders to be
         # rebalanced on to the node. the error minimization done in the leader
         # balancer is a little fuzzy so it problematic to assert an exact target
         # number that should return
-        self.redpanda.start_node(node)
+        self.funes.start_node(node)
         wait_until(lambda: all_partitions_present(3, 15),
                    timeout_sec=300,
                    backoff_sec=10,

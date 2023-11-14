@@ -14,7 +14,7 @@ import (
 	"context"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -67,7 +67,7 @@ members and their lag), and manage offsets.
 `,
 		Args: cobra.ExactArgs(0),
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 
 	cmd.AddCommand(
 		newDeleteCommand(fs, p),
@@ -87,7 +87,7 @@ func newListCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short:   "List all groups",
 		Long: `List all groups.
 
-This command lists all groups currently known to Redpanda, including empty
+This command lists all groups currently known to Funes, including empty
 groups that have not yet expired. The BROKER column is which broker node is the
 coordinator for the group. This command can be used to track down unknown
 groups, or to list groups that need to be cleaned up.
@@ -97,8 +97,8 @@ groups, or to list groups that need to be cleaned up.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			listed, err := adm.ListGroups(context.Background())
@@ -122,7 +122,7 @@ func newDeleteCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short: "Delete groups from brokers",
 		Long: `Delete groups from brokers.
 
-Older versions of the Kafka protocol included a retention_millis field in
+Older versions of the SQL protocol included a retention_millis field in
 offset commit requests. Group commits persisted for this retention and then
 eventually expired. Once all commits for a group expired, the group would be
 considered deleted.
@@ -131,7 +131,7 @@ The retention field was removed because it proved problematic for infrequently
 committing consumers: the offsets could be expired for a group that was still
 active. If clients use new enough versions of OffsetCommit (versions that have
 removed the retention field), brokers expire offsets only when the group is
-empty for offset.retention.minutes. Redpanda does not currently support that
+empty for offset.retention.minutes. Funes does not currently support that
 configuration (see #2904), meaning offsets for empty groups expire only when
 they are explicitly deleted.
 
@@ -144,8 +144,8 @@ quick investigation or testing. This command helps you do that.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			deleted, err := adm.DeleteGroups(context.Background(), args...)

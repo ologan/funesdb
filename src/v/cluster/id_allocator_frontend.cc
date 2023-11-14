@@ -127,7 +127,7 @@ id_allocator_frontend::id_allocator_frontend(
 ss::future<allocate_id_reply>
 id_allocator_frontend::allocate_id(model::timeout_clock::duration timeout) {
     auto nt = model::topic_namespace(
-      model::kafka_internal_namespace, model::id_allocator_topic);
+      model::sql_internal_namespace, model::id_allocator_topic);
 
     auto has_topic = true;
 
@@ -146,7 +146,7 @@ id_allocator_frontend::allocate_id(model::timeout_clock::duration timeout) {
 
 ss::future<bool> id_allocator_frontend::try_create_id_allocator_topic() {
     cluster::topic_configuration topic{
-      model::kafka_internal_namespace,
+      model::sql_internal_namespace,
       model::id_allocator_topic,
       1,
       _controller->internal_topic_replication()};
@@ -164,7 +164,7 @@ ss::future<bool> id_allocator_frontend::try_create_id_allocator_topic() {
               vlog(
                 clusterlog.warn,
                 "can not create {}/{} topic - error: {}",
-                model::kafka_internal_namespace,
+                model::sql_internal_namespace,
                 model::id_allocator_topic,
                 cluster::make_error_code(res[0].ec).message());
               return false;
@@ -175,7 +175,7 @@ ss::future<bool> id_allocator_frontend::try_create_id_allocator_topic() {
           vlog(
             clusterlog.warn,
             "can not create {}/{} topic - error: {}",
-            model::kafka_internal_namespace,
+            model::sql_internal_namespace,
             model::id_allocator_topic,
             e);
           return false;

@@ -13,17 +13,17 @@ from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.default import DefaultClient
 from rptest.services.cluster import cluster
 from rptest.utils.mode_checks import skip_debug_mode
 from time import sleep
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 from rptest.services.compacted_verifier import CompactedVerifier, Workload
 
 
-class CompactionE2EIdempotencyTest(RedpandaTest):
+class CompactionE2EIdempotencyTest(FunesTest):
     def __init__(self, test_context):
         extra_rp_conf = {}
 
@@ -36,9 +36,9 @@ class CompactionE2EIdempotencyTest(RedpandaTest):
 
     def topic_segments(self) -> list[list[int]]:
         partitions = []
-        for node in self.redpanda.nodes:
-            storage = self.redpanda.node_storage(node)
-            topic_partitions = storage.partitions("kafka", self.topic)
+        for node in self.funes.nodes:
+            storage = self.funes.node_storage(node)
+            topic_partitions = storage.partitions("sql", self.topic)
             partitions.append([len(p.segments) for p in topic_partitions])
         return partitions
 
@@ -70,7 +70,7 @@ class CompactionE2EIdempotencyTest(RedpandaTest):
 
         # creating the topic manually instead of relying on topics
         # because the topic depends on the test parameter
-        client = DefaultClient(self.redpanda)
+        client = DefaultClient(self.funes)
         self.topics = [
             TopicSpec(partition_count=self.partition_count,
                       replication_factor=3,
@@ -79,18 +79,18 @@ class CompactionE2EIdempotencyTest(RedpandaTest):
         ]
         client.create_topic(self.topics[0])
 
-        rw_verifier = CompactedVerifier(self.test_context, self.redpanda,
+        rw_verifier = CompactedVerifier(self.test_context, self.funes,
                                         workload)
         rw_verifier.start()
 
-        rw_verifier.remote_start_producer(self.redpanda.brokers(), self.topic,
+        rw_verifier.remote_start_producer(self.funes.brokers(), self.topic,
                                           self.partition_count)
         self.logger.info(
             f"Waiting for {expect_progress} writes to ensure progress")
         rw_verifier.ensure_progress(expect_progress, 30)
         self.logger.info(f"The test made progress")
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         cfgs = rpk.describe_topic_configs(self.topic)
         self.logger.debug(f"Initial topic {self.topic} configuration: {cfgs}")
 
@@ -157,7 +157,7 @@ class CompactionE2EIdempotencyTest(RedpandaTest):
         rw_verifier.wait(timeout_sec=10)
 
 
-class CompactionE2ERebootTest(RedpandaTest):
+class CompactionE2ERebootTest(FunesTest):
     def __init__(self, test_context):
         self.segment_size = 5 * 1024 * 1024
         super(CompactionE2ERebootTest,
@@ -177,7 +177,7 @@ class CompactionE2ERebootTest(RedpandaTest):
 
         # creating the topic manually instead of relying on topics
         # because the topic depends on the test parameter
-        client = DefaultClient(self.redpanda)
+        client = DefaultClient(self.funes)
         self.topics = [
             TopicSpec(partition_count=1,
                       replication_factor=3,
@@ -186,11 +186,11 @@ class CompactionE2ERebootTest(RedpandaTest):
         ]
         client.create_topic(self.topics[0])
 
-        rw_verifier = CompactedVerifier(self.test_context, self.redpanda,
+        rw_verifier = CompactedVerifier(self.test_context, self.funes,
                                         workload)
         rw_verifier.start()
 
-        rw_verifier.remote_start_producer(self.redpanda.brokers(), self.topic,
+        rw_verifier.remote_start_producer(self.funes.brokers(), self.topic,
                                           1)
         self.logger.info(
             f"Waiting for {expect_progress} writes to ensure progress")
@@ -200,22 +200,22 @@ class CompactionE2ERebootTest(RedpandaTest):
         rw_verifier.remote_wait_producer()
         self.logger.info(f"Producer is stopped")
 
-        self.logger.info(f"Rebooting redpanda cluster")
-        assert len(self.redpanda.started_nodes(
-        )) == 3, f"only {len(self.redpanda.started_nodes())} nodes are running"
+        self.logger.info(f"Rebooting funes cluster")
+        assert len(self.funes.started_nodes(
+        )) == 3, f"only {len(self.funes.started_nodes())} nodes are running"
         nodes = []
-        for node in list(self.redpanda.started_nodes()):
+        for node in list(self.funes.started_nodes()):
             nodes.append(node)
             self.logger.info(f"Stoping {node.account.hostname}")
-            self.redpanda.stop_node(node)
+            self.funes.stop_node(node)
         for node in nodes:
             self.logger.info(f"Starting {node.account.hostname}")
-            self.redpanda.start_node(node)
+            self.funes.start_node(node)
 
         def compaction_is_triggered(node):
             try:
                 for line in node.account.ssh_capture(
-                        f"grep 'rebuilt index:' {RedpandaService.STDOUT_STDERR_CAPTURE}",
+                        f"grep 'rebuilt index:' {FunesService.STDOUT_STDERR_CAPTURE}",
                         timeout_sec=5):
                     self.logger.info(
                         f"Compaction was triggered on {node.account.hostname}: {line}"
@@ -226,7 +226,7 @@ class CompactionE2ERebootTest(RedpandaTest):
             return False
 
         self.logger.info(f"Waiting until compaction is triggered")
-        for node in list(self.redpanda.started_nodes()):
+        for node in list(self.funes.started_nodes()):
             wait_until(
                 lambda: compaction_is_triggered(node),
                 timeout_sec=60,

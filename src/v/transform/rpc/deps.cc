@@ -19,7 +19,7 @@
 #include "cluster/topics_frontend.h"
 #include "cluster/types.h"
 #include "config/configuration.h"
-#include "kafka/server/partition_proxy.h"
+#include "sql/server/partition_proxy.h"
 #include "model/fundamental.h"
 #include "model/ktp.h"
 #include "model/namespace.h"
@@ -87,14 +87,14 @@ public:
       ss::shard_id shard,
       const model::ktp& ntp,
       ss::noncopyable_function<
-        ss::future<cluster::errc>(kafka::partition_proxy*)> fn) final {
+        ss::future<cluster::errc>(sql::partition_proxy*)> fn) final {
         return invoke_on_shard_impl(shard, ntp, std::move(fn));
     }
     ss::future<cluster::errc> invoke_on_shard(
       ss::shard_id shard,
       const model::ntp& ntp,
       ss::noncopyable_function<
-        ss::future<cluster::errc>(kafka::partition_proxy*)> fn) final {
+        ss::future<cluster::errc>(sql::partition_proxy*)> fn) final {
         return invoke_on_shard_impl(shard, ntp, std::move(fn));
     }
 
@@ -209,18 +209,18 @@ private:
       ss::shard_id shard,
       const model::any_ntp auto& ntp,
       ss::noncopyable_function<
-        ss::future<cluster::errc>(kafka::partition_proxy*)> fn) {
+        ss::future<cluster::errc>(sql::partition_proxy*)> fn) {
         return _manager->invoke_on(
           shard,
           [ntp, fn = std::move(fn)](cluster::partition_manager& mgr) mutable {
-              auto pp = kafka::make_partition_proxy(ntp, mgr);
+              auto pp = sql::make_partition_proxy(ntp, mgr);
               if (!pp || !pp->is_leader()) {
                   return ss::make_ready_future<cluster::errc>(
                     cluster::errc::not_leader);
               }
               return ss::do_with(
                 *std::move(pp),
-                [fn = std::move(fn)](kafka::partition_proxy& pp) {
+                [fn = std::move(fn)](sql::partition_proxy& pp) {
                     return fn(&pp);
                 });
           });
@@ -312,7 +312,7 @@ partition_manager::shard_owner(const model::ktp& ktp) {
 ss::future<cluster::errc> partition_manager::invoke_on_shard(
   ss::shard_id shard_id,
   const model::ktp& ktp,
-  ss::noncopyable_function<ss::future<cluster::errc>(kafka::partition_proxy*)>
+  ss::noncopyable_function<ss::future<cluster::errc>(sql::partition_proxy*)>
     fn) {
     auto ntp = ktp.to_ntp();
     co_return co_await invoke_on_shard(shard_id, ntp, std::move(fn));

@@ -14,27 +14,27 @@ import string
 
 from ducktape.utils.util import wait_until
 from rptest.clients.rpk import RpkTool
-from rptest.services.redpanda import ResourceSettings
-from kafka import KafkaProducer, KafkaConsumer, TopicPartition
+from rptest.services.funes import ResourceSettings
+from sql import SQLProducer, SQLConsumer, TopicPartition
 from rptest.clients.kcl import RawKCL, KclCreateTopicsRequestTopic, \
     KclCreatePartitionsRequestTopic
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
 
 
-class ClusterQuotaPartitionMutationTest(RedpandaTest):
+class ClusterQuotaPartitionMutationTest(FunesTest):
     """
     Ducktape tests for partition mutation quota
     """
     def __init__(self, *args, **kwargs):
-        additional_options = {'kafka_admin_topic_api_rate': 1}
+        additional_options = {'sql_admin_topic_api_rate': 1}
         super().__init__(*args,
                          num_brokers=3,
                          extra_rp_conf=additional_options,
                          **kwargs)
         # Use kcl so the throttle_time_ms value in the response can be examined
-        self.kcl = RawKCL(self.redpanda)
+        self.kcl = RawKCL(self.funes)
 
     @cluster(num_nodes=3)
     def test_partition_throttle_mechanism(self):
@@ -42,7 +42,7 @@ class ClusterQuotaPartitionMutationTest(RedpandaTest):
         Ensure the partition throttling mechanism (KIP-599) works
         """
 
-        # The kafka_admin_topic_api_rate is 1, quota will be 10. This test will
+        # The sql_admin_topic_api_rate is 1, quota will be 10. This test will
         # make 1 request within containing three topics to create, each containing
         # different number of partitions.
         #
@@ -70,7 +70,7 @@ class ClusterQuotaPartitionMutationTest(RedpandaTest):
 
         # Respect throttle millis response - exhaust the timeout so quota resets
         throttle_ms = response['ThrottleMillis']
-        self.redpanda.logger.info(f"First throttle_ms: {throttle_ms}")
+        self.funes.logger.info(f"First throttle_ms: {throttle_ms}")
         assert throttle_ms > 0
         time.sleep((throttle_ms * 0.001) + 1)
 
@@ -90,7 +90,7 @@ class ClusterQuotaPartitionMutationTest(RedpandaTest):
 
         # Respect throttle millis response
         throttle_ms = response['ThrottleMillis']
-        self.redpanda.logger.info(f"Second throttle_ms: {throttle_ms}")
+        self.funes.logger.info(f"Second throttle_ms: {throttle_ms}")
         assert throttle_ms > 0
         time.sleep((throttle_ms * 0.001) + 1)
 
@@ -107,7 +107,7 @@ class ClusterQuotaPartitionMutationTest(RedpandaTest):
         assert response['ThrottleMillis'] > 0
 
 
-class ClusterRateQuotaTest(RedpandaTest):
+class ClusterRateQuotaTest(FunesTest):
     """
     Ducktape tests for rate quota
     """
@@ -125,7 +125,7 @@ class ClusterRateQuotaTest(RedpandaTest):
         # Fetch 10 messages per one request (msg_size + headers)
         self.max_partition_fetch_bytes = self.message_size * 11
         additional_options = {
-            "max_kafka_throttle_delay_ms": self.max_throttle_time,
+            "max_sql_throttle_delay_ms": self.max_throttle_time,
             "target_quota_byte_rate": self.target_default_quota_byte_rate,
             "target_fetch_quota_byte_rate":
             self.target_default_quota_byte_rate,
@@ -135,15 +135,15 @@ class ClusterRateQuotaTest(RedpandaTest):
                          extra_rp_conf=additional_options,
                          resource_settings=ResourceSettings(num_cpus=1),
                          **kwargs)
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
     def init_test_data(self):
         wait_until(lambda: len(list(self.rpk.describe_topic(self.topic))) != 0,
                    10)
         wait_until(lambda: next(self.rpk.describe_topic(self.topic)).leader,
                    10)
-        self.leader_node = self.redpanda.broker_address(
-            self.redpanda.get_node(
+        self.leader_node = self.funes.broker_address(
+            self.funes.get_node(
                 next(self.rpk.describe_topic(self.topic)).leader))
         self.msg = "".join(
             random.choice(string.ascii_lowercase)
@@ -195,8 +195,8 @@ class ClusterRateQuotaTest(RedpandaTest):
         """
         self.init_test_data()
 
-        self.redpanda.set_cluster_config({
-            "kafka_client_group_byte_rate_quota": [
+        self.funes.set_cluster_config({
+            "sql_client_group_byte_rate_quota": [
                 {
                     "group_name": "group_1",
                     "clients_prefix": "producer_group_alone_producer",
@@ -210,7 +210,7 @@ class ClusterRateQuotaTest(RedpandaTest):
             ]
         })
 
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  retries=1,
@@ -224,13 +224,13 @@ class ClusterRateQuotaTest(RedpandaTest):
         self.produce(producer, self.break_group_quota_message_amount)
         self.check_producer_throttled(producer)
 
-        producer_1 = KafkaProducer(acks="all",
+        producer_1 = SQLProducer(acks="all",
                                    bootstrap_servers=self.leader_node,
                                    value_serializer=str.encode,
                                    retries=1,
                                    client_id="producer_group_multiple_1")
 
-        producer_2 = KafkaProducer(acks="all",
+        producer_2 = SQLProducer(acks="all",
                                    bootstrap_servers=self.leader_node,
                                    value_serializer=str.encode,
                                    client_id="producer_group_multiple_2")
@@ -247,15 +247,15 @@ class ClusterRateQuotaTest(RedpandaTest):
         self.produce(producer_2, 10)
         self.check_producer_throttled(producer_2)
 
-        self.redpanda.set_cluster_config({
-            "kafka_client_group_byte_rate_quota": {
+        self.funes.set_cluster_config({
+            "sql_client_group_byte_rate_quota": {
                 "group_name": "change_config_group",
                 "clients_prefix": "new_producer_group",
                 "quota": self.target_group_quota_byte_rate
             }
         })
 
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  client_id="new_producer_group_producer")
@@ -270,8 +270,8 @@ class ClusterRateQuotaTest(RedpandaTest):
         """
         self.init_test_data()
 
-        self.redpanda.set_cluster_config({
-            "kafka_client_group_fetch_byte_rate_quota": [
+        self.funes.set_cluster_config({
+            "sql_client_group_fetch_byte_rate_quota": [
                 {
                     "group_name": "group_1",
                     "clients_prefix": "consumer_alone",
@@ -285,13 +285,13 @@ class ClusterRateQuotaTest(RedpandaTest):
             ]
         })
 
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  retries=1)
         self.produce(producer, self.break_group_quota_message_amount * 2)
 
-        consumer = KafkaConsumer(
+        consumer = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="consumer_alone",
@@ -304,7 +304,7 @@ class ClusterRateQuotaTest(RedpandaTest):
         self.fetch(consumer, self.break_group_quota_message_amount)
         self.check_consumer_throttled(consumer)
 
-        consumer_1 = KafkaConsumer(
+        consumer_1 = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="consumer_multiple_1",
@@ -313,7 +313,7 @@ class ClusterRateQuotaTest(RedpandaTest):
             auto_offset_reset='earliest',
             enable_auto_commit=False)
 
-        consumer_2 = KafkaConsumer(
+        consumer_2 = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="consumer_multiple_2",
@@ -334,15 +334,15 @@ class ClusterRateQuotaTest(RedpandaTest):
         self.fetch(consumer_2, 10)
         self.check_consumer_throttled(consumer_2)
 
-        self.redpanda.set_cluster_config({
-            "kafka_client_group_fetch_byte_rate_quota": {
+        self.funes.set_cluster_config({
+            "sql_client_group_fetch_byte_rate_quota": {
                 "group_name": "change_config",
                 "clients_prefix": "new_consumer",
                 "quota": self.target_group_quota_byte_rate
             }
         })
 
-        consumer = KafkaConsumer(
+        consumer = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="new_consumer",
@@ -361,14 +361,14 @@ class ClusterRateQuotaTest(RedpandaTest):
         """
         self.init_test_data()
 
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  retries=2,
                                  request_timeout_ms=60000,
                                  client_id="producer")
 
-        consumer = KafkaConsumer(
+        consumer = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="consumer",
@@ -394,13 +394,13 @@ class ClusterRateQuotaTest(RedpandaTest):
         """
         self.init_test_data()
 
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  retries=1,
                                  client_id="producer")
 
-        consumer = KafkaConsumer(
+        consumer = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="consumer",
@@ -423,26 +423,26 @@ class ClusterRateQuotaTest(RedpandaTest):
     @cluster(num_nodes=3)
     def test_client_response_and_produce_throttle_mechanism(self):
         self.init_test_data()
-        self.redpanda.set_cluster_config({
-            "kafka_client_group_byte_rate_quota": {
+        self.funes.set_cluster_config({
+            "sql_client_group_byte_rate_quota": {
                 "group_name": "producer_throttle_group",
                 "clients_prefix": "throttle_producer_only",
                 "quota": self.target_group_quota_byte_rate
             },
-            "kafka_client_group_fetch_byte_rate_quota": {
+            "sql_client_group_fetch_byte_rate_quota": {
                 "group_name": "producer_throttle_group",
                 "clients_prefix": "throttle_producer_only",
                 "quota": self.target_group_quota_byte_rate
             }
         })
         # Producer and Consumer same client_id
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  retries=1,
                                  client_id="throttle_producer_only")
 
-        consumer = KafkaConsumer(
+        consumer = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="throttle_producer_only",
@@ -459,26 +459,26 @@ class ClusterRateQuotaTest(RedpandaTest):
         self.fetch(consumer, 10)
         self.check_consumer_not_throttled(consumer)
 
-        self.redpanda.set_cluster_config({
-            "kafka_client_group_byte_rate_quota": {
+        self.funes.set_cluster_config({
+            "sql_client_group_byte_rate_quota": {
                 "group_name": "consumer_throttle_group",
                 "clients_prefix": "throttle_consumer_only",
                 "quota": self.target_group_quota_byte_rate
             },
-            "kafka_client_group_fetch_byte_rate_quota": {
+            "sql_client_group_fetch_byte_rate_quota": {
                 "group_name": "consumer_throttle_group",
                 "clients_prefix": "throttle_consumer_only",
                 "quota": self.target_group_quota_byte_rate
             }
         })
         # Producer and Consumer same client_id
-        producer = KafkaProducer(acks="all",
+        producer = SQLProducer(acks="all",
                                  bootstrap_servers=self.leader_node,
                                  value_serializer=str.encode,
                                  retries=1,
                                  client_id="throttle_consumer_only")
 
-        consumer = KafkaConsumer(
+        consumer = SQLConsumer(
             self.topic,
             bootstrap_servers=self.leader_node,
             client_id="throttle_consumer_only",

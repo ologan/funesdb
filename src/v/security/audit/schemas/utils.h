@@ -1,15 +1,15 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
-#include "kafka/protocol/types.h"
+#include "sql/protocol/types.h"
 #include "net/unresolved_address.h"
 #include "security/acl.h"
 #include "security/audit/schemas/application_activity.h"
@@ -30,7 +30,7 @@
 
 namespace security::audit {
 
-event_type kafka_api_to_event_type(kafka::api_key);
+event_type sql_api_to_event_type(sql::api_key);
 
 enum class audit_resource_type : int8_t {
     topic,
@@ -45,9 +45,9 @@ std::ostream& operator<<(std::ostream&, audit_resource_type);
 
 template<typename T>
 concept AuditableResource = std::is_same_v<T, model::topic>
-                            || std::is_same_v<T, kafka::group_id>
+                            || std::is_same_v<T, sql::group_id>
                             || std::is_same_v<T, security::acl_cluster_name>
-                            || std::is_same_v<T, kafka::transactional_id>
+                            || std::is_same_v<T, sql::transactional_id>
                             || std::is_same_v<T, security::acl_binding>
                             || std::is_same_v<T, security::acl_binding_filter>;
 
@@ -55,11 +55,11 @@ template<AuditableResource T>
 consteval audit_resource_type get_audit_resource_type() {
     if constexpr (std::is_same_v<T, model::topic>) {
         return audit_resource_type::topic;
-    } else if constexpr (std::is_same_v<T, kafka::group_id>) {
+    } else if constexpr (std::is_same_v<T, sql::group_id>) {
         return audit_resource_type::group;
     } else if constexpr (std::is_same_v<T, security::acl_cluster_name>) {
         return audit_resource_type::cluster;
-    } else if constexpr (std::is_same_v<T, kafka::transactional_id>) {
+    } else if constexpr (std::is_same_v<T, sql::transactional_id>) {
         return audit_resource_type::transactional_id;
     } else if constexpr (std::is_same_v<T, security::acl_binding>) {
         return audit_resource_type::acl_binding;

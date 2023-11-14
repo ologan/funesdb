@@ -4,7 +4,7 @@ from rptest.services.cluster import cluster
 
 from rptest.clients.types import TopicSpec
 from rptest.services.mock_iam_roles_server import MockIamRolesServer
-from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST
+from rptest.services.funes import CHAOS_LOG_ALLOW_LIST
 from rptest.tests.e2e_shadow_indexing_test import EndToEndShadowIndexingBase
 from rptest.util import produce_until_segments, wait_for_local_storage_truncate
 
@@ -22,7 +22,7 @@ class AWSRoleFetchTests(EndToEndShadowIndexingBase):
                              'RP_SI_CREDS_API_ADDRESS':
                              self.iam_server.address,
                          })
-        self.redpanda.add_extra_rp_conf(
+        self.funes.add_extra_rp_conf(
             {'cloud_storage_credentials_source': 'aws_instance_metadata'})
 
     def setUp(self):
@@ -39,21 +39,21 @@ class AWSRoleFetchTests(EndToEndShadowIndexingBase):
     def test_write(self):
         self.start_producer()
         produce_until_segments(
-            redpanda=self.redpanda,
+            funes=self.funes,
             topic=self.topic,
             partition_idx=0,
             count=10,
         )
 
         local_retention = 5 * self.segment_size
-        self.kafka_tools.alter_topic_config(
+        self.sql_tools.alter_topic_config(
             self.topic,
             {
                 TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES:
                 local_retention,
             },
         )
-        wait_for_local_storage_truncate(redpanda=self.redpanda,
+        wait_for_local_storage_truncate(funes=self.funes,
                                         topic=self.topic,
                                         target_bytes=local_retention)
         self.start_consumer()
@@ -98,10 +98,10 @@ class STSRoleFetchTests(EndToEndShadowIndexingBase):
                              'AWS_ROLE_ARN': self.role,
                              'AWS_WEB_IDENTITY_TOKEN_FILE': self.token_path,
                          })
-        self.redpanda.add_extra_rp_conf(
+        self.funes.add_extra_rp_conf(
             {'cloud_storage_credentials_source': 'sts'})
 
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             node.account.create_file(self.token_path, self.token)
 
     def setUp(self):
@@ -118,18 +118,18 @@ class STSRoleFetchTests(EndToEndShadowIndexingBase):
     def test_write(self):
         self.start_producer()
         produce_until_segments(
-            redpanda=self.redpanda,
+            funes=self.funes,
             topic=self.topic,
             partition_idx=0,
             count=10,
         )
 
         local_retention = 5 * self.segment_size
-        self.kafka_tools.alter_topic_config(
+        self.sql_tools.alter_topic_config(
             self.topic,
             {TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES: local_retention},
         )
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         self.topic,
                                         target_bytes=local_retention)
         self.start_consumer()
@@ -166,10 +166,10 @@ class ShortLivedCredentialsTests(EndToEndShadowIndexingBase):
                              'AWS_ROLE_ARN': self.role,
                              'AWS_WEB_IDENTITY_TOKEN_FILE': self.token_path,
                          })
-        self.redpanda.add_extra_rp_conf(
+        self.funes.add_extra_rp_conf(
             {'cloud_storage_credentials_source': 'sts'})
 
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             node.account.create_file(self.token_path, self.token)
 
     def setUp(self):
@@ -186,18 +186,18 @@ class ShortLivedCredentialsTests(EndToEndShadowIndexingBase):
     def test_short_lived_credentials(self):
         self.start_producer()
         produce_until_segments(
-            redpanda=self.redpanda,
+            funes=self.funes,
             topic=self.topic,
             partition_idx=0,
             count=10,
         )
 
         local_retention = 5 * self.segment_size
-        self.kafka_tools.alter_topic_config(
+        self.sql_tools.alter_topic_config(
             self.topic,
             {TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES: local_retention},
         )
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         self.topic,
                                         target_bytes=local_retention)
         self.start_consumer()

@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/ntp_archiver_service.h"
@@ -15,8 +15,8 @@
 #include "cluster/cloud_metadata/key_utils.h"
 #include "cluster/cloud_metadata/manifest_downloads.h"
 #include "model/fundamental.h"
-#include "redpanda/application.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/application.h"
+#include "funes/tests/fixture.h"
 #include "utils/retry_chain_node.h"
 
 #include <seastar/core/io_priority_class.hh>
@@ -29,12 +29,12 @@ using namespace cluster::cloud_metadata;
 
 class cluster_metadata_fixture
   : public s3_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public enable_cloud_storage_fixture {
 public:
     cluster_metadata_fixture()
-      : redpanda_thread_fixture(
-        redpanda_thread_fixture::init_cloud_storage_tag{}, httpd_port_number())
+      : funes_thread_fixture(
+        funes_thread_fixture::init_cloud_storage_tag{}, httpd_port_number())
       , remote(app.cloud_storage_api.local())
       , bucket(cloud_storage_clients::bucket_name("test-bucket")) {
         set_expectations_and_listen({});

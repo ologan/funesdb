@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cluster/tests/topic_properties_generator.h"
@@ -18,7 +18,7 @@
 namespace cluster::cloud_metadata {
 
 inline security::license get_test_license() {
-    const char* sample_valid_license = std::getenv("REDPANDA_SAMPLE_LICENSE");
+    const char* sample_valid_license = std::getenv("FUNES_SAMPLE_LICENSE");
     const ss::sstring license_str{sample_valid_license};
     return security::make_license(license_str);
 }

@@ -14,21 +14,21 @@ from rptest.tests.prealloc_nodes import PreallocNodesTest
 
 from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
-from rptest.services.admin_ops_fuzzer import AdminOperationsFuzzer, RedpandaAdminOperation
+from rptest.services.admin_ops_fuzzer import AdminOperationsFuzzer, FunesAdminOperation
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.clients.default import DefaultClient
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST, PREV_VERSION_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import RedpandaInstaller
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import CHAOS_LOG_ALLOW_LIST, PREV_VERSION_LOG_ALLOW_LIST
+from rptest.services.funes_installer import FunesInstaller
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.mode_checks import cleanup_on_early_exit, skip_debug_mode
 from rptest.utils.node_operations import FailureInjectorBackgroundThread, NodeOpsExecutor, generate_random_workload
 
 from rptest.clients.offline_log_viewer import OfflineLogViewer
 
 
-class AdminOperationsTest(RedpandaTest):
+class AdminOperationsTest(FunesTest):
     def __init__(self, test_context, *args, **kwargs):
         self.admin_fuzz = None
 
@@ -46,7 +46,7 @@ class AdminOperationsTest(RedpandaTest):
     @cluster(num_nodes=3)
     def test_admin_operations(self):
 
-        self.admin_fuzz = AdminOperationsFuzzer(self.redpanda,
+        self.admin_fuzz = AdminOperationsFuzzer(self.funes,
                                                 min_replication=1,
                                                 operations_interval=1)
 

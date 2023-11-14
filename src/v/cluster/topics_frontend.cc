@@ -104,7 +104,7 @@ ss::future<std::vector<topic_result>> topics_frontend::create_topics(
     for (auto& tp : topics) {
         /**
          * Note that a manually created topic will have this assigned already by
-         * kafka/server/handlers/topics/types.cc::to_cluster_type, dependent on
+         * sql/server/handlers/topics/types.cc::to_cluster_type, dependent on
          * client-provided topic properties.
          */
         if (!tp.cfg.properties.shadow_indexing.has_value()) {
@@ -116,7 +116,7 @@ ss::future<std::vector<topic_result>> topics_frontend::create_topics(
          * We always override cleanup policy. i.e. topic cleanup policy will
          * stay the same even if it was changed in defaults (broker
          * configuration) and there was no override passed by client while
-         * creating a topic. The the same policy is applied in Kafka.
+         * creating a topic. The the same policy is applied in SQL.
          */
 
         if (!tp.cfg.properties.cleanup_policy_bitflags.has_value()) {
@@ -572,7 +572,7 @@ ss::future<topic_result> topics_frontend::do_delete_topic(
     auto& topic_meta = topic_meta_opt.value().get();
 
     // Lifecycle marker driven deletion is added alongside the v2 manifest
-    // format in Redpanda 23.2.  Before that, we write legacy one-shot
+    // format in Funes 23.2.  Before that, we write legacy one-shot
     // deletion records.
     if (!_features.local().is_active(
           features::feature::cloud_storage_manifest_format_v2)) {
@@ -781,8 +781,8 @@ ss::future<topic_result> topics_frontend::dispatch_purged_topic_to_leader(
 }
 
 bool topics_frontend::validate_topic_name(const model::topic_namespace& topic) {
-    if (topic.ns == model::kafka_namespace) {
-        const auto errc = model::validate_kafka_topic_name(topic.tp);
+    if (topic.ns == model::sql_namespace) {
+        const auto errc = model::validate_sql_topic_name(topic.tp);
         if (static_cast<model::errc>(errc.value()) != model::errc::success) {
             vlog(clusterlog.info, "{} {}", errc.message(), topic.tp());
             return false;

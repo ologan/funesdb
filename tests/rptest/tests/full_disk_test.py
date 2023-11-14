@@ -14,19 +14,19 @@ from ducktape.cluster.cluster import ClusterNode
 from ducktape.mark import matrix
 from ducktape.tests.test import TestContext
 from ducktape.utils.util import wait_until
-from kafka import KafkaProducer
-from kafka.errors import BrokerNotAvailableError, NotLeaderForPartitionError
+from sql import SQLProducer
+from sql.errors import BrokerNotAvailableError, NotLeaderForPartitionError
 
 from rptest.clients.default import DefaultClient
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
-from rptest.services.redpanda import LoggingConfig, RedpandaService, SISettings
+from rptest.services.funes import LoggingConfig, FunesService, SISettings
 from rptest.tests.end_to_end import EndToEndTest
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.util import produce_total_bytes, search_logs_with_timeout
 from rptest.utils.expect_rate import ExpectRate, RateTarget
 from rptest.utils.full_disk import FullDiskHelper
@@ -40,9 +40,9 @@ FDT_LOG_ALLOW_LIST = [".*cluster - storage space alert: free space.*"]
 LOOP_ITERATIONS = 3
 
 
-# XXX This test really needs a raw protocol client (i.e. not librdkafka # based)
-# to test cleanly. That, or figure out how to make kafka-python act like one.
-class WriteRejectTest(RedpandaTest):
+# XXX This test really needs a raw protocol client (i.e. not librdsql # based)
+# to test cleanly. That, or figure out how to make sql-python act like one.
+class WriteRejectTest(FunesTest):
 
     NUM_TOPICS = 1
     topics = [TopicSpec() for _ in range(NUM_TOPICS)]
@@ -53,23 +53,23 @@ class WriteRejectTest(RedpandaTest):
                          log_config=LoggingConfig(
                              'info', logger_levels={'cluster': 'trace'}))
         self.producers = None
-        self.full_disk = FullDiskHelper(self.logger, self.redpanda)
+        self.full_disk = FullDiskHelper(self.logger, self.funes)
 
-    def _get_producers(self, refresh=False) -> list[KafkaProducer]:
+    def _get_producers(self, refresh=False) -> list[SQLProducer]:
         if not self.producers:
             self.producers = [
-                KafkaProducer(acks="all",
-                              bootstrap_servers=self.redpanda.brokers_list(),
+                SQLProducer(acks="all",
+                              bootstrap_servers=self.funes.brokers_list(),
                               value_serializer=str.encode,
                               retries=10) for _ in range(len(self.topics))
             ]
         return self.producers
 
     def _setup(self) -> None:
-        self.logger.debug(f"brokers: {self.redpanda.brokers_list()}")
-        self.admin = Admin(self.redpanda)
+        self.logger.debug(f"brokers: {self.funes.brokers_list()}")
+        self.admin = Admin(self.funes)
 
-        # python kafka client doesn't seem to recover from no leader for partition,
+        # python sql client doesn't seem to recover from no leader for partition,
         # despite retries, when it encounters ECONNREFUSED. The sleep here works
         # around this.
         sleep(5)
@@ -129,7 +129,7 @@ class WriteRejectTest(RedpandaTest):
         for i in range(LOOP_ITERATIONS):
             self.logger.info(f"Iteration {i} of {LOOP_ITERATIONS}..")
             # 1. Confirm we can produce successfully.
-            self._send_all_topics("Q: What do redpandas eat?")
+            self._send_all_topics("Q: What do funess eat?")
 
             # 2. Set threshold below current free space, assert we get rejected.
             self.full_disk.trigger_low_space()
@@ -149,16 +149,16 @@ class WriteRejectTest(RedpandaTest):
             # that structure logs disk space alerts.
             pattern = f"Update disk health cache {disk_space_change}"
             wait_until(
-                lambda: self.redpanda.search_log_any(pattern),
+                lambda: self.funes.search_log_any(pattern),
                 timeout_sec=5,
                 err_msg=f"Failed to find disk space change: {disk_space_change}"
             )
 
         def check_health_monitor_backend(fail_msg: str):
             # This is an indirect check for the health monitor backend because
-            # RedpandaService.healthy() uses the prometheus metric, vectorized_cluster_partition_under_replicated_replicas,
+            # FunesService.healthy() uses the prometheus metric, vectorized_cluster_partition_under_replicated_replicas,
             # which is measured in the health monitor backend.
-            wait_until(lambda: self.redpanda.healthy(),
+            wait_until(lambda: self.funes.healthy(),
                        timeout_sec=20,
                        backoff_sec=1,
                        err_msg=fail_msg)
@@ -176,10 +176,10 @@ class WriteRejectTest(RedpandaTest):
             fail_msg="Cluster is not healthy before health monitor refresh")
 
         self.logger.debug("Check health monitor refresh")
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             result_raw = self.admin.refresh_disk_health_info(node=node)
             self.logger.debug(result_raw)
-            search_logs_with_timeout(self.redpanda,
+            search_logs_with_timeout(self.funes,
                                      "Refreshing disk health info")
             assert result_raw.status_code == requests.codes.ok
 
@@ -207,10 +207,10 @@ class FullDiskTest(EndToEndTest):
             "metrics_reporter_report_interval": 1000,
         }
         super().__init__(test_context=test_ctx, extra_rp_conf=extra_rp_conf)
-        self.start_redpanda(num_nodes=3)
-        assert self.redpanda
-        self.pm = PartitionMetrics(self.redpanda)
-        self.full_disk = FullDiskHelper(self.logger, self.redpanda)
+        self.start_funes(num_nodes=3)
+        assert self.funes
+        self.pm = PartitionMetrics(self.funes)
+        self.full_disk = FullDiskHelper(self.logger, self.funes)
         self.bytes_prod = ExpectRate(lambda: self.pm.bytes_produced(),
                                      self.logger)
 
@@ -221,7 +221,7 @@ class FullDiskTest(EndToEndTest):
         for _ in range(0, 5):
             topics.append(TopicSpec(partition_count=random.randint(1, 10)))
         # chose one topic to run the main workload
-        DefaultClient(self.redpanda).create_topic(topics)
+        DefaultClient(self.funes).create_topic(topics)
         self.topic = random.choice(topics).name
         self.start_producer(1)
         self.start_consumer(1)
@@ -249,7 +249,7 @@ class FullDiskTest(EndToEndTest):
             self.full_disk.clear_low_space()
 
 
-class FullDiskReclaimTest(RedpandaTest):
+class FullDiskReclaimTest(FunesTest):
     """
     Test that full disk alert triggers eager gc to reclaim space
     """
@@ -273,21 +273,21 @@ class FullDiskReclaimTest(RedpandaTest):
         The test works as follows:
 
         1. Create a topic with lots of data eligible for reclaim
-        2. Configure Redpanda to not run compaction housekeeping
+        2. Configure Funes to not run compaction housekeeping
         3. Verify that after some amount of time no data is reclaimed
         4. Trigger a low disk space alert
         5. Observe that data is reclaimed from disk
         """
         nbytes = lambda mb: mb * 2**20
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         def observed_data_size(pred):
-            observed = self.redpanda.data_stat(node)
+            observed = self.funes.data_stat(node)
             observed_total = sum(s for _, s in observed)
             return pred(observed_total)
 
         # write around 30 megabytes into the topic
-        produce_total_bytes(self.redpanda, self.topic, nbytes(30))
+        produce_total_bytes(self.funes, self.topic, nbytes(30))
 
         # wait until all that data shows up. add some fuzz factor to avoid
         # timeouts due to placement skew or other such issues.
@@ -308,7 +308,7 @@ class FullDiskReclaimTest(RedpandaTest):
         # now trigger the disk space alert on the same node. unlike the 30
         # second delay above, we should almost immediately observe the data
         # be reclaimed from disk.
-        full_disk = FullDiskHelper(self.logger, self.redpanda)
+        full_disk = FullDiskHelper(self.logger, self.funes)
         full_disk.trigger_low_space(node=node)
 
         # now wait until the data drops below 1 mb
@@ -317,7 +317,7 @@ class FullDiskReclaimTest(RedpandaTest):
                    backoff_sec=2)
 
 
-class LocalDiskReportTimeTest(RedpandaTest):
+class LocalDiskReportTimeTest(FunesTest):
     topics = (TopicSpec(segment_bytes=2**20,
                         partition_count=1,
                         retention_bytes=-1,
@@ -330,18 +330,18 @@ class LocalDiskReportTimeTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_target_min_capacity_wanted_time_based(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         default_segment_size = admin.get_cluster_config()["log_segment_size"]
 
         # produce roughly 30mb at 0.5mb/sec
-        kafka_tools = KafkaCliTools(self.redpanda)
-        kafka_tools.produce(self.topic,
+        sql_tools = SQLCliTools(self.funes)
+        sql_tools.produce(self.topic,
                             30 * 1024,
                             1024,
                             throughput=500,
                             acks=-1)
 
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
         reported = admin.get_local_storage_usage(
             node)["target_min_capacity_wanted"]
 
@@ -363,7 +363,7 @@ class LocalDiskReportTimeTest(RedpandaTest):
         ), f"diff {diff} reported {reported} expected {expected} default seg size {default_segment_size}"
 
 
-class LocalDiskReportTest(RedpandaTest):
+class LocalDiskReportTest(FunesTest):
     topics = (
         TopicSpec(segment_bytes=2**30,
                   retention_bytes=2 * 2**30,
@@ -379,12 +379,12 @@ class LocalDiskReportTest(RedpandaTest):
         super().__init__(test_context=test_ctx, extra_rp_conf=extra_rp_conf)
 
     def check(self, threshold):
-        admin = Admin(self.redpanda)
-        for node in self.redpanda.nodes:
+        admin = Admin(self.funes)
+        for node in self.funes.nodes:
             reported = admin.get_local_storage_usage(node)
             reported_total = reported["data"] + reported["index"] + reported[
                 "compaction"]
-            observed = self.redpanda.data_stat(node)
+            observed = self.funes.data_stat(node)
             observed_total = sum(s for _, s in observed)
             diff = observed_total - reported_total
             pct_diff = abs(diff / reported_total)
@@ -397,9 +397,9 @@ class LocalDiskReportTest(RedpandaTest):
         """
         Test minimum capacity wanted calculation.
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         default_segment_size = admin.get_cluster_config()["log_segment_size"]
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         # minimum based on retention bytes policy
         reported = admin.get_local_storage_usage(
@@ -420,12 +420,12 @@ class LocalDiskReportTest(RedpandaTest):
         Test that the target min storage capcity reflects changes to reserved min
         segments configuration option.
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         default_segment_size = admin.get_cluster_config()["log_segment_size"]
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         for min_segments in (1, 2, 3):
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 dict(storage_reserve_min_segments=min_segments))
             reported = admin.get_local_storage_usage(
                 node)["target_min_capacity"]
@@ -450,31 +450,31 @@ class LocalDiskReportTest(RedpandaTest):
 
         for _ in range(2):
             # write some data
-            self.kafka_tools = KafkaCliTools(self.redpanda)
+            self.sql_tools = SQLCliTools(self.funes)
             for topic in self.topics:
-                self.kafka_tools.produce(topic.name, 10000, 1024)
+                self.sql_tools.produce(topic.name, 10000, 1024)
 
             wait_until(lambda: self.check(0.05), timeout_sec=10, backoff_sec=5)
 
             # restart the cluster
-            self.redpanda.rolling_restart_nodes(self.redpanda.nodes)
+            self.funes.rolling_restart_nodes(self.funes.nodes)
 
             wait_until(lambda: self.check(0.05), timeout_sec=10, backoff_sec=5)
 
 
-class DiskStatsOverrideTest(RedpandaTest):
+class DiskStatsOverrideTest(FunesTest):
     @cluster(num_nodes=3)
     def test_disk_stat_total_overrides(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         # current size
-        orig_stat = admin.get_disk_stat("data", self.redpanda.nodes[0])
+        orig_stat = admin.get_disk_stat("data", self.funes.nodes[0])
         # set total size to 16 KB smaller
         admin.set_disk_stat_override("data",
-                                     self.redpanda.nodes[0],
+                                     self.funes.nodes[0],
                                      total_bytes=orig_stat["total_bytes"] -
                                      (16 * 1024))
         # updated current size
-        stat = admin.get_disk_stat("data", self.redpanda.nodes[0])
+        stat = admin.get_disk_stat("data", self.funes.nodes[0])
 
         # the sizes aren't exact because there are conversion that involve
         # rounding to block size. use a 4K block threshold to test.
@@ -484,15 +484,15 @@ class DiskStatsOverrideTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_disk_stat_free_overrides(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         # current size
-        orig_stat = admin.get_disk_stat("data", self.redpanda.nodes[0])
+        orig_stat = admin.get_disk_stat("data", self.funes.nodes[0])
         # set a fixed free bytes
         admin.set_disk_stat_override("data",
-                                     self.redpanda.nodes[0],
+                                     self.funes.nodes[0],
                                      free_bytes=orig_stat["total_bytes"])
         # updated current size
-        stat = admin.get_disk_stat("data", self.redpanda.nodes[0])
+        stat = admin.get_disk_stat("data", self.funes.nodes[0])
 
         # the sizes aren't exact because there are conversion that involve
         # rounding to block size. use a 4K block threshold to test.
@@ -501,19 +501,19 @@ class DiskStatsOverrideTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_disk_stat_free_delta_overrides(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         # current size
-        orig_stat = admin.get_disk_stat("data", self.redpanda.nodes[0])
+        orig_stat = admin.get_disk_stat("data", self.funes.nodes[0])
         # set a free bytes adjustment
         # fix free bytes too so this works reliably with noisy neighbors
         admin.set_disk_stat_override(
             "data",
-            self.redpanda.nodes[0],
+            self.funes.nodes[0],
             free_bytes=orig_stat["free_bytes"],
             free_bytes_delta=(orig_stat["total_bytes"] -
                               orig_stat["free_bytes"]))
         # updated current size
-        stat = admin.get_disk_stat("data", self.redpanda.nodes[0])
+        stat = admin.get_disk_stat("data", self.funes.nodes[0])
 
         # the sizes aren't exact because there are conversion that involve
         # rounding to block size. use a 4K block threshold to test.
@@ -521,21 +521,21 @@ class DiskStatsOverrideTest(RedpandaTest):
         assert delta <= 4096
 
 
-class LogStorageMaxSizeSI(RedpandaTest):
+class LogStorageMaxSizeSI(FunesTest):
     def __init__(self, test_context, *args, **kwargs):
         super().__init__(test_context, *args, **kwargs)
 
     def setUp(self):
-        # defer redpanda startup to the test
+        # defer funes startup to the test
         pass
 
-    def _kafka_size_on_disk(self, node):
+    def _sql_size_on_disk(self, node):
         total_bytes = 0
-        observed = list(self.redpanda.data_stat(node))
+        observed = list(self.funes.data_stat(node))
         for file, size in observed:
             if len(file.parents) == 1:
                 continue
-            if file.parents[-2].name == "kafka":
+            if file.parents[-2].name == "sql":
                 total_bytes += size
         return total_bytes
 
@@ -549,7 +549,7 @@ class LogStorageMaxSizeSI(RedpandaTest):
         uploaded into s3 will become eligible for forced GC in order to meet the
         target size.
         """
-        # start redpanda with specific config like segment size
+        # start funes with specific config like segment size
         si_settings = SISettings(test_context=self.test_context,
                                  log_segment_size=log_segment_size,
                                  fast_uploads=True)
@@ -559,9 +559,9 @@ class LogStorageMaxSizeSI(RedpandaTest):
             'retention_local_target_capacity_percent': 100,
             'retention_local_trim_interval': 1000,  # every second
         }
-        self.redpanda.set_extra_rp_conf(extra_rp_conf)
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start()
+        self.funes.set_extra_rp_conf(extra_rp_conf)
+        self.funes.set_si_settings(si_settings)
+        self.funes.start()
 
         # test parameters
         topic_name = "target-size-topic"
@@ -578,7 +578,7 @@ class LogStorageMaxSizeSI(RedpandaTest):
         data_size = target_size * 3
 
         # make the sink topic
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(
             topic_name,
             partitions=partition_count,
@@ -590,7 +590,7 @@ class LogStorageMaxSizeSI(RedpandaTest):
         # write `data_size` bytes
         t1 = time()
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic_name,
                                     msg_size=msg_size,
                                     msg_count=msg_count,
@@ -600,22 +600,22 @@ class LogStorageMaxSizeSI(RedpandaTest):
             f"Produced {data_size} bytes in {produce_duration} seconds, {(data_size/produce_duration)/1000000.0:.2f}MB/s"
         )
 
-        quiesce_uploads(self.redpanda, [t.name for t in self.topics],
+        quiesce_uploads(self.funes, [t.name for t in self.topics],
                         timeout_sec=30)
 
         # verify approx same amount of data on disk. adds on some fuzz factor
-        total = sum(self._kafka_size_on_disk(n) for n in self.redpanda.nodes)
-        total += fuzz_size * len(self.redpanda.nodes)
+        total = sum(self._sql_size_on_disk(n) for n in self.funes.nodes)
+        total += fuzz_size * len(self.funes.nodes)
         assert total > (data_size * replica_count)
 
         # set the log storage target size. system will try to meet this target.
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             dict(retention_local_target_capacity_bytes=target_size, ))
 
         # now go write another `data_size` bytes
         t1 = time()
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic_name,
                                     msg_size=msg_size,
                                     msg_count=msg_count,
@@ -634,9 +634,9 @@ class LogStorageMaxSizeSI(RedpandaTest):
         # Exception to this case are topics created with `cleanup.policy=compact`.
         def target_size_reached():
             total = sum(
-                self._kafka_size_on_disk(n) for n in self.redpanda.nodes)
+                self._sql_size_on_disk(n) for n in self.funes.nodes)
             target = ((target_size + 2 * log_segment_size) *
-                      len(self.redpanda.nodes))
+                      len(self.funes.nodes))
             below = total < target
             if not below:
                 self.logger.debug(
@@ -647,14 +647,14 @@ class LogStorageMaxSizeSI(RedpandaTest):
         # give it plenty of time. on debug it is hella slow
         wait_until(target_size_reached, timeout_sec=30, backoff_sec=5)
         assert min_local_start_offset(
-            self.redpanda, topic_name
+            self.funes, topic_name
         ) > 0, "expecting disk storage to be reduced by advancing local offsets (local log prefix trim)"
 
 
-def min_local_start_offset(redpanda: RedpandaService, topic: str):
+def min_local_start_offset(funes: FunesService, topic: str):
     min_offset = None
-    for node in redpanda.nodes:
-        for p in local_start_offsets(redpanda, node, topic):
+    for node in funes.nodes:
+        for p in local_start_offsets(funes, node, topic):
             if min_offset is None:
                 min_offset = p['local_log_start_offset']
             else:
@@ -662,9 +662,9 @@ def min_local_start_offset(redpanda: RedpandaService, topic: str):
     return min_offset
 
 
-def local_start_offsets(redpanda: RedpandaService, node: ClusterNode,
+def local_start_offsets(funes: FunesService, node: ClusterNode,
                         topic: str):
-    admin = Admin(redpanda, default_node=node)
+    admin = Admin(funes, default_node=node)
     partitions = admin.get_partitions(topic)
 
     for p in partitions:

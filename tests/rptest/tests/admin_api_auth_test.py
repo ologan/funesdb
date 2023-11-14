@@ -10,24 +10,24 @@
 import requests
 
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.tests.pandaproxy_test import PandaProxyEndpoints
+from rptest.tests.funes_test import FunesTest
+from rptest.tests.funesproxy_test import FunesProxyEndpoints
 from rptest.clients.rpk import RpkTool
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import SaslCredentials, SecurityConfig
+from rptest.services.funes import SaslCredentials, SecurityConfig
 from rptest.util import expect_exception, expect_http_error
 
 from ducktape.utils.util import wait_until
 
 
-def create_user_and_wait(redpanda, admin: Admin, creds: SaslCredentials):
+def create_user_and_wait(funes, admin: Admin, creds: SaslCredentials):
     admin.create_user(*creds)
 
     def user_exists_everywhere():
-        for node in redpanda.nodes:
-            users = redpanda._admin.list_users(node=node)
+        for node in funes.nodes:
+            users = funes._admin.list_users(node=node)
             if creds.username not in users:
-                redpanda.logger.info(f"{creds.username} not in {users}")
+                funes.logger.info(f"{creds.username} not in {users}")
                 return False
 
         return True
@@ -40,30 +40,30 @@ def create_user_and_wait(redpanda, admin: Admin, creds: SaslCredentials):
 ALICE = SaslCredentials("alice", "itsMeH0nest", "SCRAM-SHA-256")
 
 
-class AdminApiAuthTest(RedpandaTest):
+class AdminApiAuthTest(FunesTest):
     """
-    Test the behaviour of a redpanda cluster with admin API authentication
+    Test the behaviour of a funes cluster with admin API authentication
     enabled.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
-        self.superuser = self.redpanda.SUPERUSER_CREDENTIALS
+        self.superuser = self.funes.SUPERUSER_CREDENTIALS
 
-        self.superuser_admin = Admin(self.redpanda,
+        self.superuser_admin = Admin(self.funes,
                                      auth=(self.superuser.username,
                                            self.superuser.password))
-        self.regular_user_admin = Admin(self.redpanda,
+        self.regular_user_admin = Admin(self.funes,
                                         auth=(ALICE.username, ALICE.password))
-        self.anonymous_admin = Admin(self.redpanda)
+        self.anonymous_admin = Admin(self.funes)
 
     def setUp(self):
         super().setUp()
-        create_user_and_wait(self.redpanda, self.anonymous_admin, ALICE)
+        create_user_and_wait(self.funes, self.anonymous_admin, ALICE)
 
-        self.redpanda.set_cluster_config({'admin_api_require_auth': True})
+        self.funes.set_cluster_config({'admin_api_require_auth': True})
 
     @cluster(num_nodes=3)
     def test_superuser_access(self):
@@ -84,7 +84,7 @@ class AdminApiAuthTest(RedpandaTest):
 
         # An anonymous user may access unauthenticated endpoints
         self.anonymous_admin.get_status_ready()
-        self.redpanda.metrics(self.redpanda.nodes[0])
+        self.funes.metrics(self.funes.nodes[0])
 
     @cluster(num_nodes=3)
     def test_scram_sha512(self):
@@ -96,64 +96,64 @@ class AdminApiAuthTest(RedpandaTest):
 
         charles = SaslCredentials("charles", "highEntropyHipster",
                                   "SCRAM-SHA-512")
-        create_user_and_wait(self.redpanda, self.superuser_admin, charles)
-        self.redpanda.set_cluster_config({
+        create_user_and_wait(self.funes, self.superuser_admin, charles)
+        self.funes.set_cluster_config({
             'superusers':
-            [charles.username, self.redpanda.SUPERUSER_CREDENTIALS.username]
+            [charles.username, self.funes.SUPERUSER_CREDENTIALS.username]
         })
 
-        charles_admin = Admin(self.redpanda,
+        charles_admin = Admin(self.funes,
                               auth=(charles.username, charles.password))
         # Hit an endpoint requiring superuser
         charles_admin.get_cluster_config()
 
 
-class AdminApiAuthEnablementTest(RedpandaTest):
+class AdminApiAuthEnablementTest(FunesTest):
     """
-    Test redpanda's rules for when admin API auth may be switched on
+    Test funes's rules for when admin API auth may be switched on
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     @cluster(num_nodes=3)
     def test_no_superusers(self):
-        anonymous_admin = Admin(self.redpanda)
+        anonymous_admin = Admin(self.funes)
 
         # Nobody may enable auth if there are no superusers
-        self.redpanda.set_cluster_config({'superusers': []})
+        self.funes.set_cluster_config({'superusers': []})
         with expect_http_error(400):
-            self.redpanda.set_cluster_config({'admin_api_require_auth': True})
+            self.funes.set_cluster_config({'admin_api_require_auth': True})
         with expect_http_error(400):
             anonymous_admin.patch_cluster_config(
                 {'admin_api_require_auth': True})
 
         # Once we are a superuser, we can enable auth
-        self.redpanda.set_cluster_config(
-            {'superusers': [self.redpanda.SUPERUSER_CREDENTIALS.username]})
-        self.redpanda.set_cluster_config({'admin_api_require_auth': True})
+        self.funes.set_cluster_config(
+            {'superusers': [self.funes.SUPERUSER_CREDENTIALS.username]})
+        self.funes.set_cluster_config({'admin_api_require_auth': True})
 
         # Once auth is enabled, we cannot clear the superusers list
         with expect_http_error(400):
-            self.redpanda.set_cluster_config({'superusers': []})
+            self.funes.set_cluster_config({'superusers': []})
 
     @cluster(num_nodes=3)
     def test_not_a_superuser(self):
-        anonymous_admin = Admin(self.redpanda)
+        anonymous_admin = Admin(self.funes)
 
         # Nobody may enable auth unless they are themselves in the superusers list
-        self.redpanda.set_cluster_config({'superusers': ['bob']})
+        self.funes.set_cluster_config({'superusers': ['bob']})
         with expect_http_error(400):
-            self.redpanda.set_cluster_config({'admin_api_require_auth': True})
+            self.funes.set_cluster_config({'admin_api_require_auth': True})
         with expect_http_error(400):
             anonymous_admin.patch_cluster_config(
                 {'admin_api_require_auth': True})
 
         # A superuser may enable auth
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             'superusers':
-            ['bob', self.redpanda.SUPERUSER_CREDENTIALS.username]
+            ['bob', self.funes.SUPERUSER_CREDENTIALS.username]
         })
-        self.redpanda.set_cluster_config({'admin_api_require_auth': True})
+        self.funes.set_cluster_config({'admin_api_require_auth': True})
 
     @cluster(num_nodes=3)
     def test_combined_request(self):
@@ -161,39 +161,39 @@ class AdminApiAuthEnablementTest(RedpandaTest):
         Check that the API accepts a config update that simultaneously updates superusers
         and enables auth.
         """
-        regular_user_admin = Admin(self.redpanda,
+        regular_user_admin = Admin(self.funes,
                                    auth=(ALICE.username, ALICE.password))
 
         # We can use our regular user for admin API access right away, because
         # we didn't enable authentication yet.
-        create_user_and_wait(self.redpanda, regular_user_admin, ALICE)
+        create_user_and_wait(self.funes, regular_user_admin, ALICE)
 
         regular_user_admin.patch_cluster_config({
             'admin_api_require_auth':
             True,
             "superusers":
-            [self.redpanda.SUPERUSER_CREDENTIALS.username, ALICE.username]
+            [self.funes.SUPERUSER_CREDENTIALS.username, ALICE.username]
         })
 
 
-class AdminApiListUsersTest(PandaProxyEndpoints):
+class AdminApiListUsersTest(FunesProxyEndpoints):
     def __init__(self, context):
         security = SecurityConfig()
-        security.kafka_enable_authorization = True
+        security.sql_enable_authorization = True
         security.endpoint_authn_method = 'sasl'
         security.auto_auth = True
 
         super(AdminApiListUsersTest, self).__init__(context, security=security)
 
-        self.superuser = self.redpanda.SUPERUSER_CREDENTIALS
-        self.superuser_admin = Admin(self.redpanda,
+        self.superuser = self.funes.SUPERUSER_CREDENTIALS
+        self.superuser_admin = Admin(self.funes,
                                      auth=(self.superuser.username,
                                            self.superuser.password))
 
     @cluster(num_nodes=3)
     def test_list_users(self):
-        # Create ephemeral users for each pandaproxy instance
-        pp_hosts = [node.account.hostname for node in self.redpanda.nodes]
+        # Create ephemeral users for each funesproxy instance
+        pp_hosts = [node.account.hostname for node in self.funes.nodes]
         for host in pp_hosts:
             res = requests.get(f"http://{host}:8082/status/ready")
             assert res.status_code == requests.codes.ok

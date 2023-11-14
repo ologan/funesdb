@@ -37,9 +37,9 @@ class Workload(str, Enum):
 class CompactedVerifier(Service):
     logs = {"rw_stdout_stderr": {"path": OUTPUT_LOG, "collect_default": True}}
 
-    def __init__(self, context, redpanda, workload):
+    def __init__(self, context, funes, workload):
         super(CompactedVerifier, self).__init__(context, num_nodes=1)
-        self._redpanda = redpanda
+        self._funes = funes
         self._is_done = False
         self._node = None
         if workload not in Workload:
@@ -210,7 +210,7 @@ class CompactedVerifier(Service):
                 return False
             for partition in info["partitions"]:
                 if not partition["consumed"]:
-                    self._redpanda.logger.debug(
+                    self._funes.logger.debug(
                         f"Consumption of partition {partition['partition']} isn't finished"
                     )
                     return False
@@ -236,13 +236,13 @@ class CompactedVerifier(Service):
             )
         ip = self._node.account.hostname
         url = f"http://{ip}:8080/info"
-        self._redpanda.logger.debug(f"Dispatching {url}")
+        self._funes.logger.debug(f"Dispatching {url}")
         r = requests.get(url)
         if r.status_code != 200:
             raise Exception(
                 f"unexpected status code: {r.status_code} content: {r.content}"
             )
-        self._redpanda.logger.debug(f"Received {json.dumps(r.json())}")
+        self._funes.logger.debug(f"Received {json.dumps(r.json())}")
         return r.json()
 
     def remote_info(self):
@@ -254,7 +254,7 @@ class CompactedVerifier(Service):
             except ConsistencyViolationException:
                 raise
             except:
-                self._redpanda.logger.debug(
+                self._funes.logger.debug(
                     "Got error on fetching info, retrying?!", exc_info=True)
             return (False, None)
 

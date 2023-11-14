@@ -311,7 +311,7 @@ partition_manager::do_shutdown(ss::lw_shared_ptr<partition> partition) {
         vassert(
           false,
           "error shutting down partition {},  "
-          "partition manager state: {}, error: {} - terminating redpanda",
+          "partition manager state: {}, error: {} - terminating funes",
           partition->ntp(),
           *this,
           std::current_exception());

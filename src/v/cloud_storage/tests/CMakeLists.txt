@@ -58,7 +58,7 @@ rp_test(
     v::storage_test_utils
     v::cloud_roles
     v::application
-    v::kafka_test_utils
+    v::sql_test_utils
     v::http_test_utils
   ARGS "-- -c 1"
   LABELS cloud_storage

@@ -170,7 +170,7 @@ FIXTURE_TEST(
 
     // simulate admin deleting log folders. For more details look here:
     //
-    // https://github.com/redpanda-data/redpanda/issues/321
+    // https://github.com/redpanda-data/funes/issues/321
 
     remove_all_data();
 
@@ -190,7 +190,7 @@ FIXTURE_TEST(
 
     // simulate admin deleting log folders. For more details look here:
     //
-    // https://github.com/redpanda-data/redpanda/issues/321
+    // https://github.com/redpanda-data/funes/issues/321
 
     remove_data({model::node_id(1)});
 

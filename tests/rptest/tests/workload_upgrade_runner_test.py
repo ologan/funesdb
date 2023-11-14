@@ -13,13 +13,13 @@ from typing import Any, Optional
 from rptest.clients.offline_log_viewer import OfflineLogViewer
 from rptest.services.cluster import cluster
 from rptest.services.admin import Admin
-from rptest.services.redpanda import SISettings, CloudStorageType, get_cloud_storage_type
-from rptest.services.redpanda_installer import RedpandaInstaller, RedpandaVersion, RedpandaVersionTriple
+from rptest.services.funes import SISettings, CloudStorageType, get_cloud_storage_type
+from rptest.services.funes_installer import FunesInstaller, FunesVersion, FunesVersionTriple
 from rptest.services.workload_protocol import PWorkload
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.tests.workload_producer_consumer import ProducerConsumerWorkload
 from rptest.tests.workload_dummy import DummyWorkload, MinimalWorkload
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.tests.workload_license import LicenseWorkload
 from rptest.tests.workload_upgrade_config_defaults import SetLogSegmentMsMinConfig
 from rptest.utils.mode_checks import skip_debug_mode
@@ -27,14 +27,14 @@ from ducktape.mark import matrix, ok_to_fail
 
 
 def expand_version(
-        installer: RedpandaInstaller,
-        version: Optional[RedpandaVersion]) -> RedpandaVersionTriple:
+        installer: FunesInstaller,
+        version: Optional[FunesVersion]) -> FunesVersionTriple:
     if version is None:
         # return latest unsupported version
         return installer.latest_for_line(
             installer.latest_unsupported_line())[0]
 
-    if version == RedpandaInstaller.HEAD:
+    if version == FunesInstaller.HEAD:
         return installer.head_version()
 
     if len(version) == 3:
@@ -53,8 +53,8 @@ class WorkloadAdapter(PWorkload):
     STOPPED = "stopped"
     STOPPED_WITH_ERROR = "stopped_with_error"
 
-    def __init__(self, workload: PWorkload, ctx: RedpandaTest,
-                 installer: RedpandaInstaller) -> None:
+    def __init__(self, workload: PWorkload, ctx: FunesTest,
+                 installer: FunesInstaller) -> None:
         self.workload = workload
         self.ctx = ctx
         self.installer = installer
@@ -128,7 +128,7 @@ class WorkloadAdapter(PWorkload):
                                    PWorkload.end.__name__)
 
     def on_partial_cluster_upgrade(self,
-                                   versions: dict[Any, RedpandaVersionTriple]):
+                                   versions: dict[Any, FunesVersionTriple]):
         res = self._exec_workload_method(
             self.state, PWorkload.on_partial_cluster_upgrade.__name__,
             versions)
@@ -137,13 +137,13 @@ class WorkloadAdapter(PWorkload):
     def get_workload_name(self):
         return self.workload.get_workload_name()
 
-    def on_cluster_upgraded(self, version: RedpandaVersionTriple):
+    def on_cluster_upgraded(self, version: FunesVersionTriple):
         res = self._exec_workload_method(
             self.state, PWorkload.on_cluster_upgraded.__name__, version)
         return res if res is not None else PWorkload.DONE
 
 
-class RedpandaUpgradeTest(PreallocNodesTest):
+class FunesUpgradeTest(PreallocNodesTest):
     def __init__(self, test_context):
         # si_settings are needed for LicenseWorkload
         super().__init__(test_context=test_context,
@@ -151,15 +151,15 @@ class RedpandaUpgradeTest(PreallocNodesTest):
                          si_settings=SISettings(test_context),
                          node_prealloc_count=1,
                          node_ready_timeout_s=60)
-        # it is expected that older versions of redpanda will generate this kind of errors, at least while we keep testing from v23.x
-        self.redpanda.si_settings.set_expected_damage({
+        # it is expected that older versions of funes will generate this kind of errors, at least while we keep testing from v23.x
+        self.funes.si_settings.set_expected_damage({
             'ntr_no_topic_manifest',
             'ntpr_no_manifest',
             'unknown_keys',
             'missing_segments',
         })
 
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
 
         # workloads that will be executed during this test
         workloads: list[PWorkload] = [
@@ -177,7 +177,7 @@ class RedpandaUpgradeTest(PreallocNodesTest):
             for w in workloads
         ]
 
-        self.upgrade_steps: list[RedpandaVersionTriple] = []
+        self.upgrade_steps: list[FunesVersionTriple] = []
 
     def setUp(self):
         # at the end of setUp, self.upgrade_steps will look like this:
@@ -201,7 +201,7 @@ class RedpandaUpgradeTest(PreallocNodesTest):
         ]
 
         # for each version, include a downgrade step to previous patch, then go to latest patch
-        self.upgrade_steps: list[RedpandaVersionTriple] = []
+        self.upgrade_steps: list[FunesVersionTriple] = []
         prev = forward_upgrade_steps[0]
         for v in forward_upgrade_steps:
             if v[0:2] != prev[0:2] and prev[2] > 1:
@@ -216,8 +216,8 @@ class RedpandaUpgradeTest(PreallocNodesTest):
 
     def _check_workload_list(self,
                              to_check_list: list[WorkloadAdapter],
-                             version_param: RedpandaVersionTriple
-                             | dict[Any, RedpandaVersionTriple],
+                             version_param: FunesVersionTriple
+                             | dict[Any, FunesVersionTriple],
                              partial_update: bool = False):
         # run checks on all the workloads in the to_check_list
         # each check could take multiple runs, so loop on a list of it until exhaustion
@@ -248,17 +248,17 @@ class RedpandaUpgradeTest(PreallocNodesTest):
                 time.sleep(delay)
 
     def cluster_version(self) -> int:
-        return Admin(self.redpanda).get_features()['cluster_version']
+        return Admin(self.funes).get_features()['cluster_version']
 
     @skip_debug_mode
     @cluster(num_nodes=4)
     # TODO(vlad): Allow this test on ABS once we have at least two versions
-    # of Redpanda that support Azure Hierarchical Namespaces.
+    # of Funes that support Azure Hierarchical Namespaces.
     @matrix(cloud_storage_type=get_cloud_storage_type(
         applies_only_on=[CloudStorageType.S3]))
     def test_workloads_through_releases(self, cloud_storage_type):
         # this callback will be called between each upgrade, in a mixed version state
-        def mid_upgrade_check(raw_versions: dict[Any, RedpandaVersion]):
+        def mid_upgrade_check(raw_versions: dict[Any, FunesVersion]):
             rp_versions = {
                 k: expand_version(self.installer, v)
                 for k, v in raw_versions.items()
@@ -325,8 +325,8 @@ class RedpandaUpgradeTest(PreallocNodesTest):
 
         # Validate that the data structures written by a mixture of historical
         # versions remain readable by our current debug tools
-        log_viewer = OfflineLogViewer(self.redpanda)
-        for node in self.redpanda.nodes:
+        log_viewer = OfflineLogViewer(self.funes)
+        for node in self.funes.nodes:
             controller_records = log_viewer.read_controller(node=node)
             self.logger.info(
                 f"Read {len(controller_records)} controller records from node {node.name} successfully"

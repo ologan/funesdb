@@ -9,7 +9,7 @@ from ducktape.utils.util import wait_until
 
 from rptest.services.admin import Admin
 from rptest.services.failure_injector import FailureSpec, make_failure_injector
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 
 @dataclasses.dataclass
@@ -45,12 +45,12 @@ class DisruptiveAction:
 
     is_reversible = False
 
-    def __init__(self, redpanda: RedpandaService, config: ActionConfig,
+    def __init__(self, funes: FunesService, config: ActionConfig,
                  admin: Admin):
         self.admin = admin
         self.config = config
-        self.redpanda = redpanda
-        self.nodes_for_action = set(self.redpanda.nodes)
+        self.funes = funes
+        self.nodes_for_action = set(self.funes.nodes)
         self.affected_nodes = set()
         self.recovered_nodes = set()
         self.last_affected_node = None
@@ -64,8 +64,8 @@ class DisruptiveAction:
     def recover_node(self, node: ClusterNode):
         """
         A node on which the disruptive action had been performed is recovered/restored. This
-        happens for reversible operations such as killing redpanda, where recovery means starting
-        redpanda back up again.
+        happens for reversible operations such as killing funes, where recovery means starting
+        funes back up again.
         """
         self.recovered_nodes.add(node)
         self.affected_nodes.remove(node)
@@ -123,10 +123,10 @@ class ProcessKill(DisruptiveAction):
 
     is_reversible = True
 
-    def __init__(self, redpanda: RedpandaService, config: ActionConfig,
+    def __init__(self, funes: FunesService, config: ActionConfig,
                  admin: Admin):
-        super(ProcessKill, self).__init__(redpanda, config, admin)
-        self.failure_injector = make_failure_injector(self.redpanda)
+        super(ProcessKill, self).__init__(funes, config, admin)
+        self.failure_injector = make_failure_injector(self.funes)
 
     def max_affected_nodes_reached(self):
         return len(self.affected_nodes) >= self.config.max_affected_nodes
@@ -134,7 +134,7 @@ class ProcessKill(DisruptiveAction):
     def do_action(self):
         node = self.target_node()
         if node:
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f'executing action on {node.account.hostname}')
             self.failure_injector.inject_failure(
                 FailureSpec(FailureSpec.FAILURE_KILL, node))
@@ -143,16 +143,16 @@ class ProcessKill(DisruptiveAction):
 
             # Update started_nodes so storage validations are run
             # on the correct set of nodes later.
-            self.redpanda.remove_from_started_nodes(node)
+            self.funes.remove_from_started_nodes(node)
             return node
         else:
-            self.redpanda.logger.warn(f'no usable node')
+            self.funes.logger.warn(f'no usable node')
             return None
 
     def do_reverse_action(self):
         self._start_rp(node=self.last_affected_node)
         self.recover_node(self.last_affected_node)
-        self.redpanda.add_to_started_nodes(self.last_affected_node)
+        self.funes.add_to_started_nodes(self.last_affected_node)
 
         last_affected_node, self.last_affected_node = self.last_affected_node, None
         return last_affected_node
@@ -160,18 +160,18 @@ class ProcessKill(DisruptiveAction):
     def _start_rp(self, node):
         self.failure_injector._start(node)
         wait_until(
-            lambda: self.redpanda.redpanda_pid(node),
+            lambda: self.funes.funes_pid(node),
             timeout_sec=self.PROCESS_START_WAIT_SEC,
             backoff_sec=self.PROCESS_START_WAIT_BACKOFF,
             err_msg=
-            f'Failed to start redpanda process on {node.account.hostname}')
+            f'Failed to start funes process on {node.account.hostname}')
 
 
 class ActionInjectorThread(Thread):
     def __init__(
         self,
         config: ActionConfig,
-        redpanda: RedpandaService,
+        funes: FunesService,
         disruptive_action: DisruptiveAction,
         *args,
         **kwargs,
@@ -179,7 +179,7 @@ class ActionInjectorThread(Thread):
         super().__init__(*args, **kwargs)
         self.daemon = True
         self.disruptive_action = disruptive_action
-        self.redpanda = redpanda
+        self.funes = funes
         self.config = config
         self._stop_requested = Event()
         self.action_triggered = False
@@ -194,15 +194,15 @@ class ActionInjectorThread(Thread):
 
     def _run(self):
         def all_nodes_started(nodes):
-            statuses = [self.redpanda.is_node_ready(node) for node in nodes]
+            statuses = [self.funes.is_node_ready(node) for node in nodes]
             return all(status is True for status in statuses)
 
-        wait_until(lambda: all_nodes_started(self.redpanda.nodes),
+        wait_until(lambda: all_nodes_started(self.funes.nodes),
                    timeout_sec=self.config.cluster_start_lead_time_sec,
                    backoff_sec=2,
                    err_msg='Cluster not ready to begin actions')
 
-        self.redpanda.logger.info('cluster is ready, starting action loop')
+        self.funes.logger.info('cluster is ready, starting action loop')
 
         while not self._stop_requested.is_set():
             if self.disruptive_action.action():
@@ -222,10 +222,10 @@ class ActionInjectorThread(Thread):
         # the node to become available, it just starts the process.  In order
         # for subsequent code to count on the cluster being able to respond
         # to API requests, we must additionally wait for readiness.
-        self.redpanda.logger.info(
-            f"Stopping/pausing failure injector, waiting for nodes {[n.name for n in self.redpanda.started_nodes()]} to be ready"
+        self.funes.logger.info(
+            f"Stopping/pausing failure injector, waiting for nodes {[n.name for n in self.funes.started_nodes()]} to be ready"
         )
-        wait_until(lambda: all_nodes_started(self.redpanda.started_nodes()),
+        wait_until(lambda: all_nodes_started(self.funes.started_nodes()),
                    timeout_sec=self.config.cluster_start_lead_time_sec,
                    backoff_sec=0.5,
                    err_msg='Cluster did not recover after failures')
@@ -240,21 +240,21 @@ class ActionInjectorThread(Thread):
 
 
 class ActionCtx:
-    def __init__(self, config: ActionConfig, redpanda: RedpandaService,
+    def __init__(self, config: ActionConfig, funes: FunesService,
                  disruptive_action: DisruptiveAction):
-        self.redpanda = redpanda
+        self.funes = funes
         self.config = config
         if config.max_affected_nodes is None:
-            config.max_affected_nodes = len(redpanda.nodes) // 2
-        self.thread = ActionInjectorThread(config, redpanda, disruptive_action)
+            config.max_affected_nodes = len(funes.nodes) // 2
+        self.thread = ActionInjectorThread(config, funes, disruptive_action)
 
     def __enter__(self):
-        self.redpanda.logger.info('entering random failure ctx')
+        self.funes.logger.info('entering random failure ctx')
         self.thread.start()
         return self
 
     def __exit__(self, *args, **kwargs):
-        self.redpanda.logger.info('leaving random failure ctx')
+        self.funes.logger.info('leaving random failure ctx')
         self.thread.stop()
         self.thread.join()
 
@@ -267,21 +267,21 @@ class ActionCtx:
                 and self.thread.reverse_action_triggered)
 
 
-def create_context_with_defaults(redpanda: RedpandaService,
+def create_context_with_defaults(funes: FunesService,
                                  op_type,
                                  config: ActionConfig = None,
                                  *args,
                                  **kwargs) -> ActionCtx:
-    admin = Admin(redpanda)
+    admin = Admin(funes)
     config = config or ActionConfig(
         cluster_start_lead_time_sec=20,
         min_time_between_actions_sec=10,
         max_time_between_actions_sec=30,
     )
-    return ActionCtx(config, redpanda,
-                     op_type(redpanda, config, admin, *args, **kwargs))
+    return ActionCtx(config, funes,
+                     op_type(funes, config, admin, *args, **kwargs))
 
 
-def random_process_kills(redpanda: RedpandaService,
+def random_process_kills(funes: FunesService,
                          config: ActionConfig = None) -> ActionCtx:
-    return create_context_with_defaults(redpanda, ProcessKill, config=config)
+    return create_context_with_defaults(funes, ProcessKill, config=config)

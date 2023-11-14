@@ -79,7 +79,7 @@ static const CryptoPP::RSA::PublicKey public_key = []() {
     return public_key;
 }();
 
-/// The redpanda license is comprised of 2 sections seperated by a delimiter.
+/// The funes license is comprised of 2 sections seperated by a delimiter.
 /// The first section is the data section (base64 encoded), the second being the
 /// signature, which is a PCKS1.5 sigature of the contents of the data section.
 static bool

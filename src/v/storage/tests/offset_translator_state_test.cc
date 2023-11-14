@@ -20,7 +20,7 @@
 
 static const model::ntp ntp;
 
-/// Convert to redpanda log offset
+/// Convert to funes log offset
 constexpr model::offset operator"" _rp(unsigned long long o) {
     return model::offset((int64_t)o);
 }

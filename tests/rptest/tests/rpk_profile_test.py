@@ -7,22 +7,22 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.utils.rpk_config import read_rpk_cfg, read_redpanda_cfg
+from rptest.utils.rpk_config import read_rpk_cfg, read_funes_cfg
 from rptest.util import expect_exception
 from rptest.services.cluster import cluster
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk_remote import RpkRemoteTool
 from rptest.clients.rpk import RpkTool
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 
-class RpkProfileTest(RedpandaTest):
+class RpkProfileTest(FunesTest):
     def __init__(self, ctx):
         super(RpkProfileTest, self).__init__(test_context=ctx)
         self._ctx = ctx
-        self._rpk = RpkTool(self.redpanda)
+        self._rpk = RpkTool(self.funes)
 
     @cluster(num_nodes=1)
     def test_e2e_profile(self):
@@ -32,8 +32,8 @@ class RpkProfileTest(RedpandaTest):
         """
         pr1 = "profile_1"
         pr2 = "profile_2"
-        node = self.redpanda.get_node(0)
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.get_node(0)
+        rpk = RpkRemoteTool(self.funes, node)
 
         # Create profiles
         rpk.create_profile(pr1)
@@ -77,35 +77,35 @@ class RpkProfileTest(RedpandaTest):
         topic without using the --brokers flag that is used in every 
         ducktape test so far.
         """
-        node = self.redpanda.get_node(0)
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.get_node(0)
+        rpk = RpkRemoteTool(self.funes, node)
         rpk.create_profile("noflag")
 
-        rpk.set_profile("brokers=" + self.redpanda.brokers())
+        rpk.set_profile("brokers=" + self.funes.brokers())
         rpk.create_topic_no_flags("no-flag-test")
 
         topic_list = self._rpk.list_topics()
         assert "no-flag-test" in topic_list
 
     @cluster(num_nodes=3)
-    def test_create_profile_from_redpanda(self):
+    def test_create_profile_from_funes(self):
         """
-        Create redpanda.yaml, use create rpk profile --from-redpanda
+        Create funes.yaml, use create rpk profile --from-funes
         """
-        node = self.redpanda.get_node(0)
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.get_node(0)
+        rpk = RpkRemoteTool(self.funes, node)
 
-        # We set the broker list in the redpanda.yaml
-        rpk.config_set("rpk.kafka_api.brokers", self.redpanda.brokers_list())
+        # We set the broker list in the funes.yaml
+        rpk.config_set("rpk.sql_api.brokers", self.funes.brokers_list())
 
-        # Then we create the profile based on the redpanda.yaml
-        rpk.create_profile_redpanda("simple_test",
-                                    RedpandaService.NODE_CONFIG_FILE)
+        # Then we create the profile based on the funes.yaml
+        rpk.create_profile_funes("simple_test",
+                                    FunesService.NODE_CONFIG_FILE)
 
         rpk_cfg = read_rpk_cfg(node)
-        redpanda_cfg = read_redpanda_cfg(node)
+        funes_cfg = read_funes_cfg(node)
 
-        rpk_brokers = rpk_cfg["profiles"][0]["kafka_api"]["brokers"]
-        redpanda_brokers = redpanda_cfg["rpk"]["kafka_api"]["brokers"]
+        rpk_brokers = rpk_cfg["profiles"][0]["sql_api"]["brokers"]
+        funes_brokers = funes_cfg["rpk"]["sql_api"]["brokers"]
 
-        assert rpk_brokers == redpanda_brokers
+        assert rpk_brokers == funes_brokers

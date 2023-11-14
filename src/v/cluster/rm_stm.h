@@ -156,12 +156,12 @@ public:
     model::control_record_type
     parse_tx_control_batch(const model::record_batch&) override;
 
-    kafka_stages replicate_in_stages(
+    sql_stages replicate_in_stages(
       model::batch_identity,
       model::record_batch_reader,
       raft::replicate_options);
 
-    ss::future<result<kafka_result>> replicate(
+    ss::future<result<sql_result>> replicate(
       model::batch_identity,
       model::record_batch_reader,
       raft::replicate_options);
@@ -282,34 +282,34 @@ private:
     ss::future<std::optional<abort_snapshot>> load_abort_snapshot(abort_index);
     ss::future<> save_abort_snapshot(abort_snapshot);
 
-    ss::future<result<kafka_result>> do_replicate(
+    ss::future<result<sql_result>> do_replicate(
       model::batch_identity,
       model::record_batch_reader,
       raft::replicate_options,
       ss::lw_shared_ptr<available_promise<>>);
 
-    ss::future<result<kafka_result>> transactional_replicate(
+    ss::future<result<sql_result>> transactional_replicate(
       model::batch_identity, model::record_batch_reader);
 
-    ss::future<result<kafka_result>> do_sync_and_transactional_replicate(
+    ss::future<result<sql_result>> do_sync_and_transactional_replicate(
       producer_ptr,
       model::batch_identity,
       model::record_batch_reader,
       ssx::semaphore_units);
 
-    ss::future<result<kafka_result>> do_transactional_replicate(
+    ss::future<result<sql_result>> do_transactional_replicate(
       model::term_id,
       producer_ptr,
       model::batch_identity,
       model::record_batch_reader);
 
-    ss::future<result<kafka_result>> idempotent_replicate(
+    ss::future<result<sql_result>> idempotent_replicate(
       model::batch_identity,
       model::record_batch_reader,
       raft::replicate_options,
       ss::lw_shared_ptr<available_promise<>>);
 
-    ss::future<result<kafka_result>> do_idempotent_replicate(
+    ss::future<result<sql_result>> do_idempotent_replicate(
       model::term_id,
       producer_ptr,
       model::batch_identity,
@@ -318,7 +318,7 @@ private:
       ss::lw_shared_ptr<available_promise<>>,
       ssx::semaphore_units&);
 
-    ss::future<result<kafka_result>> do_sync_and_idempotent_replicate(
+    ss::future<result<sql_result>> do_sync_and_idempotent_replicate(
       producer_ptr,
       model::batch_identity,
       model::record_batch_reader,
@@ -326,7 +326,7 @@ private:
       ss::lw_shared_ptr<available_promise<>>,
       ssx::semaphore_units);
 
-    ss::future<result<kafka_result>> replicate_msg(
+    ss::future<result<sql_result>> replicate_msg(
       model::record_batch_reader,
       raft::replicate_options,
       ss::lw_shared_ptr<available_promise<>>);
@@ -575,8 +575,8 @@ private:
         return lock_it->second;
     }
 
-    kafka::offset from_log_offset(model::offset old_offset) const;
-    model::offset to_log_offset(kafka::offset new_offset) const;
+    sql::offset from_log_offset(model::offset old_offset) const;
+    model::offset to_log_offset(sql::offset new_offset) const;
 
     std::optional<expiration_info>
     get_expiration_info(model::producer_identity pid) const;

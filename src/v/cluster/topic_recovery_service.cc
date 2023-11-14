@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cluster/topic_recovery_service.h"
@@ -41,7 +41,7 @@ constexpr size_t list_api_timeout_multiplier{10};
 constexpr ss::lowres_clock::duration downloads_check_interval{60s};
 
 ss::lowres_clock::duration load_downloads_check_interval() {
-    auto tick = std::getenv("__REDPANDA_TOPIC_REC_DL_CHECK_MILLIS");
+    auto tick = std::getenv("__FUNES_TOPIC_REC_DL_CHECK_MILLIS");
     if (tick) {
         try {
             return ss::lowres_clock::duration{std::stoll(tick)};
@@ -49,7 +49,7 @@ ss::lowres_clock::duration load_downloads_check_interval() {
             vlog(
               cloud_storage::cst_log.warn,
               "The environment variable "
-              "__REDPANDA_TOPIC_REC_DL_CHECK_MILLIS is set to {} but "
+              "__FUNES_TOPIC_REC_DL_CHECK_MILLIS is set to {} but "
               "could not be converted to a duration.",
               tick);
             return downloads_check_interval;
@@ -302,7 +302,7 @@ topic_recovery_service::start_bg_recovery_task(recovery_request request) {
       _remote.local(), _as, _config);
 
     auto manifests = co_await filter_existing_topics(
-      bucket_contents, request, model::ns{"kafka"});
+      bucket_contents, request, model::ns{"sql"});
 
     if (manifests.empty()) {
         vlog(cst_log.info, "exiting recovery, no topics to create");

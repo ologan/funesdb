@@ -29,7 +29,7 @@ namespace security::tls {
 
 /*
  * Test coverage includes all of the relevant test cases found in upstream
- * kafka's SslPrincipalMapperTest.
+ * sql's SslPrincipalMapperTest.
  */
 
 namespace bdata = boost::unit_test::data;

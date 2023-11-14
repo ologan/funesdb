@@ -25,7 +25,7 @@ public:
     ss::future<> create_groups() {
         _admin = co_await ss::create_scheduling_group("admin", 100);
         _raft = co_await ss::create_scheduling_group("raft", 1000);
-        _kafka = co_await ss::create_scheduling_group("kafka", 1000);
+        _sql = co_await ss::create_scheduling_group("sql", 1000);
         _cluster = co_await ss::create_scheduling_group("cluster", 300);
         _cache_background_reclaim = co_await ss::create_scheduling_group(
           "cache_background_reclaim", 200);
@@ -43,7 +43,7 @@ public:
     ss::future<> destroy_groups() {
         co_await destroy_scheduling_group(_admin);
         co_await destroy_scheduling_group(_raft);
-        co_await destroy_scheduling_group(_kafka);
+        co_await destroy_scheduling_group(_sql);
         co_await destroy_scheduling_group(_cluster);
         co_await destroy_scheduling_group(_cache_background_reclaim);
         co_await destroy_scheduling_group(_compaction);
@@ -57,7 +57,7 @@ public:
 
     ss::scheduling_group admin_sg() { return _admin; }
     ss::scheduling_group raft_sg() { return _raft; }
-    ss::scheduling_group kafka_sg() { return _kafka; }
+    ss::scheduling_group sql_sg() { return _sql; }
     ss::scheduling_group cluster_sg() { return _cluster; }
 
     ss::scheduling_group cache_background_reclaim_sg() {
@@ -74,7 +74,7 @@ public:
      * @brief Scheduling group for fetch requests.
      *
      * This scheduling group is used for consumer fetch processing. We assign
-     * it the same priority as the default group (where most other kafka
+     * it the same priority as the default group (where most other sql
      * handling takes place), but by putting it into its own group we prevent
      * non-fetch requests from being significantly delayed when fetch requests
      * use all the CPU.
@@ -87,7 +87,7 @@ public:
           std::cref(_default),
           std::cref(_admin),
           std::cref(_raft),
-          std::cref(_kafka),
+          std::cref(_sql),
           std::cref(_cluster),
           std::cref(_cache_background_reclaim),
           std::cref(_compaction),
@@ -103,7 +103,7 @@ private:
       seastar::default_scheduling_group()}; // created and managed by seastar
     ss::scheduling_group _admin;
     ss::scheduling_group _raft;
-    ss::scheduling_group _kafka;
+    ss::scheduling_group _sql;
     ss::scheduling_group _cluster;
     ss::scheduling_group _cache_background_reclaim;
     ss::scheduling_group _compaction;

@@ -11,7 +11,7 @@
 
 #include "boost/program_options.hpp"
 #include "compat/run.h"
-#include "redpanda/cluster_config_schema_util.h"
+#include "funes/cluster_config_schema_util.h"
 #include "seastar/core/app-template.hh"
 #include "seastarx.h"
 #include "version.h"
@@ -50,7 +50,7 @@ int corpus_check(char** argv, std::filesystem::path path) {
  * Few things to note when adding new capabilities to this.
  *
  * - This is _not_ customer facing tooling.
- * - This is _not_ a CLI tool to access Redpanda services.
+ * - This is _not_ a CLI tool to access Funes services.
  * - This may _not_ be shipped as a part of official release artifacts.
  * - This tool provides _no backward compatibility_ of any sorts.
  */
@@ -64,7 +64,7 @@ int main(int ac, char* av[]) {
       ("config_schema_json", "Generates JSON schema for cluster configuration")
       ("corpus_write", po::value<std::filesystem::path>(), "Writes data structure corpus")
       ("corpus_check", po::value<std::filesystem::path>(), "Check a corpus test case")
-      ("version", "Redpanda core version for this utility");
+      ("version", "Funes core version for this utility");
     // clang-format on
 
     po::variables_map vm;
@@ -77,7 +77,7 @@ int main(int ac, char* av[]) {
         std::cout << util::generate_json_schema(config::configuration())._res
                   << "\n";
     } else if (vm.count("version")) {
-        std::cout << redpanda_version() << "\n";
+        std::cout << funes_version() << "\n";
     } else if (vm.count("corpus_write")) {
         return corpus_write(av, vm["corpus_write"].as<std::filesystem::path>());
     } else if (vm.count("corpus_check")) {

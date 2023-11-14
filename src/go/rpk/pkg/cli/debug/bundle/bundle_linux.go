@@ -122,7 +122,7 @@ func executeBundle(ctx context.Context, bp bundleParams) error {
 	addrs := bp.y.Rpk.AdminAPI.Addresses
 
 	steps := []step{
-		saveKafkaMetadata(ctx, ps, bp.cl),
+		saveSQLMetadata(ctx, ps, bp.cl),
 		saveDataDirStructure(ps, bp.y),
 		saveConfig(ps, bp.y),
 		saveCPUInfo(ps),
@@ -346,9 +346,9 @@ func stringifyKadmErr(err error) []string {
 	}
 }
 
-func saveKafkaMetadata(rootCtx context.Context, ps *stepParams, cl *kgo.Client) step {
+func saveSQLMetadata(rootCtx context.Context, ps *stepParams, cl *kgo.Client) step {
 	return func() error {
-		zap.L().Sugar().Debug("Reading Kafka information")
+		zap.L().Sugar().Debug("Reading SQL information")
 
 		ctx, cancel := context.WithTimeout(rootCtx, 10*time.Second)
 		defer cancel()
@@ -422,30 +422,30 @@ func saveKafkaMetadata(rootCtx context.Context, ps *stepParams, cl *kgo.Client) 
 
 		marshal, err := json.Marshal(resps)
 		if err != nil {
-			return fmt.Errorf("unable to encode kafka admin responses: %v", err)
+			return fmt.Errorf("unable to encode sql admin responses: %v", err)
 		}
 
-		return writeFileToZip(ps, "kafka.json", marshal)
+		return writeFileToZip(ps, "sql.json", marshal)
 	}
 }
 
-// Walks the redpanda data directory recursively, and saves to the bundle
+// Walks the funes data directory recursively, and saves to the bundle
 // a JSON map where the keys are the file/ dir paths, and the values are
 // objects containing their data: size, mode, the file or dir it points to
 // if the current file is a symlink, the time it was modified, its owner and
 // its group, as well as an error message if reading that specific file failed.
-func saveDataDirStructure(ps *stepParams, y *config.RedpandaYaml) step {
+func saveDataDirStructure(ps *stepParams, y *config.FunesYaml) step {
 	return func() error {
 		files := make(map[string]*fileInfo)
-		err := walkDir(y.Redpanda.Directory, files)
+		err := walkDir(y.Funes.Directory, files)
 		if err != nil {
-			return fmt.Errorf("couldn't walk '%s': %w", y.Redpanda.Directory, err)
+			return fmt.Errorf("couldn't walk '%s': %w", y.Funes.Directory, err)
 		}
 		bs, err := json.Marshal(files)
 		if err != nil {
 			return fmt.Errorf(
 				"couldn't encode the '%s' directory structure as JSON: %w",
-				y.Redpanda.Directory,
+				y.Funes.Directory,
 				err,
 			)
 		}
@@ -454,32 +454,32 @@ func saveDataDirStructure(ps *stepParams, y *config.RedpandaYaml) step {
 }
 
 // Writes the config file to the bundle, redacting SASL credentials.
-func saveConfig(ps *stepParams, y *config.RedpandaYaml) step {
+func saveConfig(ps *stepParams, y *config.FunesYaml) step {
 	return func() error {
 		// Redact SASL credentials
 		redacted := "(REDACTED)"
-		if y.Rpk.KafkaAPI.SASL != nil {
-			y.Rpk.KafkaAPI.SASL.User = redacted
-			y.Rpk.KafkaAPI.SASL.Password = redacted
+		if y.Rpk.SQLAPI.SASL != nil {
+			y.Rpk.SQLAPI.SASL.User = redacted
+			y.Rpk.SQLAPI.SASL.Password = redacted
 		}
 		// We want to redact any blindly decoded parameters.
 		redactOtherMap(y.Other)
-		redactOtherMap(y.Redpanda.Other)
-		redactServerTLSSlice(y.Redpanda.KafkaAPITLS)
-		redactServerTLSSlice(y.Redpanda.AdminAPITLS)
+		redactOtherMap(y.Funes.Other)
+		redactServerTLSSlice(y.Funes.SQLAPITLS)
+		redactServerTLSSlice(y.Funes.AdminAPITLS)
 		if y.SchemaRegistry != nil {
 			for _, server := range y.SchemaRegistry.SchemaRegistryAPITLS {
 				redactOtherMap(server.Other)
 			}
 		}
-		if y.Pandaproxy != nil {
-			redactOtherMap(y.Pandaproxy.Other)
-			redactServerTLSSlice(y.Pandaproxy.PandaproxyAPITLS)
+		if y.Funesproxy != nil {
+			redactOtherMap(y.Funesproxy.Other)
+			redactServerTLSSlice(y.Funesproxy.FunesproxyAPITLS)
 		}
-		if y.PandaproxyClient != nil {
-			redactOtherMap(y.PandaproxyClient.Other)
-			y.PandaproxyClient.SCRAMPassword = &redacted
-			y.PandaproxyClient.SCRAMUsername = &redacted
+		if y.FunesproxyClient != nil {
+			redactOtherMap(y.FunesproxyClient.Other)
+			y.FunesproxyClient.SCRAMPassword = &redacted
+			y.FunesproxyClient.SCRAMUsername = &redacted
 		}
 		if y.SchemaRegistryClient != nil {
 			redactOtherMap(y.SchemaRegistryClient.Other)
@@ -489,9 +489,9 @@ func saveConfig(ps *stepParams, y *config.RedpandaYaml) step {
 
 		bs, err := yaml.Marshal(y)
 		if err != nil {
-			return fmt.Errorf("couldn't encode the redpanda config as YAML: %w", err)
+			return fmt.Errorf("couldn't encode the funes config as YAML: %w", err)
 		}
-		return writeFileToZip(ps, "redpanda.yaml", bs)
+		return writeFileToZip(ps, "funes.yaml", bs)
 	}
 }
 
@@ -530,11 +530,11 @@ func saveInterrupts(ps *stepParams) step {
 }
 
 // Writes a file containing memory, disk & CPU usage metrics for a local
-// redpanda process.
-func saveResourceUsageData(ps *stepParams, y *config.RedpandaYaml) step {
+// funes process.
+func saveResourceUsageData(ps *stepParams, y *config.FunesYaml) step {
 	return func() error {
 		res, err := system.GatherMetrics(ps.fs, ps.timeout, y)
-		if system.IsErrRedpandaDown(err) {
+		if system.IsErrFunesDown(err) {
 			return fmt.Errorf("omitting resource usage metrics: %w", err)
 		}
 		if err != nil {
@@ -630,22 +630,22 @@ func saveDNSData(ctx context.Context, ps *stepParams) step {
 	}
 }
 
-// Saves the disk usage total within redpanda's data directory.
-func saveDiskUsage(ctx context.Context, ps *stepParams, y *config.RedpandaYaml) step {
+// Saves the disk usage total within funes's data directory.
+func saveDiskUsage(ctx context.Context, ps *stepParams, y *config.FunesYaml) step {
 	return func() error {
 		return writeCommandOutputToZip(
 			ctx,
 			ps,
 			"du.txt",
-			"du", "-h", y.Redpanda.Directory,
+			"du", "-h", y.Funes.Directory,
 		)
 	}
 }
 
-// Writes the journald redpanda logs, if available, to the bundle.
+// Writes the journald funes logs, if available, to the bundle.
 func saveLogs(ctx context.Context, ps *stepParams, since, until string, logsLimitBytes int) step {
 	return func() error {
-		args := []string{"--no-pager", "-u", "redpanda"}
+		args := []string{"--no-pager", "-u", "funes"}
 		if since != "" {
 			args = append(args, "--since", since)
 		}
@@ -655,7 +655,7 @@ func saveLogs(ctx context.Context, ps *stepParams, since, until string, logsLimi
 		return writeCommandOutputToZipLimit(
 			ctx,
 			ps,
-			"redpanda.log",
+			"funes.log",
 			logsLimitBytes,
 			"journalctl",
 			args...,
@@ -847,9 +847,9 @@ func sliceControllerDir(cFiles []fileSize, logLimitBytes int64) (slice []fileSiz
 	return slice
 }
 
-func saveControllerLogDir(ps *stepParams, y *config.RedpandaYaml, logLimitBytes int) step {
+func saveControllerLogDir(ps *stepParams, y *config.FunesYaml, logLimitBytes int) step {
 	return func() error {
-		controllerDir := filepath.Join(y.Redpanda.Directory, "redpanda", "controller", "0_0")
+		controllerDir := filepath.Join(y.Funes.Directory, "funes", "controller", "0_0")
 
 		// We don't need the .base_index files to parse out the messages.
 		exclude := regexp.MustCompile(`^*.base_index$`)

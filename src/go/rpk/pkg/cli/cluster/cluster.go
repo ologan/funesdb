@@ -25,14 +25,14 @@ import (
 func NewCommand(fs afero.Fs, p *pkgconfig.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
-		Short: "Interact with a Redpanda cluster",
+		Short: "Interact with a Funes cluster",
 	}
 
 	offsets := group.NewDescribeCommand(fs, p)
 	offsets.Deprecated = "replaced by 'rpk group describe'"
 	offsets.Hidden = true
 	offsets.Use = "offsets"
-	p.InstallKafkaFlags(offsets)
+	p.InstallSQLFlags(offsets)
 
 	cmd.AddCommand(
 		newHealthOverviewCommand(fs, p),

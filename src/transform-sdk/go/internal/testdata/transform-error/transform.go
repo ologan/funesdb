@@ -21,9 +21,9 @@ import (
 )
 
 func main() {
-	redpanda.OnRecordWritten(errTransform)
+	funes.OnRecordWritten(errTransform)
 }
 
-func errTransform(e redpanda.WriteEvent) ([]redpanda.Record, error) {
+func errTransform(e funes.WriteEvent) ([]funes.Record, error) {
 	return nil, errors.New("oh noes!")
 }

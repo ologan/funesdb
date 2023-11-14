@@ -93,7 +93,7 @@ linters-settings:
       - name: modifies-value-receiver
       - name: optimize-operands-order
       - name: package-comments
-        disabled: true # disabling this in favor of https://github.com/redpanda-data/redpanda/issues/6340
+        disabled: true # disabling this in favor of https://github.com/redpanda-data/funes/issues/6340
       - name: range
       - name: range-val-in-closure
       - name: receiver-naming

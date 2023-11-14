@@ -13,18 +13,18 @@ from rptest.services.cluster import cluster
 
 from rptest.clients.rpk import RpkException, RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.sql_cli_consumer import SQLCliConsumer
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.services.rpk_producer import RpkProducer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
-from kafka import KafkaConsumer
+from sql import SQLConsumer
 
 from rptest.utils.mode_checks import skip_debug_mode
 
 
-class ConsumerGroupTest(RedpandaTest):
+class ConsumerGroupTest(FunesTest):
     def __init__(self, test_ctx, *args, **kwargs):
         self._ctx = test_ctx
         self.producer = None
@@ -52,9 +52,9 @@ class ConsumerGroupTest(RedpandaTest):
                         instance_name,
                         instance_id=None,
                         consumer_properties={}):
-        return KafkaCliConsumer(
+        return SQLCliConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic=topic,
             group=group,
             from_beginning=True,
@@ -87,7 +87,7 @@ class ConsumerGroupTest(RedpandaTest):
 
         for c in consumers:
             c.start()
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def group_is_ready():
             gr = rpk.group_describe(group=group, summary=True)
@@ -103,7 +103,7 @@ class ConsumerGroupTest(RedpandaTest):
         return sum([c._message_cnt for c in consumers]) >= count
 
     def validate_group_state(self, group, expected_state, static_members):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         # validate group state
         rpk_group = rpk.group_describe(group)
 
@@ -126,7 +126,7 @@ class ConsumerGroupTest(RedpandaTest):
     def start_producer(self, msg_cnt=5000):
 
         # produce some messages to the topic
-        self.producer = RpkProducer(self._ctx, self.redpanda,
+        self.producer = RpkProducer(self._ctx, self.funes,
                                     self.topic_spec.name, 128, msg_cnt, -1)
         self.producer.start()
 
@@ -162,9 +162,9 @@ class ConsumerGroupTest(RedpandaTest):
             c.wait()
             c.free()
 
-        gd = RpkTool(self.redpanda).group_describe(group=group)
-        viewer = OfflineLogViewer(self.redpanda)
-        for node in self.redpanda.nodes:
+        gd = RpkTool(self.funes).group_describe(group=group)
+        viewer = OfflineLogViewer(self.funes)
+        for node in self.funes.nodes:
             consumer_offsets_partitions = viewer.read_consumer_offsets(
                 node=node)
             offsets = {}
@@ -214,7 +214,7 @@ class ConsumerGroupTest(RedpandaTest):
         wait_until(lambda: ConsumerGroupTest.consumed_at_least(consumers, 50),
                    30, 2)
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         # validate group state
         rpk_group = rpk.group_describe(group)
 
@@ -242,7 +242,7 @@ class ConsumerGroupTest(RedpandaTest):
             c.free()
 
     def wait_for_members(self, group, members_count):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def group_stable():
             rpk_group = rpk.group_describe(group)
@@ -271,7 +271,7 @@ class ConsumerGroupTest(RedpandaTest):
         # wait for some messages
         wait_until(lambda: ConsumerGroupTest.consumed_at_least(consumers, 50),
                    30, 2)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         # at this point we have 2 consumers in stable group
         self.validate_group_state(group,
                                   expected_state="Stable",
@@ -333,7 +333,7 @@ class ConsumerGroupTest(RedpandaTest):
         # wait for some messages
         wait_until(lambda: ConsumerGroupTest.consumed_at_least(consumers, 50),
                    30, 2)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         # at this point we have 2 consumers in stable group
         self.validate_group_state(group,
                                   expected_state="Stable",
@@ -397,7 +397,7 @@ class ConsumerGroupTest(RedpandaTest):
 
         consumers.clear()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def group_is_empty():
             rpk_group = rpk.group_describe(group)
@@ -416,7 +416,7 @@ class ConsumerGroupTest(RedpandaTest):
                 rpk_group = rpk.group_describe(group)
                 return rpk_group.members == 0 and rpk_group.state == "Dead"
             except RpkException as e:
-                # allow RPK to throw an exception as redpanda nodes were
+                # allow RPK to throw an exception as funes nodes were
                 # restarted and the request may require a retry
                 return False
 
@@ -425,7 +425,7 @@ class ConsumerGroupTest(RedpandaTest):
         self.producer.free()
 
         # recreate topic
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         # after recovery group should still be dead as it was deleted
         wait_until(group_is_dead, 30, 2)
 
@@ -460,8 +460,8 @@ class ConsumerGroupTest(RedpandaTest):
         ev_loop = asyncio.new_event_loop()
 
         def poll_once(i):
-            consumer = KafkaConsumer(group_id=f"g-{i}",
-                                     bootstrap_servers=self.redpanda.brokers(),
+            consumer = SQLConsumer(group_id=f"g-{i}",
+                                     bootstrap_servers=self.funes.brokers(),
                                      enable_auto_commit=True)
             consumer.subscribe([self.topic_spec.name])
             consumer.poll(1)
@@ -479,13 +479,13 @@ class ConsumerGroupTest(RedpandaTest):
         ev_loop.stop()
         ev_loop.close()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         list = rpk.group_list()
 
         assert len(list) == groups_in_round * rounds
 
-        # restart redpanda and check recovery
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        # restart funes and check recovery
+        self.funes.restart_nodes(self.funes.nodes)
 
         list = rpk.group_list()
 

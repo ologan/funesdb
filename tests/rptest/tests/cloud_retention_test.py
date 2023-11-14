@@ -15,10 +15,10 @@ from ducktape.errors import TimeoutError
 
 from rptest.services.cluster import cluster
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
-from rptest.services.redpanda import CloudStorageType, SISettings, MetricsEndpoint, CloudStorageType, CHAOS_LOG_ALLOW_LIST, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, SISettings, MetricsEndpoint, CloudStorageType, CHAOS_LOG_ALLOW_LIST, get_cloud_storage_type
 from rptest.services.kgo_verifier_services import (
     KgoVerifierConsumerGroupConsumer, KgoVerifierProducer)
 from rptest.utils.mode_checks import skip_debug_mode
@@ -54,7 +54,7 @@ class CloudRetentionTest(PreallocNodesTest):
         * a slow consumer that can't keep up with retention and has to start
           over when retention overcomes it
         """
-        if self.redpanda.dedicated_nodes:
+        if self.funes.dedicated_nodes:
             num_partitions = 100
             msg_size = 128 * 1024
             msg_count = int(100 * 1024 * 1024 * 1024 / msg_size)
@@ -73,7 +73,7 @@ class CloudRetentionTest(PreallocNodesTest):
         si_settings = SISettings(self.test_context,
                                  log_segment_size=segment_size,
                                  fast_uploads=True)
-        self.redpanda.set_si_settings(si_settings)
+        self.funes.set_si_settings(si_settings)
 
         extra_rp_conf = dict(retention_local_target_bytes_default=self.
                              default_retention_segments * segment_size,
@@ -81,12 +81,12 @@ class CloudRetentionTest(PreallocNodesTest):
                              group_initial_rebalance_delay=300,
                              cloud_storage_segment_max_upload_interval_sec=60,
                              cloud_storage_housekeeping_interval_ms=10_000)
-        self.redpanda.add_extra_rp_conf(extra_rp_conf)
+        self.funes.add_extra_rp_conf(extra_rp_conf)
 
-        self.redpanda.start()
+        self.funes.start()
         self._create_initial_topics()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic=self.topic_name,
                          partitions=num_partitions,
                          replicas=3,
@@ -96,7 +96,7 @@ class CloudRetentionTest(PreallocNodesTest):
                          })
 
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic_name,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -104,7 +104,7 @@ class CloudRetentionTest(PreallocNodesTest):
 
         consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic_name,
             msg_size,
             readers=3,
@@ -124,7 +124,7 @@ class CloudRetentionTest(PreallocNodesTest):
                             partition_count=num_partitions), )
 
         def first_segment_missing():
-            s3_snapshot = BucketView(self.redpanda, topics=topics)
+            s3_snapshot = BucketView(self.funes, topics=topics)
             try:
                 manifest = s3_snapshot.manifest_for_ntp(self.topic_name, 0)
             except Exception as e:
@@ -139,7 +139,7 @@ class CloudRetentionTest(PreallocNodesTest):
         wait_until(first_segment_missing, timeout_sec=60, backoff_sec=5)
 
         def all_data_uploaded():
-            s3_snapshot = BucketView(self.redpanda, topics=topics)
+            s3_snapshot = BucketView(self.funes, topics=topics)
             total_of_hwms = 0
             for p in range(0, num_partitions):
                 try:
@@ -148,10 +148,10 @@ class CloudRetentionTest(PreallocNodesTest):
                     self.logger.debug(f"Failed to get manifest: {e}")
                     return False
 
-                kafka_last_offset = BucketView.kafka_last_offset(manifest)
+                sql_last_offset = BucketView.sql_last_offset(manifest)
                 self.logger.info(
-                    f"Partition {p} kafka last offset: {kafka_last_offset}")
-                total_of_hwms += kafka_last_offset
+                    f"Partition {p} sql last offset: {sql_last_offset}")
+                total_of_hwms += sql_last_offset
 
             # Require that all data is uploaded except for up to one segment's
             # worth of messages for each partition
@@ -165,7 +165,7 @@ class CloudRetentionTest(PreallocNodesTest):
 
         def check_total_size(include_below_start_offset):
             try:
-                view = BucketView(self.redpanda)
+                view = BucketView(self.funes)
                 if include_below_start_offset:
                     size = view.cloud_log_sizes_sum().total(no_archive=True)
                 else:
@@ -209,16 +209,16 @@ class CloudRetentionTest(PreallocNodesTest):
         si_settings = SISettings(self.test_context,
                                  log_segment_size=small_segment_size,
                                  fast_uploads=True)
-        self.redpanda.set_si_settings(si_settings)
+        self.funes.set_si_settings(si_settings)
         extra_rp_conf = dict(retention_local_target_bytes_default=self.
                              default_retention_segments * small_segment_size,
                              log_segment_size_jitter_percent=5,
                              group_initial_rebalance_delay=300,
                              cloud_storage_segment_max_upload_interval_sec=1,
                              cloud_storage_housekeeping_interval_ms=1000)
-        self.redpanda.add_extra_rp_conf(extra_rp_conf)
-        self.redpanda.start()
-        rpk = RpkTool(self.redpanda)
+        self.funes.add_extra_rp_conf(extra_rp_conf)
+        self.funes.start()
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic=self.topic_name,
                          partitions=num_partitions,
                          replicas=3,
@@ -233,7 +233,7 @@ class CloudRetentionTest(PreallocNodesTest):
         msg_size = 4 * 1024
         msg_count = int(num_partitions * 1024 * 1024 / msg_size)
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic_name,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -245,7 +245,7 @@ class CloudRetentionTest(PreallocNodesTest):
                             partition_count=num_partitions), )
 
         def uploaded_all_partitions():
-            s3_snapshot = BucketView(self.redpanda, topics=topics)
+            s3_snapshot = BucketView(self.funes, topics=topics)
             for partition in range(0, num_partitions):
                 size = s3_snapshot.cloud_log_size_for_ntp(
                     self.topic_name, partition).total(no_archive=True)
@@ -261,7 +261,7 @@ class CloudRetentionTest(PreallocNodesTest):
                    err_msg="Waiting for all parents to upload cloud data")
 
         def gced_all_segments():
-            s3_snapshot = BucketView(self.redpanda, topics=topics)
+            s3_snapshot = BucketView(self.funes, topics=topics)
             for partition in range(0, num_partitions):
                 try:
                     manifest = s3_snapshot.manifest_for_ntp(
@@ -292,7 +292,7 @@ class CloudRetentionTest(PreallocNodesTest):
                    backoff_sec=5,
                    err_msg="Waiting for all cloud segments to be GC")
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic_name,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -301,8 +301,8 @@ class CloudRetentionTest(PreallocNodesTest):
         producer.wait()
 
 
-class CloudRetentionTimelyGCTest(RedpandaTest):
-    # 1MiB segments, the smallest that redpanda's default config accepts
+class CloudRetentionTimelyGCTest(FunesTest):
+    # 1MiB segments, the smallest that funes's default config accepts
     segment_size = 1024 * 1024
 
     retention_bytes = 10 * segment_size
@@ -347,7 +347,7 @@ class CloudRetentionTimelyGCTest(RedpandaTest):
 
         producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             msg_count=msg_count,
             msg_size=msg_size,
@@ -363,7 +363,7 @@ class CloudRetentionTimelyGCTest(RedpandaTest):
                                backoff_sec=5)
 
         def check_cloud_log_size():
-            s3_snapshot = BucketView(self.redpanda, topics=self.topics)
+            s3_snapshot = BucketView(self.funes, topics=self.topics)
             if not s3_snapshot.is_ntp_in_manifest(self.topic, 0):
                 self.logger.debug(f"No manifest present yet")
                 return
@@ -391,7 +391,7 @@ class CloudRetentionTimelyGCTest(RedpandaTest):
                                     max_time_between_actions_sec=20)
 
         deadline = time.time() + runtime
-        with random_process_kills(self.redpanda, pkill_config) as ctx:
+        with random_process_kills(self.funes, pkill_config) as ctx:
             # This will throw if we violate size constraint
             while time.time() < deadline:
                 time.sleep(5)

@@ -69,7 +69,7 @@ public:
      *
      * free_bytes_delta: signed value applied to free_bytes, for example to
      * simulate a separate application taking up / freeing space independent of
-     * redpanda.
+     * funes.
      */
     struct statvfs_overrides {
         std::optional<size_t> total_bytes;

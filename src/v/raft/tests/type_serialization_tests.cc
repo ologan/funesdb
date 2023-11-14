@@ -121,7 +121,7 @@ model::broker create_test_broker() {
       model::node_id(random_generators::get_int(1000)), // id
       net::unresolved_address(
         "127.0.0.1",
-        random_generators::get_int(10000, 20000)), // kafka api address
+        random_generators::get_int(10000, 20000)), // sql api address
       net::unresolved_address(
         "127.0.0.1", random_generators::get_int(10000, 20000)), // rpc address
       model::rack_id("some_rack"),

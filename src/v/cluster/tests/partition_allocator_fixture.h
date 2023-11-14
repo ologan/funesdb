@@ -38,7 +38,7 @@ struct partition_allocator_fixture {
         config::mock_binding<std::optional<int32_t>>(std::nullopt),
         config::mock_binding<uint32_t>(uint32_t{partitions_per_shard}),
         config::mock_binding<uint32_t>(uint32_t{partitions_reserve_shard0}),
-        kafka_internal_topics.bind(),
+        sql_internal_topics.bind(),
         config::mock_binding<bool>(true)) {
         members.start().get0();
         ss::smp::invoke_on_all([] {
@@ -72,7 +72,7 @@ struct partition_allocator_fixture {
           broker.properties().cores,
           config::mock_binding<uint32_t>(uint32_t{partitions_per_shard}),
           config::mock_binding<uint32_t>(uint32_t{partitions_reserve_shard0}),
-          kafka_internal_topics.bind()));
+          sql_internal_topics.bind()));
     }
 
     void saturate_all_machines() {
@@ -133,8 +133,8 @@ struct partition_allocator_fixture {
         return req;
     }
 
-    config::mock_property<std::vector<ss::sstring>> kafka_internal_topics{{}};
-    model::topic_namespace tn{model::kafka_namespace, model::topic{"test"}};
+    config::mock_property<std::vector<ss::sstring>> sql_internal_topics{{}};
+    model::topic_namespace tn{model::sql_namespace, model::topic{"test"}};
     ss::sharded<cluster::members_table> members;
     cluster::partition_allocator allocator;
 

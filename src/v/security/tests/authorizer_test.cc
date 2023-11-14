@@ -89,19 +89,19 @@ BOOST_AUTO_TEST_CASE(resource_type_auto) {
     BOOST_REQUIRE(
       get_resource_type<model::topic>() == security::resource_type::topic);
     BOOST_REQUIRE(
-      get_resource_type<kafka::group_id>() == security::resource_type::group);
+      get_resource_type<sql::group_id>() == security::resource_type::group);
     BOOST_REQUIRE(
       get_resource_type<security::acl_cluster_name>()
       == security::resource_type::cluster);
     BOOST_REQUIRE(
-      get_resource_type<kafka::transactional_id>()
+      get_resource_type<sql::transactional_id>()
       == security::resource_type::transactional_id);
 
     BOOST_REQUIRE(
       get_resource_type<model::topic>() == get_resource_type<model::topic>());
     BOOST_REQUIRE(
       get_resource_type<model::topic>()
-      != get_resource_type<kafka::group_id>());
+      != get_resource_type<sql::group_id>());
 }
 
 BOOST_AUTO_TEST_CASE(empty_resource_name) {
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(empty_resource_name) {
     auto auth = make_test_instance();
 
     BOOST_REQUIRE(
-      !auth.authorized(kafka::group_id(""), acl_operation::read, user, host));
+      !auth.authorized(sql::group_id(""), acl_operation::read, user, host));
 
     acl_entry acl(
       acl_wildcard_user,
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(empty_resource_name) {
     auth.add_bindings(bindings);
 
     auto result = auth.authorized(
-      kafka::group_id(""), acl_operation::read, user, host);
+      sql::group_id(""), acl_operation::read, user, host);
     BOOST_REQUIRE(result.authorized);
     BOOST_REQUIRE_EQUAL(result.acl, acl);
     BOOST_REQUIRE_EQUAL(result.resource_pattern, resource);
@@ -1130,9 +1130,9 @@ BOOST_AUTO_TEST_CASE(topic_group_same_name) {
     acl_host host("192.168.0.1");
 
     BOOST_REQUIRE(!auth.authorized(
-      kafka::group_id("topic-foo"), acl_operation::read, user, host));
+      sql::group_id("topic-foo"), acl_operation::read, user, host));
     BOOST_REQUIRE(!auth.authorized(
-      kafka::group_id("topic-foo-xxx"), acl_operation::read, user, host));
+      sql::group_id("topic-foo-xxx"), acl_operation::read, user, host));
 }
 
 } // namespace security

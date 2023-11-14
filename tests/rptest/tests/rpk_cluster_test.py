@@ -15,31 +15,31 @@ import zipfile
 import json
 
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.util import expect_exception, get_cluster_license, get_second_cluster_license
 from ducktape.utils.util import wait_until
 from rptest.util import wait_until_result
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.clients.rpk_remote import RpkRemoteTool
 
 
-class RpkClusterTest(RedpandaTest):
+class RpkClusterTest(FunesTest):
     def __init__(self, ctx):
         super(RpkClusterTest, self).__init__(test_context=ctx)
         self._ctx = ctx
-        self._rpk = RpkTool(self.redpanda)
+        self._rpk = RpkTool(self.funes)
 
     @cluster(num_nodes=3)
     def test_cluster_info(self):
         def condition():
             brokers = self._rpk.cluster_info()
 
-            if len(brokers) != len(self.redpanda.nodes):
+            if len(brokers) != len(self.funes.nodes):
                 return False
 
-            advertised_addrs = self.redpanda.brokers()
+            advertised_addrs = self.funes.brokers()
 
             ok = True
             for b in brokers:
@@ -56,13 +56,13 @@ class RpkClusterTest(RedpandaTest):
     @cluster(num_nodes=3)
     def test_debug_bundle(self):
         # The main RpkTool helper runs rpk on the test runner machine -- debug
-        # commands are run on redpanda nodes.
+        # commands are run on funes nodes.
 
         working_dir = "/tmp"
         file_path = os.path.join(working_dir, "bundle.zip")
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
-        rpk_remote = RpkRemoteTool(self.redpanda, node)
+        rpk_remote = RpkRemoteTool(self.funes, node)
         output = rpk_remote.debug_bundle(file_path)
         lines = output.split("\n")
 
@@ -105,8 +105,8 @@ class RpkClusterTest(RedpandaTest):
 
         zf = zipfile.ZipFile(output_file)
         files = zf.namelist()
-        assert 'redpanda.yaml' in files
-        assert 'redpanda.log' in files
+        assert 'funes.yaml' in files
+        assert 'funes.log' in files
 
         # At least the first controller log is being saved:
         assert 'controller/0-1-v1.log' in files
@@ -117,7 +117,7 @@ class RpkClusterTest(RedpandaTest):
         assert 'admin/health_overview.json' in files
 
         # Per-node admin API calls:
-        for n in self.redpanda.started_nodes():
+        for n in self.funes.started_nodes():
             # rpk will save 2 snapsots per metrics endpoint:
             assert f'metrics/{n.account.hostname}-9644/t0_metrics.txt' in files
             assert f'metrics/{n.account.hostname}-9644/t1_metrics.txt' in files
@@ -129,7 +129,7 @@ class RpkClusterTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_get_config(self):
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         config_output = self._rpk.admin_config_print(node)
 
@@ -153,10 +153,10 @@ class RpkClusterTest(RedpandaTest):
 
         # Try with each node offline, in case RPK's behaviour isn't shuffling
         # properly and prefers one node over others.
-        for i, node in enumerate(self.redpanda.nodes):
+        for i, node in enumerate(self.funes.nodes):
             self.logger.info(
-                f"Stopping node {node.name}/{self.redpanda.idx(node)} ")
-            self.redpanda.stop_node(node)
+                f"Stopping node {node.name}/{self.funes.idx(node)} ")
+            self.funes.stop_node(node)
 
             # A vanilla sendAny command
             self.logger.info(f"Trying simple GETs with node {node.name} down")
@@ -171,11 +171,11 @@ class RpkClusterTest(RedpandaTest):
                 f"Trying write request with node {node.name} down")
             self._rpk.sasl_create_user(
                 f"testuser_{i}", "password",
-                self.redpanda.SUPERUSER_CREDENTIALS.algorithm)
+                self.funes.SUPERUSER_CREDENTIALS.algorithm)
 
             self.logger.info(
-                f"Starting node {node.name}/{self.redpanda.idx(node)} ")
-            self.redpanda.start_node(node)
+                f"Starting node {node.name}/{self.funes.idx(node)} ")
+            self.funes.start_node(node)
 
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_cluster_down(self):
@@ -184,8 +184,8 @@ class RpkClusterTest(RedpandaTest):
         time out and return an error.  This test verifies that more complex retry logic (like
         rpk's internal sendAny iterating over nodes) does not incorrectly retry forever.
         """
-        for node in self.redpanda.nodes:
-            self.redpanda.stop_node(node)
+        for node in self.funes.nodes:
+            self.funes.stop_node(node)
 
         try:
             # A vanilla sendAny command
@@ -200,7 +200,7 @@ class RpkClusterTest(RedpandaTest):
             # A sendToLeader command
             r = self._rpk.sasl_create_user(
                 "expect_fail", "expect_fail",
-                self.redpanda.SUPERUSER_CREDENTIALS.algorithm)
+                self.funes.SUPERUSER_CREDENTIALS.algorithm)
         except RpkException as e:
             self.logger.info(f"Got expected exception: {e}")
             pass
@@ -216,7 +216,7 @@ class RpkClusterTest(RedpandaTest):
         license = get_cluster_license()
         if license is None:
             self.logger.info(
-                "Skipping test, REDPANDA_SAMPLE_LICENSE env var not found")
+                "Skipping test, FUNES_SAMPLE_LICENSE env var not found")
             return
 
         with tempfile.NamedTemporaryFile() as tf:
@@ -240,7 +240,7 @@ class RpkClusterTest(RedpandaTest):
             'expires':
             "Jul 11 2122",
             'organization':
-            'redpanda-testing',
+            'funes-testing',
             'type':
             'enterprise',
             'checksum_sha256':
@@ -259,7 +259,7 @@ class RpkClusterTest(RedpandaTest):
             if lic is None or lic == "{}":
                 return False
             result = json.loads(lic)
-            return result['organization'] == 'redpanda-testing-2'
+            return result['organization'] == 'funes-testing-2'
 
         wait_until(obtain_new_license,
                    timeout_sec=10,
@@ -276,7 +276,7 @@ class RpkClusterTest(RedpandaTest):
         license = get_cluster_license()
         if license is None:
             self.logger.info(
-                "Skipping test, REDPANDA_SAMPLE_LICENSE env var not found")
+                "Skipping test, FUNES_SAMPLE_LICENSE env var not found")
             return
 
         output = self._rpk.license_set("", license)
@@ -287,7 +287,7 @@ class RpkClusterTest(RedpandaTest):
         license = get_cluster_license()
         if license is None:
             self.logger.info(
-                "Skipping test, REDPANDA_SAMPLE_LICENSE env var not found")
+                "Skipping test, FUNES_SAMPLE_LICENSE env var not found")
             return
 
         with expect_exception(RpkException,

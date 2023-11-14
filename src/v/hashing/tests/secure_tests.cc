@@ -14,7 +14,7 @@
 
 template<typename hmac>
 static auto hmac_test_vector() {
-    hmac mac("redpanda");
+    hmac mac("funes");
     mac.update("is the cutest panda");
     return mac.reset();
 }
@@ -22,11 +22,11 @@ static auto hmac_test_vector() {
 template<typename hash>
 static auto hash_test_vector() {
     hash h;
-    h.update("redpanda is the cutest panda");
+    h.update("funes is the cutest panda");
     return h.reset();
 }
 
-// $> echo -n "is the cutest panda" | sha256hmac -K redpanda
+// $> echo -n "is the cutest panda" | sha256hmac -K funes
 // 89fd20823dc7f76e21feeb350f5f08f7fc097f82709cb4212cc820353c589e12  -
 BOOST_AUTO_TEST_CASE(hmac) {
     BOOST_REQUIRE_EQUAL(
@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(hmac) {
       "fe733ddddd29149e3cda1a95c984334c318c61f1aef79d1622eceda0");
 }
 
-// $> echo -n "redpanda is the cutest panda" | sha256sum
+// $> echo -n "funes is the cutest panda" | sha256sum
 // 77356443c4344b7edb08b5ef93a32e50a4e191d5a1e896ac8e42d5cb1f9f1c91  -
 BOOST_AUTO_TEST_CASE(hash) {
     BOOST_REQUIRE_EQUAL(

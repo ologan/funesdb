@@ -7,8 +7,8 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, RedpandaInstaller
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST, FunesInstaller
 from rptest.services.cluster import cluster
 from rptest.services.admin import Admin
 from rptest.services.admin_ops_fuzzer import AdminOperationsFuzzer
@@ -22,7 +22,7 @@ import random
 import time
 
 
-class ControllerSnapshotPolicyTest(RedpandaTest):
+class ControllerSnapshotPolicyTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, num_brokers=3, **kwargs)
 
@@ -33,78 +33,78 @@ class ControllerSnapshotPolicyTest(RedpandaTest):
     @cluster(num_nodes=3)
     def test_snapshotting_policy(self):
         """
-        Test that Redpanda creates a controller snapshot some time after controller commands appear.
+        Test that Funes creates a controller snapshot some time after controller commands appear.
         """
-        admin = Admin(self.redpanda)
-        self.redpanda.set_extra_rp_conf({'controller_snapshot_max_age_sec': 5})
-        self.redpanda.start()
-        self.redpanda.set_feature_active('controller_snapshots',
+        admin = Admin(self.funes)
+        self.funes.set_extra_rp_conf({'controller_snapshot_max_age_sec': 5})
+        self.funes.start()
+        self.funes.set_feature_active('controller_snapshots',
                                          False,
                                          timeout_sec=10)
 
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             controller_status = admin.get_controller_status(n)
             assert controller_status['start_offset'] == 0
 
-        self.redpanda.set_feature_active('controller_snapshots',
+        self.funes.set_feature_active('controller_snapshots',
                                          True,
                                          timeout_sec=10)
 
         # first snapshot will be triggered by the feature_update command
         # check that snapshot is created both on the leader and on followers
         node_idx2snapshot_info = {}
-        for n in self.redpanda.nodes:
-            idx = self.redpanda.idx(n)
-            snap_info = self.redpanda.wait_for_controller_snapshot(n)
+        for n in self.funes.nodes:
+            idx = self.funes.idx(n)
+            snap_info = self.funes.wait_for_controller_snapshot(n)
             node_idx2snapshot_info[idx] = snap_info
 
         # second snapshot will be triggered by the topic creation
-        RpkTool(self.redpanda).create_topic('test')
-        for n in self.redpanda.nodes:
-            mtime, start_offset = node_idx2snapshot_info[self.redpanda.idx(n)]
-            self.redpanda.wait_for_controller_snapshot(
+        RpkTool(self.funes).create_topic('test')
+        for n in self.funes.nodes:
+            mtime, start_offset = node_idx2snapshot_info[self.funes.idx(n)]
+            self.funes.wait_for_controller_snapshot(
                 n, prev_mtime=mtime, prev_start_offset=start_offset)
 
     @cluster(num_nodes=3)
     def test_upgrade_auto_enable(self):
         """
-        Test that redpanda will auto-enable snapshots even for clusters created with 23.1
+        Test that funes will auto-enable snapshots even for clusters created with 23.1
         """
 
-        installer = self.redpanda._installer
+        installer = self.funes._installer
 
-        installer.install(self.redpanda.nodes, (23, 1))
-        self.redpanda.start()
+        installer.install(self.funes.nodes, (23, 1))
+        self.funes.start()
 
         # 23.2.x version that only enables the feature for new clusters
-        installer.install(self.redpanda.nodes, (23, 2, 14))
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        self.redpanda.wait_for_membership(first_start=False)
+        installer.install(self.funes.nodes, (23, 2, 14))
+        self.funes.restart_nodes(self.funes.nodes)
+        self.funes.wait_for_membership(first_start=False)
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {'controller_snapshot_max_age_sec': 5})
-        RpkTool(self.redpanda).create_topic('test')
+        RpkTool(self.funes).create_topic('test')
 
         # check that controller snapshots are still disabled
         time.sleep(10)
-        admin = Admin(self.redpanda)
-        for n in self.redpanda.nodes:
+        admin = Admin(self.funes)
+        for n in self.funes.nodes:
             controller_status = admin.get_controller_status(n)
             assert controller_status['start_offset'] == 0
 
         # check that after we upgrade to 23.3, snapshots are automatically enabled
-        installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        self.redpanda.wait_for_membership(first_start=False)
+        installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        self.funes.restart_nodes(self.funes.nodes)
+        self.funes.wait_for_membership(first_start=False)
 
-        for n in self.redpanda.nodes:
-            self.redpanda.wait_for_controller_snapshot(n)
+        for n in self.funes.nodes:
+            self.funes.wait_for_controller_snapshot(n)
 
 
 class ControllerState:
-    def __init__(self, redpanda, node):
-        admin = Admin(redpanda, default_node=node)
-        rpk = RpkTool(redpanda)
+    def __init__(self, funes, node):
+        admin = Admin(funes, default_node=node)
+        rpk = RpkTool(funes)
 
         self.features_response = admin.get_features(node=node)
         self.features_map = dict(
@@ -201,7 +201,7 @@ class ControllerState:
         self._check_security(other)
 
 
-class ControllerSnapshotTest(RedpandaTest):
+class ControllerSnapshotTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          num_brokers=4,
@@ -218,23 +218,23 @@ class ControllerSnapshotTest(RedpandaTest):
     @matrix(auto_assign_node_ids=[False, True])
     def test_bootstrap(self, auto_assign_node_ids):
         """
-        Test that Redpanda nodes can assemble into a cluster when controller snapshots are enabled. In particular, test that:
+        Test that Funes nodes can assemble into a cluster when controller snapshots are enabled. In particular, test that:
         1. Nodes can join
         2. Nodes can restart and the cluster remains healthy
         3. Node ids and cluster uuid remain stable
         """
 
-        seed_nodes = self.redpanda.nodes[0:3]
-        joiner_node = self.redpanda.nodes[3]
-        self.redpanda.set_seed_servers(seed_nodes)
+        seed_nodes = self.funes.nodes[0:3]
+        joiner_node = self.funes.nodes[3]
+        self.funes.set_seed_servers(seed_nodes)
 
-        self.redpanda.start(nodes=seed_nodes,
+        self.funes.start(nodes=seed_nodes,
                             auto_assign_node_id=auto_assign_node_ids,
                             omit_seeds_on_idx_one=False)
-        admin = Admin(self.redpanda, default_node=seed_nodes[0])
+        admin = Admin(self.funes, default_node=seed_nodes[0])
 
         for n in seed_nodes:
-            self.redpanda.wait_for_controller_snapshot(n)
+            self.funes.wait_for_controller_snapshot(n)
 
         cluster_uuid = admin.get_cluster_uuid(node=seed_nodes[0])
         assert cluster_uuid is not None
@@ -249,8 +249,8 @@ class ControllerSnapshotTest(RedpandaTest):
                 brokers = admin.get_brokers(node=n)
                 assert len(brokers) == len(started)
 
-                node_id = self.redpanda.node_id(n, force_refresh=True)
-                idx = self.redpanda.idx(n)
+                node_id = self.funes.node_id(n, force_refresh=True)
+                idx = self.funes.idx(n)
                 if idx in node_ids_per_idx:
                     expected_node_id = node_ids_per_idx[idx]
                     assert expected_node_id == node_id,\
@@ -262,41 +262,41 @@ class ControllerSnapshotTest(RedpandaTest):
 
         self.logger.info(f"seed nodes formed cluster, uuid: {cluster_uuid}")
 
-        self.redpanda.restart_nodes(seed_nodes,
+        self.funes.restart_nodes(seed_nodes,
                                     auto_assign_node_id=auto_assign_node_ids,
                                     omit_seeds_on_idx_one=False)
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.wait_for_membership(first_start=False)
 
         check_and_save_node_ids(seed_nodes)
 
         self.logger.info(f"seed nodes restarted successfully")
 
-        self.redpanda.start(nodes=[joiner_node],
+        self.funes.start(nodes=[joiner_node],
                             auto_assign_node_id=auto_assign_node_ids,
                             omit_seeds_on_idx_one=False)
-        self.redpanda.wait_for_membership(first_start=True)
+        self.funes.wait_for_membership(first_start=True)
 
-        check_and_save_node_ids(self.redpanda.nodes)
+        check_and_save_node_ids(self.funes.nodes)
 
         self.logger.info("cluster fully bootstrapped, restarting...")
 
-        self.redpanda.restart_nodes(self.redpanda.nodes,
+        self.funes.restart_nodes(self.funes.nodes,
                                     auto_assign_node_id=auto_assign_node_ids,
                                     omit_seeds_on_idx_one=False)
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.wait_for_membership(first_start=False)
 
-        check_and_save_node_ids(self.redpanda.nodes)
+        check_and_save_node_ids(self.funes.nodes)
 
         self.logger.info("cluster restarted successfully")
 
     def _wait_for_everything_snapshotted(self, nodes):
         controller_max_offset = max(
-            Admin(self.redpanda).get_controller_status(n)['committed_index']
+            Admin(self.funes).get_controller_status(n)['committed_index']
             for n in nodes)
         self.logger.info(f"controller max offset is {controller_max_offset}")
 
         for n in nodes:
-            self.redpanda.wait_for_controller_snapshot(
+            self.funes.wait_for_controller_snapshot(
                 node=n, prev_start_offset=(controller_max_offset - 1))
 
         return controller_max_offset
@@ -310,15 +310,15 @@ class ControllerSnapshotTest(RedpandaTest):
         restarts.
         """
 
-        seed_nodes = self.redpanda.nodes[0:3]
-        joiner = self.redpanda.nodes[3]
-        self.redpanda.set_seed_servers(seed_nodes)
+        seed_nodes = self.funes.nodes[0:3]
+        joiner = self.funes.nodes[3]
+        self.funes.set_seed_servers(seed_nodes)
 
         # Start first three nodes
-        self.redpanda.start(seed_nodes)
+        self.funes.start(seed_nodes)
 
-        admin = Admin(self.redpanda, default_node=seed_nodes[0])
-        rpk = RpkTool(self.redpanda)
+        admin = Admin(self.funes, default_node=seed_nodes[0])
+        rpk = RpkTool(self.funes)
 
         # Start without snapshots, to build up some data
         admin.put_feature("controller_snapshots", {"state": "disabled"})
@@ -326,11 +326,11 @@ class ControllerSnapshotTest(RedpandaTest):
         # change controller state
 
         # could be any non-default value for any property
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {'controller_snapshot_max_age_sec': 10})
         # turn off partition balancing to minimize the number of internally-generated
         # controller commands
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {'partition_autobalancing_mode': 'off'})
 
         rpk.create_topic('test_topic')
@@ -340,14 +340,14 @@ class ControllerSnapshotTest(RedpandaTest):
                           algorithm='SCRAM-SHA-256')
         rpk.acl_create_allow_cluster(username='test', op='describe')
 
-        ops_fuzzer = AdminOperationsFuzzer(self.redpanda, min_replication=3)
+        ops_fuzzer = AdminOperationsFuzzer(self.funes, min_replication=3)
         ops_fuzzer.create_initial_entities()
 
         admin.put_feature("controller_snapshots", {"state": "active"})
         self._wait_for_everything_snapshotted(seed_nodes)
 
         # check initial state
-        initial_state = ControllerState(self.redpanda, seed_nodes[0])
+        initial_state = ControllerState(self.funes, seed_nodes[0])
         assert initial_state.features_map['controller_snapshots'][
             'state'] == 'active'
         assert initial_state.config_response[
@@ -359,43 +359,43 @@ class ControllerSnapshotTest(RedpandaTest):
         # make a node join and check its state
 
         # explicit clean step is needed because we are starting the node manually and not
-        # using redpanda.start()
-        self.redpanda.clean_node(joiner)
-        self.redpanda.start_node(joiner)
-        wait_until(lambda: self.redpanda.registered(joiner),
+        # using funes.start()
+        self.funes.clean_node(joiner)
+        self.funes.start_node(joiner)
+        wait_until(lambda: self.funes.registered(joiner),
                    timeout_sec=30,
                    backoff_sec=1)
 
         def check(node, expected):
-            node_id = self.redpanda.node_id(node)
+            node_id = self.funes.node_id(node)
             self.logger.info(f"checking node {node.name} (id: {node_id})...")
-            admin.transfer_leadership_to(namespace='redpanda',
+            admin.transfer_leadership_to(namespace='funes',
                                          topic='controller',
                                          partition=0,
                                          target_id=node_id)
-            admin.await_stable_leader(namespace='redpanda',
+            admin.await_stable_leader(namespace='funes',
                                       topic='controller',
                                       check=lambda id: id == node_id)
 
-            state = ControllerState(self.redpanda, node)
+            state = ControllerState(self.funes, node)
             expected.check(state)
 
-        expected_state = ControllerState(self.redpanda, seed_nodes[0])
+        expected_state = ControllerState(self.funes, seed_nodes[0])
         check(joiner, expected_state)
 
         # restart and check
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.restart_nodes(self.funes.nodes)
+        self.funes.wait_for_membership(first_start=False)
 
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             check(n, expected_state)
 
         # do a few batches of admin operations, forcing the joiner node to catch up to the
         # recent controller state each time.
 
         for iter in range(5):
-            self.redpanda.stop_node(joiner)
+            self.funes.stop_node(joiner)
 
             executed = 0
             to_execute = random.randint(1, 5)
@@ -407,8 +407,8 @@ class ControllerSnapshotTest(RedpandaTest):
                 seed_nodes)
 
             # start joiner and wait until it catches up
-            self.redpanda.start_node(joiner)
-            wait_until(lambda: self.redpanda.registered(joiner),
+            self.funes.start_node(joiner)
+            wait_until(lambda: self.funes.registered(joiner),
                        timeout_sec=30,
                        backoff_sec=1)
             wait_until(lambda: admin.get_controller_status(joiner)[
@@ -416,7 +416,7 @@ class ControllerSnapshotTest(RedpandaTest):
                        timeout_sec=30,
                        backoff_sec=1)
 
-            expected_state = ControllerState(self.redpanda, seed_nodes[0])
+            expected_state = ControllerState(self.funes, seed_nodes[0])
             check(joiner, expected_state)
 
             self.logger.info(
@@ -425,29 +425,29 @@ class ControllerSnapshotTest(RedpandaTest):
     @cluster(num_nodes=4)
     def test_upgrade_compat(self):
         """
-        Test that redpanda can start with a controller snapshot created by the previous version.
+        Test that funes can start with a controller snapshot created by the previous version.
         """
 
         # turn off partition balancing to minimize the number of internally-generated
         # controller commands
-        self.redpanda.add_extra_rp_conf(
+        self.funes.add_extra_rp_conf(
             {'partition_autobalancing_mode': 'off'})
 
-        installer = self.redpanda._installer
+        installer = self.funes._installer
         initial_ver = installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
+            FunesInstaller.HEAD)
         self.logger.info(
-            f"will test compatibility with redpanda v. {initial_ver}")
-        installer.install(self.redpanda.nodes, initial_ver)
-        self.redpanda.start()
+            f"will test compatibility with funes v. {initial_ver}")
+        installer.install(self.funes.nodes, initial_ver)
+        self.funes.start()
 
-        admin = Admin(self.redpanda)
-        rpk = RpkTool(self.redpanda)
+        admin = Admin(self.funes)
+        rpk = RpkTool(self.funes)
 
         # issue some controller commands
 
         # could be any non-default value for any property
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {'controller_snapshot_max_age_sec': 7})
 
         rpk.create_topic('test_topic')
@@ -457,14 +457,14 @@ class ControllerSnapshotTest(RedpandaTest):
                           algorithm='SCRAM-SHA-256')
         rpk.acl_create_allow_cluster(username='test', op='describe')
 
-        self._wait_for_everything_snapshotted(self.redpanda.nodes)
+        self._wait_for_everything_snapshotted(self.funes.nodes)
 
-        expected_state = ControllerState(self.redpanda, self.redpanda.nodes[0])
+        expected_state = ControllerState(self.funes, self.funes.nodes[0])
 
-        installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
+        installer.install(self.funes.nodes, FunesInstaller.HEAD)
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.restart_nodes(self.funes.nodes)
+        self.funes.wait_for_membership(first_start=False)
 
-        state = ControllerState(self.redpanda, self.redpanda.nodes[1])
+        state = ControllerState(self.funes, self.funes.nodes[1])
         expected_state.check(state, allow_upgrade_changes=True)

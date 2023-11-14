@@ -146,7 +146,7 @@ FIXTURE_TEST(test_rm_stm_caches_last_5_offsets, rm_stm_test_fixture) {
     wait_for_confirmed_leader();
     wait_for_meta_initialized();
 
-    std::vector<kafka::offset> offsets;
+    std::vector<sql::offset> offsets;
 
     auto count = 5;
 
@@ -235,7 +235,7 @@ FIXTURE_TEST(test_rm_stm_doesnt_cache_6th_offset, rm_stm_test_fixture) {
                         raft::consistency_level::quorum_ack))
                     .get0();
         BOOST_REQUIRE((bool)r1);
-        wait_for_kafka_offset_apply(r1.value().last_offset).get0();
+        wait_for_sql_offset_apply(r1.value().last_offset).get0();
     }
 
     {

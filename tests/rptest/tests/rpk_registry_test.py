@@ -12,11 +12,11 @@ import socket
 import json
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import SchemaRegistryConfig, SecurityConfig
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import SchemaRegistryConfig, SecurityConfig
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services import tls
-from rptest.tests.pandaproxy_test import User, PandaProxyTLSProvider
+from rptest.tests.funesproxy_test import User, FunesProxyTLSProvider
 from rptest.util import expect_exception
 from ducktape.mark import ok_to_fail
 
@@ -41,7 +41,7 @@ message Test2 {
 }"""
 
 
-class RpkRegistryTest(RedpandaTest):
+class RpkRegistryTest(FunesTest):
     username = "red"
     password = "panda"
     mechanism = "SCRAM-SHA-256"
@@ -53,7 +53,7 @@ class RpkRegistryTest(RedpandaTest):
         )
         # SASL Config
         self.security = SecurityConfig()
-        super_username, super_password, super_algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, super_algorithm = self.funes.SUPERUSER_CREDENTIALS
         self.admin_user = User(0)
         self.admin_user.username = super_username
         self.admin_user.password = super_password
@@ -62,13 +62,13 @@ class RpkRegistryTest(RedpandaTest):
         self.schema_registry_config = SchemaRegistryConfig()
         self.schema_registry_config.require_client_auth = True
 
-    # Override Redpanda start to create the certs and enable auth.
+    # Override Funes start to create the certs and enable auth.
     def setUp(self):
         tls_manager = tls.TLSCertManager(self.logger)
         self.security.require_client_auth = True
 
         # Enable Basic Auth
-        self.security.kafka_enable_authorization = True
+        self.security.sql_enable_authorization = True
         self.security.endpoint_authn_method = 'sasl'
         self.schema_registry_config.authn_method = 'http_basic'
 
@@ -79,15 +79,15 @@ class RpkRegistryTest(RedpandaTest):
             name='test_admin_client')
 
         # TLS.
-        self.security.tls_provider = PandaProxyTLSProvider(tls_manager)
+        self.security.tls_provider = FunesProxyTLSProvider(tls_manager)
         self.schema_registry_config.client_key = self.admin_user.certificate.key
         self.schema_registry_config.client_crt = self.admin_user.certificate.crt
-        self.redpanda.set_security_settings(self.security)
-        self.redpanda.set_schema_registry_settings(self.schema_registry_config)
+        self.funes.set_security_settings(self.security)
+        self.funes.set_schema_registry_settings(self.schema_registry_config)
 
-        self.redpanda.start()
+        self.funes.start()
 
-        self._rpk = RpkTool(self.redpanda,
+        self._rpk = RpkTool(self.funes,
                             username=self.admin_user.username,
                             password=self.admin_user.password,
                             sasl_mechanism=self.admin_user.algorithm,
@@ -299,7 +299,7 @@ class RpkRegistryTest(RedpandaTest):
         test_topic = "test_topic_sr"
         self._rpk.create_topic(test_topic)
 
-        msg_1 = '{"name":"redpanda","telephone":{"number":12341234,"identifier":"home"}}'
+        msg_1 = '{"name":"funes","telephone":{"number":12341234,"identifier":"home"}}'
         key_1 = "somekey"
         expected_msg_1 = json.loads(msg_1)
         # Produce: unencoded key, encoded value:

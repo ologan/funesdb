@@ -17,7 +17,7 @@ import (
 // The auth0 endpoint information to get dev tokens from.
 var prodAuth0Endpoint = endpoint{
 	URL:      "https://auth.prd.cloud.redpanda.com",
-	Audience: "cloudv2-production.redpanda.cloud",
+	Audience: "cloudv2-production.funes.cloud",
 }
 
 // RPKClientID is the auth0 client ID, it is public and is safe to have it here.

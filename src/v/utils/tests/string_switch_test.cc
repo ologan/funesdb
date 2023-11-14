@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(string_switch_match_all_max) {
           "san",
           "francisco",
           "vectorized",
-          "redpanda",
+          "funes",
           "cycling",
           "c++",
           "x",

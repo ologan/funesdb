@@ -12,8 +12,8 @@ import dataclasses
 
 from ducktape.utils.util import wait_until
 
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.services.cluster import cluster
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.admin import Admin
@@ -21,7 +21,7 @@ from rptest.services.rpk_producer import RpkProducer
 from rptest.util import wait_until_result
 
 
-class RecoveryModeTest(RedpandaTest):
+class RecoveryModeTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, num_brokers=4, **kwargs)
 
@@ -31,7 +31,7 @@ class RecoveryModeTest(RedpandaTest):
 
     def _produce(self, topic):
         producer = RpkProducer(context=self.test_context,
-                               redpanda=self.redpanda,
+                               funes=self.funes,
                                topic=topic,
                                msg_size=4096,
                                msg_count=1000)
@@ -48,17 +48,17 @@ class RecoveryModeTest(RedpandaTest):
 
         # start the 3-node cluster
 
-        seed_nodes = self.redpanda.nodes[0:3]
-        joiner_node = self.redpanda.nodes[3]
-        self.redpanda.set_seed_servers(seed_nodes)
+        seed_nodes = self.funes.nodes[0:3]
+        joiner_node = self.funes.nodes[3]
+        self.funes.set_seed_servers(seed_nodes)
 
-        self.redpanda.start(nodes=seed_nodes,
+        self.funes.start(nodes=seed_nodes,
                             auto_assign_node_id=True,
                             omit_seeds_on_idx_one=False)
 
         # create a couple of topics and produce some data
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic("mytopic1", partitions=5, replicas=3)
         rpk.create_topic("mytopic2", partitions=5, replicas=3)
 
@@ -78,12 +78,12 @@ class RecoveryModeTest(RedpandaTest):
 
         # restart the cluster in recovery mode
 
-        self.redpanda.restart_nodes(
+        self.funes.restart_nodes(
             seed_nodes,
             auto_assign_node_id=True,
             omit_seeds_on_idx_one=False,
             override_cfg_params={"recovery_mode_enabled": True})
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.wait_for_membership(first_start=False)
 
         # check that describe, produce, consume return errors
 
@@ -156,20 +156,20 @@ class RecoveryModeTest(RedpandaTest):
 
         # check that a new node can join the cluster
 
-        self.redpanda.start(nodes=[joiner_node], auto_assign_node_id=True)
-        self.redpanda.wait_for_membership(first_start=True)
+        self.funes.start(nodes=[joiner_node], auto_assign_node_id=True)
+        self.funes.wait_for_membership(first_start=True)
 
         # restart the cluster back in normal mode
 
-        self.redpanda.restart_nodes(self.redpanda.nodes,
+        self.funes.restart_nodes(self.funes.nodes,
                                     auto_assign_node_id=True)
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.wait_for_membership(first_start=False)
 
         # check that topic ops effects are still in place
 
         assert list(rpk.list_topics()) == ['mytopic1']
-        for node in self.redpanda.storage().nodes:
-            assert len(node.partitions('kafka', 'mytopic2')) == 0
+        for node in self.funes.storage().nodes:
+            assert len(node.partitions('sql', 'mytopic2')) == 0
 
         # check that altered topic config remains in place
         assert rpk.describe_topic_configs(
@@ -212,7 +212,7 @@ class PartitionInfo:
             (f.name, json[f.name]) for f in dataclasses.fields(PartitionInfo)))
 
 
-class DisablingPartitionsTest(RedpandaTest):
+class DisablingPartitionsTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,
                          num_brokers=4,
@@ -220,9 +220,9 @@ class DisablingPartitionsTest(RedpandaTest):
                          **kwargs)
 
     def sync(self):
-        admin = Admin(self.redpanda)
-        first = self.redpanda.nodes[0]
-        rest = self.redpanda.nodes[1:]
+        admin = Admin(self.funes)
+        first = self.funes.nodes[0]
+        rest = self.funes.nodes[1:]
 
         def equal_everywhere():
             first_res = admin.get_cluster_partitions(node=first)
@@ -239,26 +239,26 @@ class DisablingPartitionsTest(RedpandaTest):
 
     @cluster(num_nodes=4)
     def test_apis(self):
-        rpk = RpkTool(self.redpanda)
-        admin = Admin(self.redpanda)
+        rpk = RpkTool(self.funes)
+        admin = Admin(self.funes)
 
         topics = ["mytopic1", "mytopic2", "mytopic3"]
         for topic in topics:
             rpk.create_topic(topic, partitions=3, replicas=3)
 
-        admin.set_partitions_disabled(ns="kafka", topic="mytopic1")
+        admin.set_partitions_disabled(ns="sql", topic="mytopic1")
 
         for p in [1, 2]:
-            admin.set_partitions_disabled(ns="kafka",
+            admin.set_partitions_disabled(ns="sql",
                                           topic="mytopic2",
                                           partition=p)
-        admin.set_partitions_disabled(ns="kafka",
+        admin.set_partitions_disabled(ns="sql",
                                       topic="mytopic2",
                                       partition=2,
                                       value=False)
 
-        admin.set_partitions_disabled(ns="kafka", topic="mytopic3")
-        admin.set_partitions_disabled(ns="kafka",
+        admin.set_partitions_disabled(ns="sql", topic="mytopic3")
+        admin.set_partitions_disabled(ns="sql",
                                       topic="mytopic3",
                                       partition=1,
                                       value=False)
@@ -267,7 +267,7 @@ class DisablingPartitionsTest(RedpandaTest):
 
         def pi(topic_partition, disabled=False):
             topic, partition = topic_partition.split('/')
-            return PartitionInfo('kafka', topic, int(partition), disabled)
+            return PartitionInfo('sql', topic, int(partition), disabled)
 
         all_partitions = [
             pi('mytopic1/0', True),
@@ -302,7 +302,7 @@ class DisablingPartitionsTest(RedpandaTest):
             if topic is None and partition is None:
                 ns = None
             else:
-                ns = "kafka"
+                ns = "sql"
             if partition is None:
                 json = admin.get_cluster_partitions(ns=ns,
                                                     topic=topic,
@@ -335,10 +335,10 @@ class DisablingPartitionsTest(RedpandaTest):
 
         check_everything()
 
-        for n in self.redpanda.nodes:
-            self.redpanda.wait_for_controller_snapshot(n)
+        for n in self.funes.nodes:
+            self.funes.wait_for_controller_snapshot(n)
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        self.redpanda.wait_for_membership(first_start=False)
+        self.funes.restart_nodes(self.funes.nodes)
+        self.funes.wait_for_membership(first_start=False)
 
         check_everything()

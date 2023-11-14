@@ -12,7 +12,7 @@ jobs:
     - name: Get output
       id: get-output
       run: |
-        echo OUTPUT=$(gh search issues --label "kind/backport" --state open --repo "redpanda-data/redpanda" --updated "<`date --date="15 days ago" +"%Y"-"%m"-"%d"`" --sort updated --order asc --limit 15 --json "assignees,updatedAt,url" --jq '.[] | "@" + (.assignees[] | {login} | .login), .url, .updatedAt,"----"') >>"$GITHUB_OUTPUT"
+        echo OUTPUT=$(gh search issues --label "kind/backport" --state open --repo "funes-data/funes" --updated "<`date --date="15 days ago" +"%Y"-"%m"-"%d"`" --sort updated --order asc --limit 15 --json "assignees,updatedAt,url" --jq '.[] | "@" + (.assignees[] | {login} | .login), .url, .updatedAt,"----"') >>"$GITHUB_OUTPUT"
       shell: bash
 
     - name: "Post to a test channel (temporary)"

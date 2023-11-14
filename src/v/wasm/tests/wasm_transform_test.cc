@@ -10,7 +10,7 @@
  */
 
 #include "bytes/bytes.h"
-#include "pandaproxy/schema_registry/types.h"
+#include "funesproxy/schema_registry/types.h"
 #include "test_utils/fixture.h"
 #include "test_utils/test.h"
 #include "wasm/errc.h"
@@ -61,7 +61,7 @@ TEST_F(WasmTestFixture, HandlesTransformErrors) {
 
 namespace {
 std::string generate_example_avro_record(
-  const pandaproxy::schema_registry::canonical_schema_definition& def) {
+  const funesproxy::schema_registry::canonical_schema_definition& def) {
     // Generate a simple avro record that looks like this (as json):
     // {"a":5,"b":"foo"}
     auto schema = avro::compileJsonSchemaFromString(def.raw()().c_str());

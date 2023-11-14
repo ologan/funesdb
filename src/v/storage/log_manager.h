@@ -94,10 +94,10 @@ struct log_config {
     config::binding<size_t> compacted_segment_size;
     config::binding<size_t> max_compacted_segment_size;
     ss::io_priority_class compaction_priority;
-    // same as retention.bytes in kafka
+    // same as retention.bytes in sql
     config::binding<std::optional<size_t>> retention_bytes;
     config::binding<std::chrono::milliseconds> compaction_interval;
-    // same as log.retention.ms in kafka - default 1 week
+    // same as log.retention.ms in sql - default 1 week
     config::binding<std::optional<std::chrono::milliseconds>> log_retention;
     with_cache cache = with_cache::yes;
     batch_cache::reclaim_options reclaim_opts{
@@ -144,7 +144,7 @@ struct log_config {
  *    <base>/<namespace>/<topic>/<partition>/
  *
  * where <base> is configured for each server (e.g.
- * /var/lib/redpanda/data). Log segments are stored in the ntp directory
+ * /var/lib/funes/data). Log segments are stored in the ntp directory
  * with the naming convention:
  *
  *   <base offset>-<raft term>-<format version>.log

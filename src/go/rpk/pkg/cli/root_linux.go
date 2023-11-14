@@ -11,18 +11,18 @@ package cli
 
 import (
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cli/iotune"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cli/redpanda"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cli/redpanda/tune"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cli/funes"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cli/funes/tune"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cobraext"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	rp "github.com/redpanda-data/redpanda/src/go/rpk/pkg/redpanda"
+	rp "github.com/redpanda-data/redpanda/src/go/rpk/pkg/funes"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )
 
 func addPlatformDependentCmds(fs afero.Fs, p *config.Params, cmd *cobra.Command) {
 	cmd.AddCommand(
-		redpanda.NewCommand(fs, p, rp.NewLauncher()),
+		funes.NewCommand(fs, p, rp.NewLauncher()),
 		iotune.NewCommand(fs, p),
 	)
 
@@ -38,25 +38,25 @@ func addPlatformDependentCmds(fs afero.Fs, p *config.Params, cmd *cobra.Command)
 }
 
 func newCheckCommand(fs afero.Fs, p *config.Params) *cobra.Command {
-	return cobraext.DeprecateCmd(redpanda.NewCheckCommand(fs, p), "rpk redpanda check")
+	return cobraext.DeprecateCmd(funes.NewCheckCommand(fs, p), "rpk funes check")
 }
 
 func newConfigCommand(fs afero.Fs, p *config.Params) *cobra.Command {
-	return cobraext.DeprecateCmd(redpanda.NewConfigCommand(fs, p), "rpk redpanda config")
+	return cobraext.DeprecateCmd(funes.NewConfigCommand(fs, p), "rpk funes config")
 }
 
 func newModeCommand(fs afero.Fs, p *config.Params) *cobra.Command {
-	return cobraext.DeprecateCmd(redpanda.NewModeCommand(fs, p), "rpk redpanda mode")
+	return cobraext.DeprecateCmd(funes.NewModeCommand(fs, p), "rpk funes mode")
 }
 
 func newStartCommand(fs afero.Fs, p *config.Params, launcher rp.Launcher) *cobra.Command {
-	return cobraext.DeprecateCmd(redpanda.NewStartCommand(fs, p, launcher), "rpk redpanda start")
+	return cobraext.DeprecateCmd(funes.NewStartCommand(fs, p, launcher), "rpk funes start")
 }
 
 func newStopCommand(fs afero.Fs, p *config.Params) *cobra.Command {
-	return cobraext.DeprecateCmd(redpanda.NewStopCommand(fs, p), "rpk redpanda stop")
+	return cobraext.DeprecateCmd(funes.NewStopCommand(fs, p), "rpk funes stop")
 }
 
 func newTuneCommand(fs afero.Fs, p *config.Params) *cobra.Command {
-	return cobraext.DeprecateCmd(tune.NewCommand(fs, p), "rpk redpanda tune")
+	return cobraext.DeprecateCmd(tune.NewCommand(fs, p), "rpk funes tune")
 }

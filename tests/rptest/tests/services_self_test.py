@@ -10,7 +10,7 @@
 from ducktape.mark import matrix
 from ducktape.tests.test import Test
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
@@ -18,17 +18,17 @@ from rptest.services.failure_injector import FailureSpec, make_failure_injector
 from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
 from rptest.services.kgo_repeater_service import repeater_traffic
 from rptest.services.kgo_verifier_services import KgoVerifierRandomConsumer, KgoVerifierSeqConsumer, KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda import SISettings, CloudStorageType, get_cloud_storage_type, make_redpanda_service
+from rptest.services.funes import SISettings, CloudStorageType, get_cloud_storage_type, make_funes_service
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.utils.si_utils import BucketView
 from rptest.util import expect_exception
 from rptest.utils.mode_checks import skip_debug_mode
 
 
-class OpenBenchmarkSelfTest(RedpandaTest):
+class OpenBenchmarkSelfTest(FunesTest):
     """
     This test verifies that OpenMessagingBenchmark service
-    works as expected.  It is not a test of redpanda itself: this is
+    works as expected.  It is not a test of funes itself: this is
     to avoid committing changes that break services that might only
     be used in nightlies and not normally used in tests run on PRS.
     """
@@ -37,11 +37,11 @@ class OpenBenchmarkSelfTest(RedpandaTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, num_brokers=3, **kwargs)
 
-    @skip_debug_mode  # Sends meaningful traffic, and not intended to test Redpanda
+    @skip_debug_mode  # Sends meaningful traffic, and not intended to test Funes
     @cluster(num_nodes=6)
     @matrix(driver=["SIMPLE_DRIVER"], workload=["SIMPLE_WORKLOAD"])
     def test_default_omb_configuration(self, driver, workload):
-        benchmark = OpenMessagingBenchmark(self.test_context, self.redpanda,
+        benchmark = OpenMessagingBenchmark(self.test_context, self.funes,
                                            driver, workload)
         benchmark.start()
         benchmark_time_min = benchmark.benchmark_time(
@@ -49,14 +49,14 @@ class OpenBenchmarkSelfTest(RedpandaTest):
         benchmark.wait(timeout_sec=benchmark_time_min * 60)
         # docker runs have high variance in perf numbers, check only in dedicate node
         # setup.
-        benchmark.check_succeed(validate_metrics=self.redpanda.dedicated_nodes)
+        benchmark.check_succeed(validate_metrics=self.funes.dedicated_nodes)
 
 
-class KgoRepeaterSelfTest(RedpandaTest):
+class KgoRepeaterSelfTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, num_brokers=3, **kwargs)
 
-    @skip_debug_mode  # Sends meaningful traffic, and not intended to test Redpanda
+    @skip_debug_mode  # Sends meaningful traffic, and not intended to test Funes
     @cluster(num_nodes=4)
     def test_kgo_repeater(self):
         topic = 'test'
@@ -66,7 +66,7 @@ class KgoRepeaterSelfTest(RedpandaTest):
                       retention_bytes=16 * 1024 * 1024,
                       segment_bytes=1024 * 1024))
         with repeater_traffic(context=self.test_context,
-                              redpanda=self.redpanda,
+                              funes=self.funes,
                               topic=topic,
                               msg_size=4096,
                               workers=1) as repeater:
@@ -81,7 +81,7 @@ class KgoVerifierSelfTest(PreallocNodesTest):
                          *args,
                          **kwargs)
 
-    @skip_debug_mode  # Sends meaningful traffic, and not intended to test Redpanda
+    @skip_debug_mode  # Sends meaningful traffic, and not intended to test Funes
     @cluster(num_nodes=4)
     def test_kgo_verifier(self):
         topic = 'test'
@@ -92,7 +92,7 @@ class KgoVerifierSelfTest(PreallocNodesTest):
                       segment_bytes=1024 * 1024))
 
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        topic,
                                        16384,
                                        1000,
@@ -104,7 +104,7 @@ class KgoVerifierSelfTest(PreallocNodesTest):
 
         rand_consumer = KgoVerifierRandomConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic,
             16384,
             100,
@@ -115,7 +115,7 @@ class KgoVerifierSelfTest(PreallocNodesTest):
         rand_consumer.start(clean=False)
 
         seq_consumer = KgoVerifierSeqConsumer(self.test_context,
-                                              self.redpanda,
+                                              self.funes,
                                               topic,
                                               16384,
                                               nodes=self.preallocated_nodes,
@@ -125,7 +125,7 @@ class KgoVerifierSelfTest(PreallocNodesTest):
 
         group_consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic,
             16384,
             2,
@@ -140,7 +140,7 @@ class KgoVerifierSelfTest(PreallocNodesTest):
         seq_consumer.wait(timeout_sec=60)
 
 
-class BucketScrubSelfTest(RedpandaTest):
+class BucketScrubSelfTest(FunesTest):
     """
     Verify that if we erase an object from tiered storage,
     the bucket validation will fail.
@@ -173,7 +173,7 @@ class BucketScrubSelfTest(RedpandaTest):
         total_write_bytes = segment_size * partition_count * 4
 
         with repeater_traffic(context=self.test_context,
-                              redpanda=self.redpanda,
+                              funes=self.funes,
                               topic=topic,
                               msg_size=msg_size,
                               workers=1) as repeater:
@@ -182,29 +182,29 @@ class BucketScrubSelfTest(RedpandaTest):
                                     timeout_sec=120)
 
         def all_partitions_have_segments():
-            view = BucketView(self.redpanda)
+            view = BucketView(self.funes)
             for p in range(0, partition_count):
                 if view.cloud_log_segment_count_for_ntp(topic, p) == 0:
                     return False
 
             return True
 
-        self.redpanda.wait_until(all_partitions_have_segments,
+        self.funes.wait_until(all_partitions_have_segments,
                                  timeout_sec=60,
                                  backoff_sec=5)
 
         # Initially a bucket scrub should pass
         self.logger.info(f"Running baseline scrub")
-        self.redpanda.stop_and_scrub_object_storage()
-        self.redpanda.for_nodes(
-            self.redpanda.nodes,
-            lambda n: self.redpanda.start_node(n, first_start=False))
+        self.funes.stop_and_scrub_object_storage()
+        self.funes.for_nodes(
+            self.funes.nodes,
+            lambda n: self.funes.start_node(n, first_start=False))
 
         # Go delete a segment: pick one arbitrarily, but it must be one
         # that is linked into a manifest to constitute a corruption.
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
         segment_key = None
-        for o in self.redpanda.cloud_storage_client.list_objects(
+        for o in self.funes.cloud_storage_client.list_objects(
                 self.si_settings.cloud_storage_bucket):
             if ".log" in o.key and view.is_segment_part_of_a_manifest(o):
                 segment_key = o.key
@@ -214,7 +214,7 @@ class BucketScrubSelfTest(RedpandaTest):
 
         tmp_location = f"tmp_{segment_key}_tmp"
         self.logger.info(f"Simulating loss of segment {segment_key}")
-        self.redpanda.cloud_storage_client.move_object(
+        self.funes.cloud_storage_client.move_object(
             self.si_settings.cloud_storage_bucket,
             segment_key,
             tmp_location,
@@ -222,32 +222,32 @@ class BucketScrubSelfTest(RedpandaTest):
 
         self.logger.info(f"Running scrub that should discover issue")
         with expect_exception(RuntimeError, lambda e: "fatal" in str(e)):
-            self.redpanda.stop_and_scrub_object_storage()
+            self.funes.stop_and_scrub_object_storage()
 
         # Avoid tripping exception during shutdown: reinstate the object
-        self.redpanda.cloud_storage_client.move_object(
+        self.funes.cloud_storage_client.move_object(
             self.si_settings.cloud_storage_bucket,
             tmp_location,
             segment_key,
             validate=True)
 
-        self.redpanda.for_nodes(
-            self.redpanda.nodes,
-            lambda n: self.redpanda.start_node(n, first_start=False))
+        self.funes.for_nodes(
+            self.funes.nodes,
+            lambda n: self.funes.start_node(n, first_start=False))
 
 
 class SimpleSelfTest(Test):
     """
-    Verify instantiation of a RedpandaServiceBase subclass through the factory method.
+    Verify instantiation of a FunesServiceBase subclass through the factory method.
 
-    Runs a few methods of RedpandaServiceBase.
+    Runs a few methods of FunesServiceBase.
     """
     def __init__(self, test_context):
         super(SimpleSelfTest, self).__init__(test_context)
-        self.redpanda = make_redpanda_service(test_context, 3)
+        self.funes = make_funes_service(test_context, 3)
 
     def setUp(self):
-        self.redpanda.start()
+        self.funes.start()
 
     @cluster(num_nodes=3, check_allowed_error_logs=False)
     def test_cloud(self):
@@ -255,16 +255,16 @@ class SimpleSelfTest(Test):
         Execute a few of the methods that will connect to the k8s pod.
         """
 
-        node_memory = float(self.redpanda.get_node_memory_mb())
+        node_memory = float(self.funes.get_node_memory_mb())
         assert node_memory > 1.0
 
-        node_cpu_count = self.redpanda.get_node_cpu_count()
+        node_cpu_count = self.funes.get_node_cpu_count()
         assert node_cpu_count > 0
 
-        node_disk_free = self.redpanda.get_node_disk_free()
+        node_disk_free = self.funes.get_node_disk_free()
         assert node_disk_free > 0
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic_name = 'rp_ducktape_test_cloud_topic'
         self.logger.info(f'creating topic {topic_name}')
         rpk.create_topic(topic_name)
@@ -278,12 +278,12 @@ class FailureInjectorSelfTest(Test):
     """
     def __init__(self, test_context):
         super(FailureInjectorSelfTest, self).__init__(test_context)
-        self.redpanda = make_redpanda_service(test_context, 3)
+        self.funes = make_funes_service(test_context, 3)
 
     def setUp(self):
-        self.redpanda.start()
+        self.funes.start()
 
     @cluster(num_nodes=3, check_allowed_error_logs=False)
     def test_finjector(self):
-        fi = make_failure_injector(self.redpanda)
+        fi = make_failure_injector(self.funes)
         fi.inject_failure(FailureSpec(FailureSpec.FAILURE_ISOLATE, None))

@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/remote_partition.h"
@@ -112,7 +112,7 @@ remote_partition::borrow_result_t remote_partition::borrow_next_segment_reader(
 
     auto ko = model::offset_cast(config.start_offset);
     // Two level lookup:
-    // - find segment meta based on kafka offset
+    // - find segment meta based on sql offset
     //   this allow us to avoid any abiguity in case if the segment
     //   doesn't have any data. The 'segment_containing' method of the
     //   manifest takes this into account.
@@ -120,14 +120,14 @@ remote_partition::borrow_result_t remote_partition::borrow_next_segment_reader(
     auto mit = manifest.end();
     if (hint == model::offset{}) {
         // This code path is only used for the first lookup. It
-        // could be either lookup by kafka offset or by timestamp.
+        // could be either lookup by sql offset or by timestamp.
         if (config.first_timestamp) {
             auto maybe_meta = manifest.timequery(*config.first_timestamp);
             if (maybe_meta) {
                 mit = manifest.segment_containing(maybe_meta->base_offset);
             }
         } else {
-            // In this case the lookup is perfomed by kafka offset.
+            // In this case the lookup is perfomed by sql offset.
             // Normally, this would be the first lookup done by the
             // partition_record_batch_reader_impl. This lookup will
             // skip segments without data batches (the logic is implemented
@@ -139,8 +139,8 @@ remote_partition::borrow_result_t remote_partition::borrow_next_segment_reader(
             // this case we want to start scanning from the begining of the
             // partition if the start of the manifest is contained by the scan
             // range.
-            auto so = manifest.get_start_kafka_offset().value_or(
-              kafka::offset::min());
+            auto so = manifest.get_start_sql_offset().value_or(
+              sql::offset::min());
             if (config.start_offset < so && config.max_offset > so) {
                 mit = manifest.begin();
             }
@@ -155,10 +155,10 @@ remote_partition::borrow_result_t remote_partition::borrow_next_segment_reader(
                 break;
             }
 
-            // If a segment contains kafka data batches, its next offset will
+            // If a segment contains sql data batches, its next offset will
             // be greater than its base offset.
-            auto b = mit->base_kafka_offset();
-            auto end = mit->next_kafka_offset();
+            auto b = mit->base_sql_offset();
+            auto end = mit->next_sql_offset();
             if (b != end) {
                 break;
             }
@@ -186,7 +186,7 @@ remote_partition::borrow_result_t remote_partition::borrow_next_segment_reader(
     while (next_it != manifest.end()) {
         // Normally, the segments in the manifest do not overlap.
         // But in some cases we may see them overlapping, for instance
-        // if they were produced by older version of redpanda.
+        // if they were produced by older version of funes.
         // In this case we want to skip segment if its offset range
         // lies withing the offset range of the current segment.
         if (mit_committed_offset < next_it->committed_offset) {
@@ -259,7 +259,7 @@ public:
             // without calling stop() on it.  The remote_partition is
             // responsible for cleaning up readers, including calling
             // stop() on them in a background fiber so that we don't have
-            // to. (https://github.com/redpanda-data/redpanda/issues/3378)
+            // to. (https://github.com/redpanda-data/funes/issues/3378)
             vlog(
               _ctxlog.debug,
               "partition_record_batch_reader_impl::~ releasing reader on "
@@ -505,7 +505,7 @@ private:
         if (config.first_timestamp.has_value()) {
             query = config.first_timestamp.value();
         } else {
-            // NOTE: config.start_offset actually contains kafka offset
+            // NOTE: config.start_offset actually contains sql offset
             // stored using model::offset type.
             query = model::offset_cast(config.start_offset);
         }
@@ -518,19 +518,19 @@ private:
 
             if (
               cur.error() == error_outcome::out_of_range
-              && std::holds_alternative<kafka::offset>(query)) {
+              && std::holds_alternative<sql::offset>(query)) {
                 // Special case queries below the start offset of the log.
                 // The start offset may have advanced while the request was
                 // in progress. This is expected, so log at debug level.
                 const auto log_start_offset = _partition->_manifest_view
                                                 ->stm_manifest()
-                                                .full_log_start_kafka_offset();
+                                                .full_log_start_sql_offset();
 
-                const auto query_offset = std::get<kafka::offset>(query);
+                const auto query_offset = std::get<sql::offset>(query);
                 if (log_start_offset && query_offset < *log_start_offset) {
                     vlog(
                       _ctxlog.debug,
-                      "Manifest query below the log's start Kafka offset: {} < "
+                      "Manifest query below the log's start SQL offset: {} < "
                       "{}",
                       query_offset(),
                       log_start_offset.value()());
@@ -867,24 +867,24 @@ ss::future<> remote_partition::run_eviction_loop() {
     }
 }
 
-kafka::offset remote_partition::first_uploaded_offset() {
+sql::offset remote_partition::first_uploaded_offset() {
     vassert(
       _manifest_view->stm_manifest().size() > 0,
       "The manifest for {} is not expected to be empty",
       _manifest_view->stm_manifest().get_ntp());
     auto so
-      = _manifest_view->stm_manifest().full_log_start_kafka_offset().value();
+      = _manifest_view->stm_manifest().full_log_start_sql_offset().value();
     vlog(_ctxlog.trace, "remote partition first_uploaded_offset: {}", so);
     return so;
 }
 
-kafka::offset remote_partition::next_kafka_offset() {
+sql::offset remote_partition::next_sql_offset() {
     vassert(
       _manifest_view->stm_manifest().size() > 0,
       "The manifest for {} is not expected to be empty",
       _manifest_view->get_ntp());
-    auto next = _manifest_view->stm_manifest().get_next_kafka_offset().value();
-    vlog(_ctxlog.debug, "remote partition next_kafka_offset: {}", next);
+    auto next = _manifest_view->stm_manifest().get_next_sql_offset().value();
+    vlog(_ctxlog.debug, "remote partition next_sql_offset: {}", next);
     return next;
 }
 
@@ -915,8 +915,8 @@ ss::future<> remote_partition::serialize_json_manifest_to_output_stream(
     co_await tmp.serialize_json(output);
 }
 
-// returns term last kafka offset
-ss::future<std::optional<kafka::offset>>
+// returns term last sql offset
+ss::future<std::optional<sql::offset>>
 remote_partition::get_term_last_offset(model::term_id term) const {
     const auto res = co_await _manifest_view->get_term_last_offset(term);
     if (res.has_error()) {
@@ -933,9 +933,9 @@ remote_partition::aborted_transactions(offset_range offsets) {
     const auto so = stm_manifest.get_start_offset();
     std::vector<model::tx_range> result;
     if (so.has_value() && offsets.begin > so.value()) {
-        // Here we have to use kafka offsets to locate the segments and
-        // redpanda offsets to extract aborted transactions metadata because
-        // tx-manifests contains redpanda offsets.
+        // Here we have to use sql offsets to locate the segments and
+        // funes offsets to extract aborted transactions metadata because
+        // tx-manifests contains funes offsets.
         std::deque<ss::lw_shared_ptr<remote_segment>> remote_segs;
         for (auto it = stm_manifest.segment_containing(offsets.begin);
              it != stm_manifest.end();
@@ -1133,11 +1133,11 @@ remote_partition::timequery(storage::timequery_config cfg) {
         co_return std::nullopt;
     }
 
-    auto start_offset = stm_manifest.full_log_start_kafka_offset().value();
+    auto start_offset = stm_manifest.full_log_start_sql_offset().value();
 
     // Synthesize a log_reader_config from our timequery_config
     storage::log_reader_config config(
-      kafka::offset_cast(start_offset),
+      sql::offset_cast(start_offset),
       cfg.max_offset,
       0,
       2048, // We just need one record batch

@@ -69,7 +69,7 @@ rp_test(
   BINARY_NAME test_offset_translator
   SOURCES offset_translator_tests.cc
   LIBRARIES v::seastar_testing_main v::raft v::storage_test_utils
-  LABELS kafka
+  LABELS sql
   ARGS "-- -c 8"
 )
 

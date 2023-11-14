@@ -16,7 +16,7 @@
 #include "cluster/tx_coordinator_mapper.h"
 #include "cluster/types.h"
 #include "features/feature_table.h"
-#include "kafka/protocol/types.h"
+#include "sql/protocol/types.h"
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "rpc/fwd.h"
@@ -44,12 +44,12 @@ public:
       config::binding<uint64_t> max_transactions_per_coordinator);
 
     ss::future<std::optional<model::ntp>>
-      ntp_for_tx_id(kafka::transactional_id);
-    ss::future<bool> hosts(model::partition_id, kafka::transactional_id);
+      ntp_for_tx_id(sql::transactional_id);
+    ss::future<bool> hosts(model::partition_id, sql::transactional_id);
     ss::future<fetch_tx_reply> fetch_tx_locally(
-      kafka::transactional_id, model::term_id, model::partition_id);
+      sql::transactional_id, model::term_id, model::partition_id);
     ss::future<init_tm_tx_reply> init_tm_tx(
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds transaction_timeout_ms,
       model::timeout_clock::duration,
       model::producer_identity);
@@ -66,13 +66,13 @@ public:
     get_all_transactions_for_one_tx_partition(model::ntp tx_manager_ntp);
     ss::future<return_all_txs_res> get_all_transactions();
     ss::future<result<tm_transaction, tx_errc>>
-      describe_tx(kafka::transactional_id);
+      describe_tx(sql::transactional_id);
 
     ss::future<try_abort_reply> route_globally(try_abort_request&&);
     ss::future<try_abort_reply> route_locally(try_abort_request&&);
 
     ss::future<tx_errc> delete_partition_from_tx(
-      kafka::transactional_id, tm_transaction::tx_partition);
+      sql::transactional_id, tm_transaction::tx_partition);
 
     ss::future<> stop();
 
@@ -127,7 +127,7 @@ private:
     ss::future<checked<tm_transaction, tx_errc>> get_tx(
       model::term_id,
       ss::shared_ptr<tm_stm>,
-      kafka::transactional_id,
+      sql::transactional_id,
       model::timeout_clock::duration);
     ss::future<checked<tm_transaction, tx_errc>> bump_etag(
       model::term_id,
@@ -143,26 +143,26 @@ private:
       model::term_id,
       ss::shared_ptr<tm_stm>,
       model::producer_identity,
-      kafka::transactional_id,
+      sql::transactional_id,
       model::timeout_clock::duration);
     ss::future<checked<tm_transaction, tx_errc>> get_ongoing_tx(
       model::term_id,
       ss::shared_ptr<tm_stm>,
       model::producer_identity,
-      kafka::transactional_id,
+      sql::transactional_id,
       model::timeout_clock::duration);
 
     ss::future<checked<tm_transaction, tx_errc>>
-      fetch_tx(kafka::transactional_id, model::term_id, model::partition_id);
+      fetch_tx(sql::transactional_id, model::term_id, model::partition_id);
     ss::future<> dispatch_fetch_tx(
-      kafka::transactional_id,
+      sql::transactional_id,
       model::term_id,
       model::partition_id,
       model::timeout_clock::duration,
       ss::lw_shared_ptr<available_promise<checked<tm_transaction, tx_errc>>>);
     ss::future<fetch_tx_reply> dispatch_fetch_tx(
       model::node_id,
-      kafka::transactional_id,
+      sql::transactional_id,
       model::term_id,
       model::partition_id,
       model::timeout_clock::duration,
@@ -170,30 +170,30 @@ private:
     ss::future<try_abort_reply> do_try_abort(
       model::term_id,
       ss::shared_ptr<tm_stm>,
-      kafka::transactional_id,
+      sql::transactional_id,
       model::producer_identity,
       model::tx_seq,
       model::timeout_clock::duration);
-    ss::future<bool> do_hosts(model::partition_id, kafka::transactional_id);
+    ss::future<bool> do_hosts(model::partition_id, sql::transactional_id);
     ss::future<tx_errc>
       do_init_hosted_transactions(ss::shared_ptr<cluster::tm_stm>);
 
     ss::future<cluster::init_tm_tx_reply> init_tm_tx_locally(
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds,
       model::timeout_clock::duration,
       model::producer_identity,
       model::partition_id);
     ss::future<cluster::init_tm_tx_reply> limit_init_tm_tx(
       ss::shared_ptr<tm_stm>,
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds,
       model::timeout_clock::duration,
       model::producer_identity);
     ss::future<cluster::init_tm_tx_reply> do_init_tm_tx(
       ss::shared_ptr<tm_stm>,
       model::term_id,
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds,
       model::timeout_clock::duration,
       model::producer_identity);
@@ -252,14 +252,14 @@ private:
 
     ss::future<tx_errc> do_delete_partition_from_tx(
       ss::shared_ptr<tm_stm>,
-      kafka::transactional_id,
+      sql::transactional_id,
       tm_transaction::tx_partition);
 
     ss::future<tm_transaction> remove_deleted_partitions_from_tx(
       ss::shared_ptr<tm_stm>, model::term_id term, cluster::tm_transaction tx);
 
     ss::future<result<tm_transaction, tx_errc>>
-      describe_tx(ss::shared_ptr<tm_stm>, kafka::transactional_id);
+      describe_tx(ss::shared_ptr<tm_stm>, sql::transactional_id);
 
     ss::future<try_abort_reply>
     process_locally(ss::shared_ptr<tm_stm>, try_abort_request&&);
@@ -267,7 +267,7 @@ private:
     void expire_old_txs();
     ss::future<> expire_old_txs(model::ntp);
     ss::future<> expire_old_txs(ss::shared_ptr<tm_stm>);
-    ss::future<> expire_old_tx(ss::shared_ptr<tm_stm>, kafka::transactional_id);
+    ss::future<> expire_old_tx(ss::shared_ptr<tm_stm>, sql::transactional_id);
     ss::future<tx_errc> do_expire_old_tx(
       ss::shared_ptr<tm_stm>,
       model::term_id term,

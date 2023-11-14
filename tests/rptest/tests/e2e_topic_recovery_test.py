@@ -11,10 +11,10 @@ from rptest.services.cluster import cluster
 from ducktape.mark import matrix
 from ducktape.cluster.cluster_spec import ClusterSpec
 from rptest.clients.types import TopicSpec
-from rptest.services.redpanda import CloudStorageType, RedpandaService, SISettings, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, FunesService, SISettings, get_cloud_storage_type
 from rptest.util import Scale, segments_count, wait_for_local_storage_truncate
 from rptest.clients.rpk import RpkTool
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierSeqConsumer
 from rptest.utils.mode_checks import skip_debug_mode
 from ducktape.mark import ok_to_fail
@@ -26,7 +26,7 @@ import re
 ALLOWED_ERROR_LOG_LINES = [re.compile("Can't prepare pid.* - unknown session")]
 
 
-class EndToEndTopicRecovery(RedpandaTest):
+class EndToEndTopicRecovery(FunesTest):
     """
     The test produces data and makes sure that all data
     is uploaded to S3. After that the test recreates the
@@ -60,14 +60,14 @@ class EndToEndTopicRecovery(RedpandaTest):
         self.logger.info(f"Verifier node name: {self._verifier_node.name}")
 
     def init_producer(self, msg_size, num_messages):
-        self._producer = KgoVerifierProducer(self._ctx, self.redpanda,
+        self._producer = KgoVerifierProducer(self._ctx, self.funes,
                                              self.topic, msg_size,
                                              num_messages,
                                              [self._verifier_node])
 
     def init_consumer(self, msg_size):
         self._consumer = KgoVerifierSeqConsumer(self._ctx,
-                                                self.redpanda,
+                                                self.funes,
                                                 self.topic,
                                                 msg_size,
                                                 nodes=[self._verifier_node],
@@ -75,57 +75,57 @@ class EndToEndTopicRecovery(RedpandaTest):
 
     def free_nodes(self):
         super().free_nodes()
-        wait_until(lambda: self.redpanda.sockets_clear(self._verifier_node),
+        wait_until(lambda: self.funes.sockets_clear(self._verifier_node),
                    timeout_sec=120,
                    backoff_sec=10)
         self.test_context.cluster.free_single(self._verifier_node)
 
-    def _stop_redpanda_nodes(self):
-        """Stop all redpanda nodes"""
-        for node in self.redpanda.nodes:
+    def _stop_funes_nodes(self):
+        """Stop all funes nodes"""
+        for node in self.funes.nodes:
             self.logger.info(f"Node {node.account.hostname} will be stopped")
             if not node is self._verifier_node:
-                self.redpanda.stop_node(node)
+                self.funes.stop_node(node)
         time.sleep(10)
 
-    def _start_redpanda_nodes(self):
-        """Start all redpanda nodes"""
-        for node in self.redpanda.nodes:
+    def _start_funes_nodes(self):
+        """Start all funes nodes"""
+        for node in self.funes.nodes:
             self.logger.info(f"Starting node {node.account.hostname}")
             if not node is self._verifier_node:
-                self.redpanda.start_node(node)
+                self.funes.start_node(node)
         time.sleep(10)
 
     def _wipe_data(self):
-        """Remove all data from redpanda cluster"""
-        for node in self.redpanda.nodes:
+        """Remove all data from funes cluster"""
+        for node in self.funes.nodes:
             self.logger.info(
                 f"All data will be removed from node {node.account.hostname}")
-            self.redpanda.remove_local_data(node)
+            self.funes.remove_local_data(node)
 
     def _restore_topic(self, topic_spec, overrides={}):
         """Restore individual topic"""
         self.logger.info(f"Restore topic called. Topic-manifest: {topic_spec}")
         conf = {
-            'redpanda.remote.recovery': 'true',
-            #'redpanda.remote.write': 'true',
+            'funes.remote.recovery': 'true',
+            #'funes.remote.write': 'true',
         }
         conf.update(overrides)
         self.logger.info(f"Confg: {conf}")
         topic = topic_spec.name
         npart = topic_spec.partition_count
         nrepl = topic_spec.replication_factor
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic, npart, nrepl, conf)
         time.sleep(10)
         rpk.describe_topic(topic)
         rpk.describe_topic_configs(topic)
 
     def _s3_has_all_data(self, num_messages):
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
         manifest = view.get_partition_manifest(
-            NTP(ns='kafka', topic=self.topic, partition=0))
-        last_offset = BucketView.kafka_last_offset(manifest)
+            NTP(ns='sql', topic=self.topic, partition=0))
+        last_offset = BucketView.sql_last_offset(manifest)
         return last_offset is not None and last_offset + 1 >= num_messages
 
     @cluster(num_nodes=4)
@@ -138,7 +138,7 @@ class EndToEndTopicRecovery(RedpandaTest):
          in other words, only segments containing at least some data counts towards retention.local.target.bytes limit"""
         """1. generate some messages
         2. restart the cluster to generate some config-only remote segments
-        3. restore topic with a small retention.local.target.bytes to force redpanda 
+        3. restore topic with a small retention.local.target.bytes to force funes 
            to get over the limit and skip over configuration batches"""
         self.logger.info("start")
         self.init_producer(5000, num_messages)
@@ -153,15 +153,15 @@ class EndToEndTopicRecovery(RedpandaTest):
 
         for i in range(3):
             self.logger.info(f"iteration {i}")
-            self._stop_redpanda_nodes()
-            self._start_redpanda_nodes()
+            self._stop_funes_nodes()
+            self._start_funes_nodes()
 
         self.logger.info("final iteration")
-        self._stop_redpanda_nodes()
+        self._stop_funes_nodes()
         self._wipe_data()
 
         # Run recovery
-        self._start_redpanda_nodes()
+        self._start_funes_nodes()
         for topic_spec in self.topics:
             self._restore_topic(topic_spec,
                                 {'retention.local.target.bytes': 512})
@@ -197,10 +197,10 @@ class EndToEndTopicRecovery(RedpandaTest):
                    err_msg=f"Not all data is uploaded to S3 bucket")
 
         # Wipe out the state on the nodes
-        self._stop_redpanda_nodes()
+        self._stop_funes_nodes()
         self._wipe_data()
         # Run recovery
-        self._start_redpanda_nodes()
+        self._start_funes_nodes()
         for topic_spec in self.topics:
             self._restore_topic(topic_spec, recovery_overrides)
 
@@ -221,8 +221,8 @@ class EndToEndTopicRecovery(RedpandaTest):
     @cluster(num_nodes=5, log_allow_list=ALLOWED_ERROR_LOG_LINES)
     @matrix(recovery_overrides=[{}, {
         'retention.local.target.bytes': 1024,
-        'redpanda.remote.write': True,
-        'redpanda.remote.read': True,
+        'funes.remote.write': True,
+        'funes.remote.read': True,
     }],
             cloud_storage_type=get_cloud_storage_type())
     @skip_debug_mode
@@ -241,12 +241,12 @@ class EndToEndTopicRecovery(RedpandaTest):
 
         # Abort an unrealistically high fraction of transactions, to give a good probability
         # of exercising code paths that might e.g. seek to an abort marker
-        # (reproduce https://github.com/redpanda-data/redpanda/issues/7043)
+        # (reproduce https://github.com/redpanda-data/funes/issues/7043)
         msg_size = 16384
         msg_count = 10000
         per_transaction = 10
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -266,7 +266,7 @@ class EndToEndTopicRecovery(RedpandaTest):
         # Re-use the same node as the producer for consumers
         traffic_node = producer.nodes[0]
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         hwm = next(rpk.describe_topic(self.topic)).high_watermark
         self.logger.info(f"Produced to HWM {hwm}")
 
@@ -283,7 +283,7 @@ class EndToEndTopicRecovery(RedpandaTest):
 
         def validate():
             consumer = KgoVerifierSeqConsumer(self.test_context,
-                                              self.redpanda,
+                                              self.funes,
                                               self.topic,
                                               msg_size,
                                               loop=False,
@@ -312,7 +312,7 @@ class EndToEndTopicRecovery(RedpandaTest):
         # Let local data age out validate that transaction reads that hit S3 are correct
         rpk.alter_topic_config(self.topic, "retention.local.target.bytes",
                                "1024")
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         self.topic,
                                         target_bytes=int(msg_size * msg_count *
                                                          0.5),
@@ -320,14 +320,14 @@ class EndToEndTopicRecovery(RedpandaTest):
         validate()
 
         # Restart, and check that transactional reads to S3 remain correct
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         validate()
 
         # Wipe out the state on the nodes
-        self._stop_redpanda_nodes()
+        self._stop_funes_nodes()
         self._wipe_data()
         # Run recovery
-        self._start_redpanda_nodes()
+        self._start_funes_nodes()
         for topic_spec in self.topics:
             self._restore_topic(topic_spec, recovery_overrides)
 

@@ -18,18 +18,18 @@ from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
-from rptest.clients.python_librdkafka import PythonLibrdkafka
+from rptest.clients.python_librdsql import PythonLibrdsql
 from rptest.services.admin import Admin
-from rptest.services.redpanda import SecurityConfig, SaslCredentials, SecurityConfig
+from rptest.services.funes import SecurityConfig, SaslCredentials, SecurityConfig
 from rptest.tests.sasl_reauth_test import get_sasl_metrics, REAUTH_METRIC, EXPIRATION_METRIC
 from rptest.util import expect_http_error
 from rptest.utils.utf8 import CONTROL_CHARS, CONTROL_CHARS_MAP
 
 
-class BaseScramTest(RedpandaTest):
+class BaseScramTest(FunesTest):
     def __init__(self, test_context, **kwargs):
         super(BaseScramTest, self).__init__(test_context, **kwargs)
 
@@ -40,7 +40,7 @@ class BaseScramTest(RedpandaTest):
 
         password = gen(20)
 
-        controller = self.redpanda.nodes[0]
+        controller = self.funes.nodes[0]
         url = f"http://{controller.account.hostname}:9644/v1/security/users/{username}"
         data = dict(
             username=username,
@@ -53,13 +53,13 @@ class BaseScramTest(RedpandaTest):
         return password
 
     def delete_user(self, username):
-        controller = self.redpanda.nodes[0]
+        controller = self.funes.nodes[0]
         url = f"http://{controller.account.hostname}:9644/v1/security/users/{username}"
         res = requests.delete(url)
         assert res.status_code == 200
 
     def list_users(self):
-        controller = self.redpanda.nodes[0]
+        controller = self.funes.nodes[0]
         url = f"http://{controller.account.hostname}:9644/v1/security/users"
         res = requests.get(url)
         assert res.status_code == 200
@@ -78,7 +78,7 @@ class BaseScramTest(RedpandaTest):
         if password is None:
             password = gen(15)
 
-        controller = self.redpanda.nodes[0]
+        controller = self.funes.nodes[0]
         url = f"http://{controller.account.hostname}:9644/v1/security/users"
         data = dict(
             username=username,
@@ -96,9 +96,9 @@ class BaseScramTest(RedpandaTest):
         return password
 
     def make_superuser_client(self, password_override=None):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
         password = password_override or password
-        return PythonLibrdkafka(self.redpanda,
+        return PythonLibrdsql(self.funes,
                                 username=username,
                                 password=password,
                                 algorithm=algorithm)
@@ -127,9 +127,9 @@ class ScramTest(BaseScramTest):
         controller_id = None
         t1 = time.time()
         while controller_id is None:
-            node = self.redpanda.nodes[0]
+            node = self.funes.nodes[0]
             controller_id = r = requests.get(
-                f"http://{node.account.hostname}:9644/v1/partitions/redpanda/controller/0",
+                f"http://{node.account.hostname}:9644/v1/partitions/funes/controller/0",
             )
             if r.status_code != 200:
                 time.sleep(1)
@@ -144,17 +144,17 @@ class ScramTest(BaseScramTest):
             if time.time() - t1 > 10:
                 raise RuntimeError("Timed out waiting for a leader")
 
-        leader_node = self.redpanda.get_node(controller_id)
+        leader_node = self.funes.get_node(controller_id)
 
         # Request to all nodes, with redirect-following disabled.  Expect success
         # from the leader, and redirect responses from followers.
-        for i, node in enumerate(self.redpanda.nodes):
-            # Redpanda config in ducktape has two listeners, one by IP and one by DNS (this simulates
+        for i, node in enumerate(self.funes.nodes):
+            # Funes config in ducktape has two listeners, one by IP and one by DNS (this simulates
             # nodes that have internal and external addresses).  The admin API redirects should
             # redirect us to the leader's IP for requests sent by IP, by DNS for requests sent by DNS.
             if alternate_listener:
                 hostname = socket.gethostbyname(node.account.hostname)
-                port = self.redpanda.ADMIN_ALTERNATE_PORT
+                port = self.funes.ADMIN_ALTERNATE_PORT
                 leader_name = socket.gethostbyname(
                     leader_node.account.hostname)
 
@@ -219,7 +219,7 @@ class ScramTest(BaseScramTest):
         except AssertionError as e:
             raise e
         except Exception as e:
-            self.redpanda.logger.debug(e)
+            self.funes.logger.debug(e)
             pass
 
         # but it works with correct password
@@ -234,7 +234,7 @@ class ScramTest(BaseScramTest):
         print(topics)
         assert topic.name in topics
 
-        username = self.redpanda.SUPERUSER_CREDENTIALS.username
+        username = self.funes.SUPERUSER_CREDENTIALS.username
         self.delete_user(username)
 
         try:
@@ -248,11 +248,11 @@ class ScramTest(BaseScramTest):
         except AssertionError as e:
             raise e
         except Exception as e:
-            self.redpanda.logger.debug(e)
+            self.funes.logger.debug(e)
             pass
 
         # recreate user
-        algorithm = self.redpanda.SUPERUSER_CREDENTIALS.algorithm
+        algorithm = self.funes.SUPERUSER_CREDENTIALS.algorithm
         password = self.create_user(username, algorithm)
 
         # works ok again
@@ -274,7 +274,7 @@ class ScramTest(BaseScramTest):
         except AssertionError as e:
             raise e
         except Exception as e:
-            self.redpanda.logger.debug(e)
+            self.funes.logger.debug(e)
             pass
 
         # but works ok with new password
@@ -287,7 +287,7 @@ class ScramTest(BaseScramTest):
         assert username in users
 
 
-class ScramLiveUpdateTest(RedpandaTest):
+class ScramLiveUpdateTest(FunesTest):
     def __init__(self, test_context):
         super(ScramLiveUpdateTest, self).__init__(test_context, num_brokers=1)
 
@@ -295,16 +295,16 @@ class ScramLiveUpdateTest(RedpandaTest):
     def test_enable_sasl_live(self):
         """
         Verify that when enable_sasl is set to true at runtime, subsequent
-        unauthenticated kafka clients are rejected.
+        unauthenticated sql clients are rejected.
         """
 
-        unauthenticated_client = PythonLibrdkafka(self.redpanda)
+        unauthenticated_client = PythonLibrdsql(self.funes)
         topic = TopicSpec(replication_factor=1)
         unauthenticated_client.create_topic(topic)
         assert len(unauthenticated_client.topics()) == 1
 
         # Switch on authentication
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         admin.patch_cluster_config(upsert={'enable_sasl': True})
 
         # An unauthenticated client should be rejected
@@ -324,7 +324,7 @@ class ScramLiveUpdateTest(RedpandaTest):
         assert len(unauthenticated_client.topics()) == 1
 
 
-class ScramBootstrapUserTest(RedpandaTest):
+class ScramBootstrapUserTest(FunesTest):
     BOOTSTRAP_USERNAME = 'bob'
     BOOTSTRAP_PASSWORD = 'sekrit'
 
@@ -358,7 +358,7 @@ class ScramBootstrapUserTest(RedpandaTest):
             **kwargs)
 
     def setUp(self):
-        self.redpanda.start(expect_fail=self.expect_fail)
+        self.funes.start(expect_fail=self.expect_fail)
         if not self.expect_fail:
             self._create_initial_topics()
 
@@ -371,7 +371,7 @@ class ScramBootstrapUserTest(RedpandaTest):
         :returns: true if all nodes throw an error with the expected status code
         """
 
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             try:
                 callable(n)
             except HTTPError as e:
@@ -387,12 +387,12 @@ class ScramBootstrapUserTest(RedpandaTest):
     @parametrize(mechanism='SCRAM-SHA-256')
     def test_bootstrap_user(self, mechanism):
         # Anonymous access should be refused
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         with expect_http_error(403):
             admin.list_users()
 
         # Access using the bootstrap credentials should succeed
-        admin = Admin(self.redpanda,
+        admin = Admin(self.funes,
                       auth=(self.BOOTSTRAP_USERNAME, self.BOOTSTRAP_PASSWORD))
         assert self.BOOTSTRAP_USERNAME in admin.list_users()
 
@@ -412,14 +412,14 @@ class ScramBootstrapUserTest(RedpandaTest):
             admin.list_users()
 
         # Using new credential should succeed
-        admin = Admin(self.redpanda,
+        admin = Admin(self.funes,
                       auth=(self.BOOTSTRAP_USERNAME, 'newpassword'))
         admin.list_users()
 
         # Modified credential should survive a restart: this verifies that
         # the RP_BOOTSTRAP_USER setting does not fight with changes made
         # by other means.
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         admin.list_users()
 
     @cluster(num_nodes=1,
@@ -429,7 +429,7 @@ class ScramBootstrapUserTest(RedpandaTest):
     @parametrize(mechanism='sCrAm-ShA-512', expect_fail=True)
     def test_invalid_scram_mechanism(self, mechanism, expect_fail):
         assert expect_fail
-        assert self.redpanda.count_log_node(self.redpanda.nodes[0],
+        assert self.funes.count_log_node(self.funes.nodes[0],
                                             "Invalid SCRAM mechanism")
 
 
@@ -515,11 +515,11 @@ class SCRAMReauthTest(BaseScramTest):
             test_context=test_context,
             num_brokers=3,
             security=security,
-            extra_rp_conf={'kafka_sasl_max_reauth_ms': self.MAX_REAUTH_MS},
+            extra_rp_conf={'sql_sasl_max_reauth_ms': self.MAX_REAUTH_MS},
             **kwargs)
 
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
-        self.rpk = RpkTool(self.redpanda,
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
+        self.rpk = RpkTool(self.funes,
                            username=username,
                            password=password,
                            sasl_mechanism=algorithm)
@@ -543,8 +543,8 @@ class SCRAMReauthTest(BaseScramTest):
 
         producer.flush(timeout=2)
 
-        metrics = get_sasl_metrics(self.redpanda)
-        self.redpanda.logger.debug(f"SASL metrics: {metrics}")
+        metrics = get_sasl_metrics(self.funes)
+        self.funes.logger.debug(f"SASL metrics: {metrics}")
         assert (EXPIRATION_METRIC in metrics.keys())
         assert (metrics[EXPIRATION_METRIC] == 0
                 ), "Client should reauth before session expiry"

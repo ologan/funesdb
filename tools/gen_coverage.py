@@ -127,7 +127,7 @@ def gen_coverage_csv(report_json):
 
 
 def main(args):
-    rp_binary = os.path.join(args.build_root, "debug/clang/bin/redpanda")
+    rp_binary = os.path.join(args.build_root, "debug/clang/bin/funes")
     data_profile = tempfile.NamedTemporaryFile()
 
     # merge profraw files into the data profile
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     parser.add_argument("--build-root",
                         type=str,
                         required=True,
-                        help="The path to redpanda/vbuild")
+                        help="The path to funes/vbuild")
     parser.add_argument("--ignore-regex",
                         type=str,
                         help="Ignore files that match the regex")

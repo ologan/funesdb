@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/schemaregistry"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/serde"
@@ -146,8 +146,8 @@ func newProduceCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			cl, err := kafka.NewFranzClient(fs, p, opts...)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			cl, err := sql.NewFranzClient(fs, p, opts...)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer cl.Close()
 			defer cl.Flush(context.Background())
 
@@ -260,7 +260,7 @@ func querySchemas(ctx context.Context, cl *sr.Client, keySchemaID, valSchemaID i
 const helpProduce = `Produce records to a topic.
 
 Producing records reads from STDIN, parses input according to --format, and
-produce records to Redpanda. The input formatter understands a wide variety of
+produce records to Funes. The input formatter understands a wide variety of
 formats.
 
 Parsing input operates on either sizes or on delimiters, both of which can be

@@ -9,7 +9,7 @@
 
 from collections import defaultdict
 from time import sleep
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 
 from rptest.services.cluster import cluster
 from ducktape.mark import parametrize
@@ -17,11 +17,11 @@ from ducktape.mark import parametrize
 from rptest.clients.kcl import KCL
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.sql_cli_consumer import SQLCliConsumer
+from rptest.tests.funes_test import FunesTest
 
 
-class FetchTest(RedpandaTest):
+class FetchTest(FunesTest):
     def __init__(self, test_ctx, *args, **kwargs):
         self._ctx = test_ctx
         super(FetchTest, self).__init__(test_ctx,
@@ -33,7 +33,7 @@ class FetchTest(RedpandaTest):
     @cluster(num_nodes=4)
     def fetch_long_poll_test(self):
         """
-        Test if redpanda is able to debounce fetches when consumer requests
+        Test if funes is able to debounce fetches when consumer requests
         to wait for data
         """
         partition_count = 20
@@ -43,10 +43,10 @@ class FetchTest(RedpandaTest):
 
         # create topic
         self.client().create_topic(specs=topic)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
-        consumer = KafkaCliConsumer(self.test_context,
-                                    self.redpanda,
+        consumer = SQLCliConsumer(self.test_context,
+                                    self.funes,
                                     topic=topic.name,
                                     group='test-gr-1',
                                     from_beginning=True,

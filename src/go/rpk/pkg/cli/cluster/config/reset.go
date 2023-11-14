@@ -28,26 +28,26 @@ func newForceResetCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Long: `Forcibly clear a cluster configuration property on this node.
 
 This command is not for general changes to cluster configuration: use this only
-when redpanda will not start due to a configuration issue.
+when funes will not start due to a configuration issue.
 
 If your cluster is working properly and you would like to reset a property
 to its default, you may use the 'set' command with an empty string, or
 use the 'edit' command and delete the property's line.
 
 This command erases a named property from an internal cache of the cluster
-configuration on the local node, so that on next startup redpanda will treat
+configuration on the local node, so that on next startup funes will treat
 the setting as if it was set to the default.
 
-WARNING: this should only be used when redpanda is not running.
+WARNING: this should only be used when funes is not running.
 `,
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, propertyNames []string) {
-			y, err := p.LoadVirtualRedpandaYaml(fs)
+			y, err := p.LoadVirtualFunesYaml(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			dataDir := y.Redpanda.Directory
+			dataDir := y.Funes.Directory
 
-			// Same filename as in redpanda config_manager.cc
+			// Same filename as in funes config_manager.cc
 			if configCacheFile == "" {
 				const cacheFileName = "config_cache.yaml"
 				configCacheFile = filepath.Join(dataDir, cacheFileName)
@@ -75,7 +75,7 @@ WARNING: this should only be used when redpanda is not running.
 			err = afero.WriteFile(fs, configCacheFile, outBytes, 0o755)
 			out.MaybeDie(err, "Couldn't write %q: %v", configCacheFile, err)
 
-			fmt.Println("The property has been successfully removed from the cluster configuration cache. Next time Redpanda starts, the setting will be treated as if it were set to its default value.")
+			fmt.Println("The property has been successfully removed from the cluster configuration cache. Next time Funes starts, the setting will be treated as if it were set to its default value.")
 		},
 	}
 
@@ -83,7 +83,7 @@ WARNING: this should only be used when redpanda is not running.
 		&configCacheFile,
 		"cache-file",
 		"",
-		"location of configuration cache file (defaults to redpanda data directory)",
+		"location of configuration cache file (defaults to funes data directory)",
 	)
 
 	return cmd

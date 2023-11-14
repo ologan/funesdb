@@ -184,7 +184,7 @@ inline ss::metrics::histogram report_default_histogram(const hdr_hist& hist) {
       num_buckets, first_value, log_base, scale);
 }
 
-constexpr auto label_namespace = "redpanda";
+constexpr auto label_namespace = "funes";
 
 inline ss::metrics::label make_namespaced_label(const seastar::sstring& name) {
     return ss::metrics::label(ssx::sformat("{}_{}", label_namespace, name));

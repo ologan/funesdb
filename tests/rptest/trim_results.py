@@ -27,7 +27,7 @@ log.addHandler(logging.StreamHandler())
 
 class Trimmer:
     """
-    Trim the redpanda logs in a ducktape result tree, such that successful
+    Trim the funes logs in a ducktape result tree, such that successful
     tests do not retain DEBUG or TRACE logs.
     """
     def __init__(self, result_path):
@@ -42,9 +42,9 @@ class Trimmer:
             if r['test_status'] == "PASS" or r['test_status'] == "OPASS":
                 for service in r['services']:
                     service_logs = {
-                        "RedpandaService": "redpanda.log",
+                        "FunesService": "funes.log",
                         "MirrorMaker2": "mirror_maker2.log",
-                        "KafkaService": "server-start-stdout-stderr.log"
+                        "SQLService": "server-start-stdout-stderr.log"
                     }
 
                     try:

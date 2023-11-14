@@ -7,8 +7,8 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.services.redpanda import MetricsEndpoint
-from rptest.services.redpanda import FAILURE_INJECTION_LOG_ALLOW_LIST
+from rptest.services.funes import MetricsEndpoint
+from rptest.services.funes import FAILURE_INJECTION_LOG_ALLOW_LIST
 from rptest.services.storage_failure_injection import FailureInjectionConfig, \
     NTPFailureInjectionConfig, FailureConfig, NTP, Operation, BatchType
 from rptest.utils.si_utils import BucketView
@@ -46,14 +46,14 @@ def _generate_failure_injection_config(
         ]
 
     ntps: list[NTP] = []
-    ntps.append(NTP(namespace="redpanda", topic="controller", partition=0))
+    ntps.append(NTP(namespace="funes", topic="controller", partition=0))
 
     # Each shard gets its own kvstore ntp. The servers
     # on which the test is running will have less than 64 cores,
     # but having failure configuration for non-existing
     # partitions is not an issue.
     for shard in range(64):
-        ntps.append(NTP(namespace="redpanda", topic="kvstore", partition=0))
+        ntps.append(NTP(namespace="funes", topic="kvstore", partition=0))
 
     for topic in topic_names:
         ntps += [
@@ -69,7 +69,7 @@ def _generate_failure_injection_config(
                                   ntp_failure_configs=ntp_failure_configs)
 
 
-def _calculate_statistic(topics, rpk, redpanda):
+def _calculate_statistic(topics, rpk, funes):
     # TODO: Update for multiple topics used
     _stats = {
         # Sum of all watermarks from every partition
@@ -90,7 +90,7 @@ def _calculate_statistic(topics, rpk, redpanda):
             _m = max(list)
             _stats[key] = _m if _stats[key] < _m else _stats[key]
 
-    bucket = BucketView(redpanda)
+    bucket = BucketView(funes)
 
     # Calculate high watermark sum for all partitions in topic
     for topic in topics:
@@ -132,14 +132,14 @@ def _calculate_statistic(topics, rpk, redpanda):
     # Check manifest upload metrics:
     #  - we should not have uploaded the manifest more times
     #    then there were manifest upload intervals in the runtime.
-    _stats["manifest_uploads"] = redpanda.metric_sum(
-        metric_name="redpanda_cloud_storage_partition_manifest_uploads_total",
+    _stats["manifest_uploads"] = funes.metric_sum(
+        metric_name="funes_cloud_storage_partition_manifest_uploads_total",
         metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
-    _stats["segment_uploads"] = redpanda.metric_sum(
-        metric_name="redpanda_cloud_storage_segment_uploads_total",
+    _stats["segment_uploads"] = funes.metric_sum(
+        metric_name="funes_cloud_storage_segment_uploads_total",
         metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
-    _stats["spillover_manifest_uploads_total"] = redpanda.metric_sum(
-        metric_name="redpanda_cloud_storage_spillover_manifest_uploads_total",
+    _stats["spillover_manifest_uploads_total"] = funes.metric_sum(
+        metric_name="funes_cloud_storage_spillover_manifest_uploads_total",
         metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
 
     return _stats

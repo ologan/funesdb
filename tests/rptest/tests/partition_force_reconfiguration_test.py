@@ -32,14 +32,14 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
     SPEC = TopicSpec(name="topic", replication_factor=5)
     WAIT_TIMEOUT_S = 30
 
-    def _start_redpanda(self, acks=-1):
-        self.start_redpanda(
+    def _start_funes(self, acks=-1):
+        self.start_funes(
             num_nodes=7,
             extra_rp_conf={"internal_topic_replication_factor": 7})
         self.client().create_topic(self.SPEC)
         self.topic = self.SPEC.name
         # Wait for initial leader
-        self.redpanda._admin.await_stable_leader(topic=self.topic,
+        self.funes._admin.await_stable_leader(topic=self.topic,
                                                  replication=5,
                                                  timeout_s=self.WAIT_TIMEOUT_S)
         # Start a producer at the desired acks level
@@ -49,8 +49,8 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
     def _wait_until_no_leader(self):
         """Scrapes the debug endpoints of all replicas and checks if any of the replicas think they are the leader"""
         def no_leader():
-            state = self.redpanda._admin.get_partition_state(
-                "kafka", self.topic, 0)
+            state = self.funes._admin.get_partition_state(
+                "sql", self.topic, 0)
             if "replicas" not in state.keys() or len(state["replicas"]) == 0:
                 return True
             for r in state["replicas"]:
@@ -65,15 +65,15 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
                    err_msg="Partition has a leader")
 
     def _alive_nodes(self):
-        return [n.account.hostname for n in self.redpanda.started_nodes()]
+        return [n.account.hostname for n in self.funes.started_nodes()]
 
     def _stop_majority_nodes(self, replication=5, conf=None):
         """
         Stops a random majority of nodes hosting partition 0 of test topic.
         """
-        assert self.redpanda
+        assert self.funes
         if not conf:
-            conf = self.redpanda._admin._get_stable_configuration(
+            conf = self.funes._admin._get_stable_configuration(
                 hosts=self._alive_nodes(),
                 topic=self.topic,
                 replication=replication)
@@ -82,17 +82,17 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
         mid = len(replicas) // 2 + 1
         (killed, alive) = (replicas[0:mid], replicas[mid:])
         for replica in killed:
-            node = self.redpanda.get_node_by_id(replica.node_id)
+            node = self.funes.get_node_by_id(replica.node_id)
             assert node
             self.logger.debug(f"Stopping node with node_id: {replica.node_id}")
-            self.redpanda.stop_node(node)
+            self.funes.stop_node(node)
         # The partition should be leaderless.
         self._wait_until_no_leader()
         return (killed, alive)
 
     def _do_force_reconfiguration(self, replicas):
         try:
-            self.redpanda._admin.force_set_partition_replicas(
+            self.funes._admin.force_set_partition_replicas(
                 topic=self.topic, partition=0, replicas=replicas)
             return True
         except requests.exceptions.RetryError:
@@ -107,8 +107,8 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
             dict(node_id=replica.node_id, core=replica.core)
             for replica in new_replicas
         ]
-        self.redpanda.logger.info(f"Force reconfiguring to: {replicas}")
-        self.redpanda.wait_until(
+        self.funes.logger.info(f"Force reconfiguring to: {replicas}")
+        self.funes.wait_until(
             lambda: self._do_force_reconfiguration(replicas=replicas),
             timeout_sec=60,
             backoff_sec=2,
@@ -120,7 +120,7 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
         # Wait for all consumer offsets partitions to have a stable leadership.
         # With lost nodes on debug builds, this seems to take time to converge.
         for part in range(0, 16):
-            self.redpanda._admin.await_stable_leader(
+            self.funes._admin.await_stable_leader(
                 topic="__consumer_offsets",
                 partition=part,
                 timeout_s=self.WAIT_TIMEOUT_S,
@@ -132,13 +132,13 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
             restart=[True, False],
             controller_snapshots=[True, False])
     def test_basic_reconfiguration(self, acks, restart, controller_snapshots):
-        self._start_redpanda(acks=acks)
+        self._start_funes(acks=acks)
 
         if controller_snapshots:
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 {"controller_snapshot_max_age_sec": 1})
         else:
-            self.redpanda._admin.put_feature("controller_snapshots",
+            self.funes._admin.put_feature("controller_snapshots",
                                              {"state": "disabled"})
 
         # Kill a majority of nodes
@@ -146,7 +146,7 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
 
         self._force_reconfiguration(alive)
         # Leadership should be stabilized
-        self.redpanda._admin.await_stable_leader(topic=self.topic,
+        self.funes._admin.await_stable_leader(topic=self.topic,
                                                  replication=len(alive),
                                                  hosts=self._alive_nodes())
 
@@ -160,16 +160,16 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
             alive_nodes_before = self._alive_nodes()
             # Restart the killed nodes
             for replica in killed:
-                node = self.redpanda.get_node_by_id(replica.node_id)
+                node = self.funes.get_node_by_id(replica.node_id)
                 assert node
                 self.logger.debug(
                     f"Restarting node with node_id: {replica.node_id}")
-                self.redpanda.start_node(node=node)
+                self.funes.start_node(node=node)
             alive_nodes_after = self._alive_nodes()
             assert len(alive_nodes_before) < len(alive_nodes_after)
             # The partition should still remain with the reduced replica
             # set size even after all the nodes are started back.
-            self.redpanda._admin.await_stable_leader(
+            self.funes._admin.await_stable_leader(
                 topic=self.topic,
                 replication=reduced_replica_set_size,
                 hosts=alive_nodes_after,
@@ -180,14 +180,14 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
     @cluster(num_nodes=5)
     @matrix(controller_snapshots=[True, False])
     def test_reconfiguring_with_dead_node(self, controller_snapshots):
-        self.start_redpanda(num_nodes=5)
-        assert self.redpanda
+        self.start_funes(num_nodes=5)
+        assert self.funes
 
         if controller_snapshots:
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 {"controller_snapshot_max_age_sec": 1})
         else:
-            self.redpanda._admin.put_feature("controller_snapshots",
+            self.funes._admin.put_feature("controller_snapshots",
                                              {"state": "disabled"})
 
         self.topic = "topic"
@@ -206,10 +206,10 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
             time.sleep(3)
 
         # Started the killed node back up.
-        self.redpanda.start_node(
-            node=self.redpanda.get_node_by_id(killed.node_id))
+        self.funes.start_node(
+            node=self.funes.get_node_by_id(killed.node_id))
         # New group should include the killed node.
-        self.redpanda._admin.await_stable_leader(topic=self.topic,
+        self.funes._admin.await_stable_leader(topic=self.topic,
                                                  replication=len(alive) + 1,
                                                  hosts=self._alive_nodes(),
                                                  timeout_s=self.WAIT_TIMEOUT_S)
@@ -217,15 +217,15 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
     @cluster(num_nodes=7)
     @matrix(target_replica_set_size=[1, 3])
     def test_reconfiguring_all_replicas_lost(self, target_replica_set_size):
-        self.start_redpanda(num_nodes=4)
-        assert self.redpanda
+        self.start_funes(num_nodes=4)
+        assert self.funes
 
         # create a topic with rf = 1
         self.topic = "topic"
         self.client().create_topic(
             TopicSpec(name=self.topic, replication_factor=1))
 
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
 
         # produce some data.
         self.start_producer(acks=1)
@@ -264,12 +264,12 @@ class PartitionForceReconfigurationTest(EndToEndTest, PartitionMovementMixin):
         # force reconfigure to target replica set size
         assert target_replica_set_size <= len(self._alive_nodes())
         new_replicas = [
-            Replica(dict(node_id=self.redpanda.node_id(replica), core=0)) for
-            replica in self.redpanda.started_nodes()[:target_replica_set_size]
+            Replica(dict(node_id=self.funes.node_id(replica), core=0)) for
+            replica in self.funes.started_nodes()[:target_replica_set_size]
         ]
         self._force_reconfiguration(new_replicas=new_replicas)
 
-        self.redpanda._admin.await_stable_leader(
+        self.funes._admin.await_stable_leader(
             topic=self.topic,
             replication=target_replica_set_size,
             hosts=self._alive_nodes(),

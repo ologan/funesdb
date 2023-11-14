@@ -11,11 +11,11 @@ from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.tests.funes_test import FunesTest
+from rptest.clients.sql_cli_tools import SQLCliTools
 
 
-class CompactionTermRollRecoveryTest(RedpandaTest):
+class CompactionTermRollRecoveryTest(FunesTest):
     topics = (TopicSpec(cleanup_policy=TopicSpec.CLEANUP_COMPACT,
                         partition_count=1), )
 
@@ -46,18 +46,18 @@ class CompactionTermRollRecoveryTest(RedpandaTest):
         # because we use a metric that is aggregated by partition
         # to retrieve the number of compacted segments, which means
         # that it cannot differentiate between multiple partitions.
-        partition = self.redpanda.partitions(self.topic)[0]
+        partition = self.funes.partitions(self.topic)[0]
 
         # stop a replica in order to test its recovery
         all_replicas = list(partition.replicas)
         needs_recovery, *others = all_replicas
-        self.redpanda.stop_node(needs_recovery)
+        self.funes.stop_node(needs_recovery)
 
         # produce until segments have been compacted
         self._produce_until_compaction(others, self.topic)
 
         # restart all replicas: rolls term, starts recovery
-        self.redpanda.restart_nodes(all_replicas)
+        self.funes.restart_nodes(all_replicas)
 
         # ensure that the first stopped node recovered ok
         self._wait_until_recovered(all_replicas, self.topic, partition.index)
@@ -72,10 +72,10 @@ class CompactionTermRollRecoveryTest(RedpandaTest):
             map(lambda cnt: cnt + num_segs,
                 self._compacted_segments(nodes, topic)))
 
-        kafka_tools = KafkaCliTools(self.redpanda)
+        sql_tools = SQLCliTools(self.funes)
 
         def done():
-            kafka_tools.produce(self.topic, 1024, 1024)
+            sql_tools.produce(self.topic, 1024, 1024)
             curr = self._compacted_segments(nodes, topic)
             return all(map(lambda cnt: cnt[0] > cnt[1], zip(curr, target)))
 
@@ -94,11 +94,11 @@ class CompactionTermRollRecoveryTest(RedpandaTest):
         """
         def fetch(node):
             count = 0
-            metrics = self.redpanda.metrics(node)
+            metrics = self.funes.metrics(node)
             for family in metrics:
                 for sample in family.samples:
                     if sample.name == "vectorized_storage_log_compacted_segment_total" and \
-                            sample.labels["namespace"] == "kafka" and \
+                            sample.labels["namespace"] == "sql" and \
                             sample.labels["topic"] == topic:
                         count += int(sample.value)
             self.logger.debug(count)
@@ -113,11 +113,11 @@ class CompactionTermRollRecoveryTest(RedpandaTest):
         def fetch_lso(node):
             last_stable_offset = None
             try:
-                metrics = self.redpanda.metrics(node)
+                metrics = self.funes.metrics(node)
                 for family in metrics:
                     for sample in family.samples:
                         if sample.name == "vectorized_cluster_partition_last_stable_offset" and \
-                                sample.labels["namespace"] == "kafka" and \
+                                sample.labels["namespace"] == "sql" and \
                                 sample.labels["topic"] == topic and \
                                 int(sample.labels["partition"]) == partition:
                             last_stable_offset = int(sample.value)

@@ -52,7 +52,7 @@ func TestAll(t *testing.T) {
 			expHeaders: http.Header{
 				"Accept-Encoding": []string{"gzip"}, // default from Go
 				"Accept":          []string{"application/json"},
-				"User-Agent":      []string{"redpanda"},
+				"User-Agent":      []string{"funes"},
 			},
 			expResp: "bar",
 		}, {
@@ -69,7 +69,7 @@ func TestAll(t *testing.T) {
 			expHeaders: http.Header{
 				"Accept-Encoding": []string{"gzip"},
 				"Accept":          []string{"application/json"},
-				"User-Agent":      []string{"redpanda"},
+				"User-Agent":      []string{"funes"},
 			},
 			expPath: "/foo2",
 			expResp: []byte("resp"),
@@ -137,7 +137,7 @@ func TestAll(t *testing.T) {
 			expHeaders: http.Header{
 				"Accept-Encoding": []string{"gzip"},
 				"Accept":          []string{"application/json"},
-				"User-Agent":      []string{"redpanda"},
+				"User-Agent":      []string{"funes"},
 				"Content-Type":    []string{"application/x-www-form-urlencoded"},
 				"Content-Length":  []string{"27"},
 			},
@@ -158,7 +158,7 @@ func TestAll(t *testing.T) {
 			expHeaders: http.Header{
 				"Accept-Encoding": []string{"gzip"},
 				"Accept":          []string{"application/json"},
-				"User-Agent":      []string{"redpanda"},
+				"User-Agent":      []string{"funes"},
 				"Content-Length":  []string{"4"},
 			},
 			expPath:    "/put",
@@ -176,7 +176,7 @@ func TestAll(t *testing.T) {
 			expHeaders: http.Header{
 				"Accept-Encoding": []string{"gzip"},
 				"Accept":          []string{"application/json"},
-				"User-Agent":      []string{"redpanda"},
+				"User-Agent":      []string{"funes"},
 			},
 			expPath: "/del",
 		}, {
@@ -191,7 +191,7 @@ func TestAll(t *testing.T) {
 			expHeaders: http.Header{
 				"Accept-Encoding": []string{"gzip"},
 				"Accept":          []string{"application/json"},
-				"User-Agent":      []string{"redpanda"},
+				"User-Agent":      []string{"funes"},
 			},
 			expPath: "/2/%2F",
 			expErr:  true,

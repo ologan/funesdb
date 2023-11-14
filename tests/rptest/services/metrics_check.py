@@ -9,7 +9,7 @@
 
 import re
 
-from rptest.services.redpanda import MetricsEndpoint
+from rptest.services.funes import MetricsEndpoint
 
 
 class MetricCheckFailed(Exception):
@@ -30,14 +30,14 @@ class MetricCheck(object):
     """
     def __init__(self,
                  logger,
-                 redpanda,
+                 funes,
                  node,
                  metrics,
                  labels=None,
                  reduce=None,
                  metrics_endpoint: MetricsEndpoint = MetricsEndpoint.METRICS):
         """
-        :param redpanda: a RedpandaService
+        :param funes: a FunesService
         :param logger: a Logger
         :param node: a ducktape Node
         :param metrics: a list of metric names, or a single compiled regex (use re.compile())
@@ -46,7 +46,7 @@ class MetricCheck(object):
         :param metrics_endpoint: MetricsEndpoint enumeration instance specifies which
         Prometheus endpoint to query
         """
-        self.redpanda = redpanda
+        self.funes = funes
         self.node = node
         self.labels = labels
         self.logger = logger
@@ -56,7 +56,7 @@ class MetricCheck(object):
         self._initial_samples = self._capture(metrics)
 
     def _capture(self, check_metrics):
-        metrics = self.redpanda.metrics(self.node, self._metrics_endpoint)
+        metrics = self.funes.metrics(self.node, self._metrics_endpoint)
 
         samples = {}
         for family in metrics:

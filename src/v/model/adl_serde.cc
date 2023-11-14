@@ -113,7 +113,7 @@ void adl<model::broker_endpoint>::to(iobuf& out, model::broker_endpoint&& ep) {
 void adl<model::broker>::to(iobuf& out, model::broker&& r) {
     adl<model::node_id>{}.to(out, r.id());
     adl<std::vector<model::broker_endpoint>>{}.to(
-      out, r.kafka_advertised_listeners());
+      out, r.sql_advertised_listeners());
     adl<net::unresolved_address>{}.to(out, r.rpc_address());
     adl<std::optional<ss::sstring>>{}.to(out, r.rack());
     adl<model::broker_properties>{}.to(out, r.properties());
@@ -121,17 +121,17 @@ void adl<model::broker>::to(iobuf& out, model::broker&& r) {
 
 model::broker adl<model::broker>::from(iobuf_parser& in) {
     auto id = adl<model::node_id>{}.from(in);
-    auto kafka_adrs = adl<std::vector<model::broker_endpoint>>{}.from(in);
+    auto sql_adrs = adl<std::vector<model::broker_endpoint>>{}.from(in);
     auto rpc_adrs = adl<net::unresolved_address>{}.from(in);
     auto rack = adl<std::optional<model::rack_id>>{}.from(in);
     auto etc_props = adl<model::broker_properties>{}.from(in);
-    return model::broker{id, std::move(kafka_adrs), rpc_adrs, rack, etc_props};
+    return model::broker{id, std::move(sql_adrs), rpc_adrs, rack, etc_props};
 }
 
 void adl<model::internal::broker_v0>::to(
   iobuf& out, model::internal::broker_v0&& r) {
     adl<model::node_id>{}.to(out, r.id);
-    adl<net::unresolved_address>{}.to(out, r.kafka_address);
+    adl<net::unresolved_address>{}.to(out, r.sql_address);
     adl<net::unresolved_address>{}.to(out, r.rpc_address);
     adl<std::optional<model::rack_id>>{}.to(out, r.rack);
     adl<model::broker_properties>{}.to(out, r.properties);
@@ -140,12 +140,12 @@ void adl<model::internal::broker_v0>::to(
 model::internal::broker_v0
 adl<model::internal::broker_v0>::from(iobuf_parser& in) {
     auto id = adl<model::node_id>{}.from(in);
-    auto kafka_adrs = adl<net::unresolved_address>{}.from(in);
+    auto sql_adrs = adl<net::unresolved_address>{}.from(in);
     auto rpc_adrs = adl<net::unresolved_address>{}.from(in);
     auto rack = adl<std::optional<model::rack_id>>{}.from(in);
     auto etc_props = adl<model::broker_properties>{}.from(in);
     return model::internal::broker_v0{
-      id, kafka_adrs, rpc_adrs, rack, etc_props};
+      id, sql_adrs, rpc_adrs, rack, etc_props};
 }
 
 void adl<model::record>::to(iobuf& ref, model::record&& record) {

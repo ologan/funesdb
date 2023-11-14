@@ -9,8 +9,8 @@
 import enum
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import ResourceSettings
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import ResourceSettings
 from rptest.services.cluster import cluster
 from rptest.services.rpk_consumer import RpkConsumer
 
@@ -24,7 +24,7 @@ class CompactionMode(str, enum.Enum):
     PATHOLOGICAL = "pathological"
 
 
-class ManyClientsTest(RedpandaTest):
+class ManyClientsTest(FunesTest):
     PRODUCER_COUNT = 4000
 
     # Our workload generates tiny I/Os, so we anticipate being IOP-bound.
@@ -48,23 +48,23 @@ class ManyClientsTest(RedpandaTest):
             # cluster that has 384MB of memory per shard. It is set here to
             # since our current backpressure mechanisms will allow producers to
             # produce at a much higher rate and cause RP to run out of memory.
-            'kafka_throughput_limit_node_in_bps':
+            'sql_throughput_limit_node_in_bps':
             self.TARGET_THROUGHPUT_MB_S_PER_NODE * 1024 *
             1024,  # 100MiB/s per node
 
-            # Set higher connection count limits than the redpanda default.
+            # Set higher connection count limits than the funes default.
             # Factor of 4: allow each client 3 connections (producer,consumer,admin), plus
             # 1 connection to accomodate reconnects while a previous connection is
             # still live.
-            'kafka_connections_max':
+            'sql_connections_max':
             self.PRODUCER_COUNT * 4,
-            'kafka_connections_max_per_ip':
+            'sql_connections_max_per_ip':
             self.PRODUCER_COUNT * 4,
         }
         super().__init__(*args, **kwargs)
 
     def setUp(self):
-        # Delay starting Redpanda, we will customize ResourceSettings inside the test case
+        # Delay starting Funes, we will customize ResourceSettings inside the test case
         pass
 
     @cluster(num_nodes=7)
@@ -82,7 +82,7 @@ class ManyClientsTest(RedpandaTest):
 
     def _test_many_clients(self, compaction_mode):
         """
-        Check that redpanda remains stable under higher numbers of clients
+        Check that funes remains stable under higher numbers of clients
         than usual.
         """
 
@@ -113,8 +113,8 @@ class ManyClientsTest(RedpandaTest):
             # is small (~100k)
             memory_mb=memory_mb)
 
-        # Load the resource settings and start Redpanda
-        self.redpanda.set_resource_settings(resource_settings)
+        # Load the resource settings and start Funes
+        self.funes.set_resource_settings(resource_settings)
         super().setUp()
 
         partition_count = 100
@@ -141,17 +141,17 @@ class ManyClientsTest(RedpandaTest):
         # Need enough consumers to grab data before it gets cleaned up by the
         # retention policy
         consumer_a = RpkConsumer(self.test_context,
-                                 self.redpanda,
+                                 self.funes,
                                  TOPIC_NAME,
                                  group="testgroup",
                                  save_msgs=False)
         consumer_b = RpkConsumer(self.test_context,
-                                 self.redpanda,
+                                 self.funes,
                                  TOPIC_NAME,
                                  group="testgroup",
                                  save_msgs=False)
         consumer_c = RpkConsumer(self.test_context,
-                                 self.redpanda,
+                                 self.funes,
                                  TOPIC_NAME,
                                  group="testgroup",
                                  save_msgs=False)
@@ -159,7 +159,7 @@ class ManyClientsTest(RedpandaTest):
         key_space = 10
 
         target_throughput_mb_s = self.TARGET_THROUGHPUT_MB_S_PER_NODE * len(
-            self.redpanda.nodes)
+            self.funes.nodes)
 
         producer_kwargs = {}
         if compaction_mode == CompactionMode.NONE:
@@ -176,7 +176,7 @@ class ManyClientsTest(RedpandaTest):
 
             if compaction_mode == CompactionMode.PATHOLOGICAL:
                 # Use large compressible payloads, to stress memory consumption: a
-                # compressed batch will be accepted by the Kafka API, but
+                # compressed batch will be accepted by the SQL API, but
                 producer_kwargs['compressible_payload'] = True
                 producer_kwargs['min_record_size'] = 16 * 1024 * 1024
                 producer_kwargs[
@@ -223,7 +223,7 @@ class ManyClientsTest(RedpandaTest):
         )
 
         producer = ProducerSwarm(self.test_context,
-                                 self.redpanda,
+                                 self.funes,
                                  TOPIC_NAME,
                                  producer_count,
                                  records_per_producer,
@@ -248,7 +248,7 @@ class ManyClientsTest(RedpandaTest):
             )
             return consumer_a.message_count + consumer_b.message_count + consumer_c.message_count >= expect
 
-        self.redpanda.wait_until(complete,
+        self.funes.wait_until(complete,
                                  timeout_sec=30,
                                  backoff_sec=1,
                                  err_msg="Consumers didn't see all messages")

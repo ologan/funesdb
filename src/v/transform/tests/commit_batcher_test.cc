@@ -48,7 +48,7 @@ using namespace std::chrono;
 struct committed_offset {
     model::transform_id id;
     model::partition_id partition;
-    kafka::offset offset;
+    sql::offset offset;
 
     friend auto operator<=>(const committed_offset&, const committed_offset&)
       = default;

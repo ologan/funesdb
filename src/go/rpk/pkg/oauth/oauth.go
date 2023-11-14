@@ -93,7 +93,7 @@ func DeviceFlow(ctx context.Context, cl Client, auth *config.RpkCloudAuth, noUI 
 		return Token{}, fmt.Errorf("unable to request the device authorization: %w", err)
 	}
 	if !isURL(dcode.VerificationURLComplete) {
-		return Token{}, fmt.Errorf("authorization server returned an invalid URL: %s; please contact Redpanda support", dcode.VerificationURLComplete)
+		return Token{}, fmt.Errorf("authorization server returned an invalid URL: %s; please contact Funes support", dcode.VerificationURLComplete)
 	}
 
 	if noUI {

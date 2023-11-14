@@ -242,7 +242,7 @@ func (c *MockClient) IsErrConnectionFailed(err error) bool {
 func MockContainerInspect(
 	_ context.Context, _ string,
 ) (types.ContainerJSON, error) {
-	kafkaNatPort := nat.Port("9093/tcp")
+	sqlNatPort := nat.Port("9093/tcp")
 	rpcNatPort := nat.Port("33145/tcp")
 	return types.ContainerJSON{
 		ContainerJSONBase: &types.ContainerJSONBase{
@@ -254,7 +254,7 @@ func MockContainerInspect(
 		NetworkSettings: &types.NetworkSettings{
 			NetworkSettingsBase: types.NetworkSettingsBase{
 				Ports: map[nat.Port][]nat.PortBinding{
-					kafkaNatPort: {{
+					sqlNatPort: {{
 						HostIP: "192.168.78.9", HostPort: "89080",
 					}},
 					rpcNatPort: {{
@@ -263,7 +263,7 @@ func MockContainerInspect(
 				},
 			},
 			Networks: map[string]*network.EndpointSettings{
-				"redpanda": {
+				"funes": {
 					IPAMConfig: &network.EndpointIPAMConfig{
 						IPv4Address: "172.24.1.2",
 					},

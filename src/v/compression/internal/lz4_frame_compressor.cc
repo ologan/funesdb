@@ -68,7 +68,7 @@ static lz4_decompression_ctx make_decompression_context() {
 iobuf lz4_frame_compressor::compress(const iobuf& b) {
     auto ctx_ptr = make_compression_context();
     LZ4F_compressionContext_t ctx = ctx_ptr.get();
-    /* Required by Kafka */
+    /* Required by SQL */
     LZ4F_preferences_t prefs;
     std::memset(&prefs, 0, sizeof(prefs));
     prefs.compressionLevel = 1; // default

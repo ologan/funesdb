@@ -32,8 +32,8 @@ jobs:
     - name: Run clang-format
       run: |
         docker run \
-        -v $PWD:/redpanda ubuntu \
-        bash -c "cd /redpanda && \
+        -v $PWD:/funes ubuntu \
+        bash -c "cd /funes && \
           apt update && \
           apt install -y wget git lsb-release wget software-properties-common gnupg && \
           wget https://apt.llvm.org/llvm.sh && \

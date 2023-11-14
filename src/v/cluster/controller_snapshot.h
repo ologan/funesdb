@@ -265,7 +265,7 @@ struct controller_join_snapshot
       serde::version<0>,
       serde::compat_version<0>> {
     // Joining node should use this offset as the controllers
-    // 'bootstrap_last_applied' so that the joining node will not start Kafka
+    // 'bootstrap_last_applied' so that the joining node will not start SQL
     // API until it has replayed all the known controller history.
     model::offset last_applied;
 

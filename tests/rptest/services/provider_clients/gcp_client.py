@@ -116,7 +116,7 @@ class GCPClient:
         Get VPC Network
         """
         if prefix is None:
-            _name = f"redpanda-{network_id}"
+            _name = f"funes-{network_id}"
         else:
             _name = f"{prefix}{network_id}"
         _project_id = self.project_id if not project_id else project_id

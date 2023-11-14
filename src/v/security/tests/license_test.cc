@@ -62,12 +62,12 @@ BOOST_AUTO_TEST_CASE(test_license_invalid_content) {
 }
 
 BOOST_AUTO_TEST_CASE(test_license_valid_content) {
-    const char* sample_valid_license = std::getenv("REDPANDA_SAMPLE_LICENSE");
+    const char* sample_valid_license = std::getenv("FUNES_SAMPLE_LICENSE");
     if (sample_valid_license == nullptr) {
         const char* is_on_ci = std::getenv("CI");
         BOOST_TEST_REQUIRE(
           !is_on_ci,
-          "Expecting the REDPANDA_SAMPLE_LICENSE env var in the CI "
+          "Expecting the FUNES_SAMPLE_LICENSE env var in the CI "
           "enviornment");
         return;
     }
@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(test_license_valid_content) {
     const auto license = make_license(license_str);
     BOOST_CHECK_EQUAL(license.format_version, 0);
     BOOST_CHECK_EQUAL(license.type, license_type::enterprise);
-    BOOST_CHECK_EQUAL(license.organization, "redpanda-testing");
+    BOOST_CHECK_EQUAL(license.organization, "funes-testing");
     BOOST_CHECK_EQUAL(license.expiry.count(), 4813252273);
     BOOST_CHECK_EQUAL(
       license.checksum,

@@ -15,12 +15,12 @@ class OfflineLogViewer:
     Wrap tools/offline_log_viewer for use in tests: this is for tests that
     want to peek at the structures, but also for validating the tool itself.
     """
-    def __init__(self, redpanda):
-        self._redpanda = redpanda
+    def __init__(self, funes):
+        self._funes = funes
 
     def _cmd(self, suffix):
         viewer_path = "python3 /opt/scripts/offline_log_viewer/viewer.py"
-        return f"{viewer_path} --path {self._redpanda.DATA_DIR} {suffix}"
+        return f"{viewer_path} --path {self._funes.DATA_DIR} {suffix}"
 
     def read_kvstore(self, node):
         cmd = self._cmd("--type kvstore")
@@ -34,7 +34,7 @@ class OfflineLogViewer:
             return json.loads(json_out)
         except json.decoder.JSONDecodeError:
             # Log the bad output before re-raising
-            self._redpanda.logger.error(f"Invalid JSON output: {json_out}")
+            self._funes.logger.error(f"Invalid JSON output: {json_out}")
             raise
 
     def read_controller(self, node):

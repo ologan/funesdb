@@ -13,12 +13,12 @@ from rptest.services.cluster import cluster
 
 from rptest.clients.rpk import RpkException, RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
+from rptest.services.sql_cli_consumer import SQLCliConsumer
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.services.rpk_producer import RpkProducer
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.util import wait_until_result
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
@@ -35,16 +35,16 @@ class ConsumerOffsetsRecoveryToolTest(PreallocNodesTest):
             num_brokers=3,
             *args,
             extra_rp_conf={
-                # clear topics from the the kafka_nodelete_topics to allow for
+                # clear topics from the the sql_nodelete_topics to allow for
                 # __consumer_offsets to be configured in this test.
-                "kafka_nodelete_topics": [],
+                "sql_nodelete_topics": [],
                 "group_topic_partitions": self.initial_partition_count
             },
             node_prealloc_count=1,
             **kwargs)
 
     def describe_all_groups(self, num_groups: int = 1):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         all_groups = {}
 
         # The one consumer group in this test comes from KgoVerifierConsumerGroupConsumer
@@ -89,7 +89,7 @@ class ConsumerOffsetsRecoveryToolTest(PreallocNodesTest):
         msg_cnt = 10000
 
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        topic.name,
                                        msg_size,
                                        msg_cnt,
@@ -103,7 +103,7 @@ class ConsumerOffsetsRecoveryToolTest(PreallocNodesTest):
 
         consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic.name,
             msg_size,
             readers=3,
@@ -117,20 +117,20 @@ class ConsumerOffsetsRecoveryToolTest(PreallocNodesTest):
 
         groups_pre_migration = self.describe_all_groups()
 
-        cgr = ConsumerOffsetsRecovery(self.redpanda)
+        cgr = ConsumerOffsetsRecovery(self.funes)
 
         # execute recovery tool, ask for 16 partitions in consumer offsets topic
         #
         # this is dry run, expect that partition count didn't change
-        cgr.change_partition_count(16, self.redpanda.nodes[0], dry_run=True)
-        rpk = RpkTool(self.redpanda)
+        cgr.change_partition_count(16, self.funes.nodes[0], dry_run=True)
+        rpk = RpkTool(self.funes)
         tp_desc = list(rpk.describe_topic("__consumer_offsets"))
 
         # check if topic partition count changed
         assert len(tp_desc) == self.initial_partition_count
 
         # now allow the tool to execute
-        cgr.change_partition_count(16, self.redpanda.nodes[0], dry_run=False)
+        cgr.change_partition_count(16, self.funes.nodes[0], dry_run=False)
 
         # check if topic partition count changed
         wait_until(

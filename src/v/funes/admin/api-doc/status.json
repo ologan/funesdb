@@ -1,0 +1,14 @@
+"/v1/status/ready": {
+    "get": {
+      "summary": "funes healthcheck",
+      "operationId": "ready",
+      "produces": [
+        "application/json"
+      ],
+      "responses": {
+        "200": {
+          "description": "Funes is up and running"
+        }
+      }
+    }
+  }

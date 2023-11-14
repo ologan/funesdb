@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/tests/service_fixture.h"
@@ -53,8 +53,8 @@ inline ss::logger fixt_log("fixture"); // NOLINT
 
 archiver_fixture::archiver_fixture()
   : http_imposter_fixture(4441)
-  , redpanda_thread_fixture(
-      redpanda_thread_fixture::init_cloud_storage_no_archiver_tag{}) {
+  , funes_thread_fixture(
+      funes_thread_fixture::init_cloud_storage_no_archiver_tag{}) {
     ss::smp::invoke_on_all([port = httpd_port_number()]() {
         auto& cfg = config::shard_local_cfg();
         cfg.cloud_storage_enabled.set_value(true);
@@ -385,7 +385,7 @@ void segment_matcher<Fixture>::verify_index(
       = segment->offset_data_stream(pos, ss::default_priority_class()).get();
     cloud_storage::offset_index ix{
       meta->base_offset,
-      meta->base_kafka_offset(),
+      meta->base_sql_offset(),
       0,
       cloud_storage::remote_segment_sampling_step_bytes,
       meta->base_timestamp};

@@ -6,7 +6,7 @@ v_cc_library(
     logger.cc
     schemas/utils.cc
   DEPS
-    v::kafka_client
+    v::sql_client
     v::bytes
     v::utils
     v::config

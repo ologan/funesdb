@@ -122,7 +122,7 @@ ss::future<> disk_space_manager::run_loop() {
 }
 
 void disk_space_manager::update_target_size() {
-    // amount of data disk reserved for non-redpanda use
+    // amount of data disk reserved for non-funes use
     const uint64_t reservation_size = _data_disk_size
                                       * (_disk_reservation_percent() / 100.0);
 

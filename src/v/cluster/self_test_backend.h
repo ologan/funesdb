@@ -23,7 +23,7 @@
 
 namespace cluster {
 
-/// Class representing the logic and state of how redpanda self tests run
+/// Class representing the logic and state of how funes self tests run
 ///
 /// Within this class there is a mutex that ensures only one test can
 /// be executing at once. start_test() immediately returns and tests execute in

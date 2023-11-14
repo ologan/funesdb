@@ -45,7 +45,7 @@ struct connection_rate_info {
 
 // This class implement logic to count connections for current seconds. It uses
 // token bucket algorithm inside. If we can not accept new connections they will
-// wait new tokens. We use handlers to on-line updates for redpanda config.
+// wait new tokens. We use handlers to on-line updates for funes config.
 template<typename Clock = ss::lowres_clock>
 class connection_rate {
 public:
@@ -90,7 +90,7 @@ public:
                         new_connection_rate_str);
                     vassert(
                       parsed_override.has_value(),
-                      "Validation for redpanda config should signal about "
+                      "Validation for funes config should signal about "
                       "invalid "
                       "overrides");
 
@@ -100,7 +100,7 @@ public:
                     } catch (...) {
                         vassert(
                           false,
-                          "Validation for redpanda config should signal "
+                          "Validation for funes config should signal "
                           "about "
                           "invalid ip: {}",
                           parsed_override->first);
@@ -110,7 +110,7 @@ public:
                       addr, parsed_override->second);
                     vassert(
                       res,
-                      "Validation for redpanda config should signal about "
+                      "Validation for funes config should signal about "
                       "invalid "
                       "overrides");
                 }
@@ -145,7 +145,7 @@ public:
         }
     }
 
-    // New connection will wait when redpanda have free tokens for new
+    // New connection will wait when funes have free tokens for new
     // connection
     ss::future<> maybe_wait(const ss::net::inet_address& addr) {
         inet_address_wrapper addr_wrapper(addr);
@@ -177,7 +177,7 @@ private:
 
             vassert(
               parsed_override.has_value(),
-              "Validation for redpanda config should signal about invalid "
+              "Validation for funes config should signal about invalid "
               "overrides");
 
             auto [_, res] = _overrides.emplace(
@@ -187,7 +187,7 @@ private:
 
             vassert(
               res,
-              "Validation for redpanda config should signal about invalid "
+              "Validation for funes config should signal about invalid "
               "overrides");
         }
     }

@@ -8,20 +8,20 @@
 # by the Apache License, Version 2.0
 
 from rptest.clients.rpk import RpkTool, RpkException
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import ResourceSettings
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import ResourceSettings
 from rptest.services.cluster import cluster
 from rptest.utils.mode_checks import skip_debug_mode
 
 
-class ResourceLimitsTest(RedpandaTest):
+class ResourceLimitsTest(FunesTest):
     """
     Tests the limits that are imposed on partition counts during topic
     creation, to prevent users from overwhelming available system
     resources with too many partitions.
     """
     def setUp(self):
-        # Override parent setUp so that we don't start redpanda until each test,
+        # Override parent setUp so that we don't start funes until each test,
         # enabling each test case to customize its ResourceSettings
         pass
 
@@ -30,19 +30,19 @@ class ResourceLimitsTest(RedpandaTest):
         """
         Check enforcement of the RAM-per-partition threshold
         """
-        self.redpanda.set_resource_settings(
+        self.funes.set_resource_settings(
             ResourceSettings(memory_mb=1024, num_cpus=1))
-        self.redpanda.set_extra_rp_conf({
+        self.funes.set_extra_rp_conf({
             # Use a larger than default memory per partition, so that a 1GB system can be
-            # tested without creating 1000 partitions (which overwhelms debug redpanda
+            # tested without creating 1000 partitions (which overwhelms debug funes
             # builds because they're much slower than the real product)
             'topic_memory_per_partition':
             10 * 1024 * 1024,
         })
 
-        self.redpanda.start()
+        self.funes.start()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         # Three nodes, each with 1GB memory, replicas=3, should
         # result in an effective limit of 1024 with the default
@@ -74,9 +74,9 @@ class ResourceLimitsTest(RedpandaTest):
         """
         Check enforcement of the partitions-per-core
         """
-        self.redpanda.set_resource_settings(ResourceSettings(num_cpus=1))
+        self.funes.set_resource_settings(ResourceSettings(num_cpus=1))
 
-        self.redpanda.set_extra_rp_conf({
+        self.funes.set_extra_rp_conf({
             # Disable memory limit: on a test node the physical memory can easily
             # be the limiting factor
             'topic_memory_per_partition': None,
@@ -84,9 +84,9 @@ class ResourceLimitsTest(RedpandaTest):
             'topic_fds_per_partition': None
         })
 
-        self.redpanda.start()
+        self.funes.start()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         # Three nodes, each with 1 core, 1000 partition-replicas
         # per core, so with replicas=3, 1000 partitions should be the limit
@@ -103,15 +103,15 @@ class ResourceLimitsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_fd_limited(self):
-        self.redpanda.set_resource_settings(ResourceSettings(nfiles=1000))
-        self.redpanda.set_extra_rp_conf({
+        self.funes.set_resource_settings(ResourceSettings(nfiles=1000))
+        self.funes.set_extra_rp_conf({
             # Disable memory limit: on a test node the physical memory can easily
             # be the limiting factor
             'topic_memory_per_partition': None,
         })
-        self.redpanda.start()
+        self.funes.start()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         # Default 5 fds per partition, we set ulimit down to 1000, so 100 should be the limit
         try:

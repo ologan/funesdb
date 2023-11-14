@@ -14,7 +14,7 @@ area/docs:
 area/rpk:
 - src/go/rpk/**/*
 
-area/redpanda:
+area/funes:
 - src/v/**/*
 
 area/wasm:

@@ -18,10 +18,10 @@ class SaramaInterceptors(ExampleBase):
     """
     The helper class for Sarama's interceptors example
     """
-    def __init__(self, redpanda, topic):
-        super(SaramaInterceptors, self).__init__(redpanda)
+    def __init__(self, funes, topic):
+        super(SaramaInterceptors, self).__init__(funes)
 
-        # The kafka topic
+        # The sql topic
         self._topic = topic
 
     # The internal condition to determine if the
@@ -32,7 +32,7 @@ class SaramaInterceptors(ExampleBase):
     # Return the command to call in the shell
     def cmd(self):
         EXAMPLE_DIR = os.path.join(TESTS_DIR, "examples/interceptors")
-        cmd = f"interceptors -brokers {self._redpanda.brokers()} -topic {self._topic}"
+        cmd = f"interceptors -brokers {self._funes.brokers()} -topic {self._topic}"
         return os.path.join(EXAMPLE_DIR, cmd)
 
     # Return the process name to kill
@@ -44,8 +44,8 @@ class SaramaHttpServer(ExampleBase):
     """
     The helper class for Sarama's http server example
     """
-    def __init__(self, redpanda):
-        super(SaramaHttpServer, self).__init__(redpanda)
+    def __init__(self, funes):
+        super(SaramaHttpServer, self).__init__(funes)
 
         # The name of the node assigned to this example
         self._node_name = ""
@@ -58,7 +58,7 @@ class SaramaHttpServer(ExampleBase):
     # Return the command to call in the shell
     def cmd(self):
         EXAMPLE_DIR = os.path.join(TESTS_DIR, "examples/http_server")
-        cmd = f"http_server -addr {self._node_name}:8080 -brokers {self._redpanda.brokers()}"
+        cmd = f"http_server -addr {self._node_name}:8080 -brokers {self._funes.brokers()}"
         return os.path.join(EXAMPLE_DIR, cmd)
 
     # Return the process name to kill
@@ -80,10 +80,10 @@ class SaramaConsumerGroup(ExampleBase):
     """
     The helper class for Sarama's consumergroup example
     """
-    def __init__(self, redpanda, topic, count):
-        super(SaramaConsumerGroup, self).__init__(redpanda)
+    def __init__(self, funes, topic, count):
+        super(SaramaConsumerGroup, self).__init__(funes)
 
-        # The kafka topic
+        # The sql topic
         self._topic = topic
 
         self._count = count
@@ -97,7 +97,7 @@ class SaramaConsumerGroup(ExampleBase):
     # Return the command to call in the shell
     def cmd(self):
         EXAMPLE_DIR = os.path.join(TESTS_DIR, "examples/consumergroup")
-        cmd = f"consumer -brokers=\"{self._redpanda.brokers()}\" -topics=\"{self._topic}\" -group=\"example\""
+        cmd = f"consumer -brokers=\"{self._funes.brokers()}\" -topics=\"{self._topic}\" -group=\"example\""
         return os.path.join(EXAMPLE_DIR, cmd)
 
     # Return the process name to kill
@@ -109,9 +109,9 @@ class SaramaConsumerGroup(ExampleBase):
 # Sarama's SASL/SCRAM authentication example.
 # Here, we do not create a ExampleBase because
 # the SASL/SCRAM example runs in the foreground.
-def sarama_sasl_scram(redpanda, topic):
+def sarama_sasl_scram(funes, topic):
     EXAMPLE_DIR = os.path.join(TESTS_DIR, "examples/sasl_scram_client")
-    creds = redpanda.SUPERUSER_CREDENTIALS
-    cmd = f"sasl_scram_client -brokers {redpanda.brokers()} -username {creds[0]} -passwd {creds[1]} -topic {topic} -algorithm sha256"
+    creds = funes.SUPERUSER_CREDENTIALS
+    cmd = f"sasl_scram_client -brokers {funes.brokers()} -username {creds[0]} -passwd {creds[1]} -topic {topic} -algorithm sha256"
 
     return os.path.join(EXAMPLE_DIR, cmd)

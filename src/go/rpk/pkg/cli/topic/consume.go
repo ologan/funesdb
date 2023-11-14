@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/schemaregistry"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/serde"
@@ -85,8 +85,8 @@ func newConsumeCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize admin kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize admin sql client: %v", err)
 
 			// We fail if the topic does not exist.
 			listed, err := adm.ListTopics(cmd.Context(), topics...)
@@ -114,8 +114,8 @@ func newConsumeCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			sigs := make(chan os.Signal, 2)
 			signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-			c.cl, err = kafka.NewFranzClient(fs, p, opts...)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			c.cl, err = sql.NewFranzClient(fs, p, opts...)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 
 			if len(c.useSchemaRegistry) > 0 {
 				err = c.formatSchemaRegistryFlag()

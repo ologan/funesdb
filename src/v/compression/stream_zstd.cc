@@ -170,13 +170,13 @@ size_t find_zstd_size(const iobuf& x) {
 size_t decompression_step(const iobuf& x) {
     size_t ret = find_zstd_size(x);
     if (ret == 0) {
-        // Note that this is a similar algorithm that kafka uses. Turns out that
-        // the library that kafka uses (JNI) to load up Zstd doesn't set the
+        // Note that this is a similar algorithm that sql uses. Turns out that
+        // the library that sql uses (JNI) to load up Zstd doesn't set the
         // frame content size :
         // https://github.com/luben/zstd-jni/blob/master/src/main/java/com/github/luben/zstd/ZstdOutputStream.java
         // ZSTD_CCtx_setPledgedSrcSize(ctx, x.size_bytes())
         //
-        // See kafka JNI Loaders:
+        // See sql JNI Loaders:
         // static class ZstdConstructors {
         //     static final MethodHandle INPUT = findConstructor(
         //       "com.github.luben.zstd.ZstdInputStream",
@@ -187,7 +187,7 @@ size_t decompression_step(const iobuf& x) {
         // }
         //
         // which means that every single zstd encoded message that comes from
-        // kafka regrows!
+        // sql regrows!
         //
         return 64_KiB;
     }

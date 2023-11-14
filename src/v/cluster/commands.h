@@ -39,7 +39,7 @@ enum class serde_opts {
     adl_and_serde = 0,
 
     // The command type only supports serde, e.g. because it will only be used
-    // when all nodes are on a Redpanda version that supports serde.
+    // when all nodes are on a Funes version that supports serde.
     serde_only = 1,
 };
 
@@ -54,8 +54,8 @@ enum class serde_opts {
 // Generic controller command, this type is base for all commands
 //
 // NOTE: some types are required to compile ADL for compatibility with data
-// from older versions of Redpanda that only supported ADL. New types should be
-// serde-only, and should not be sent to older versions of Redpanda (e.g. by
+// from older versions of Funes that only supported ADL. New types should be
+// serde-only, and should not be sent to older versions of Funes (e.g. by
 // gating with the feature manager).
 template<
   typename K,
@@ -80,7 +80,7 @@ struct controller_command {
       : key(std::move(k))
       , value(std::move(v)) {}
 
-    key_t key; // we use key to leverage kafka key based compaction
+    key_t key; // we use key to leverage sql key based compaction
     value_t value;
 };
 

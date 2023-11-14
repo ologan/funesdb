@@ -18,9 +18,9 @@ class PeriodicFlushWithRelaxedConsistencyTest(EndToEndTest):
     @cluster(num_nodes=5)
     def test_changing_periodic_flush_threshold(self):
 
-        self.start_redpanda(num_nodes=3)
+        self.start_funes(num_nodes=3)
         # set raft_max_not_flushed_bytes to high value
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"raft_replica_max_pending_flush_bytes": 10 * (1024 * 1024)})
 
         # create topic with single partition
@@ -45,8 +45,8 @@ class PeriodicFlushWithRelaxedConsistencyTest(EndToEndTest):
                             producer_timeout_sec=300,
                             consumer_timeout_sec=300)
 
-        admin = Admin(self.redpanda)
-        p_state = admin.get_partition_state(namespace='kafka',
+        admin = Admin(self.funes)
+        p_state = admin.get_partition_state(namespace='sql',
                                             topic=self.topic,
                                             partition=0)
         self.logger.info(f"initial partition state: {p_state}")
@@ -55,11 +55,11 @@ class PeriodicFlushWithRelaxedConsistencyTest(EndToEndTest):
             for r in p_state['replicas']
         ]), "With ACKS=1, committed offset should not be advanced immediately"
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"raft_replica_max_pending_flush_bytes": 1})
 
         def committed_offset_advanced():
-            p_state = admin.get_partition_state(namespace='kafka',
+            p_state = admin.get_partition_state(namespace='sql',
                                                 topic=self.topic,
                                                 partition=0)
 

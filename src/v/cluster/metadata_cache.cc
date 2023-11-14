@@ -284,7 +284,7 @@ metadata_cache::get_default_initial_retention_local_target_ms() const {
 }
 
 uint32_t metadata_cache::get_default_batch_max_bytes() const {
-    return config::shard_local_cfg().kafka_batch_max_bytes();
+    return config::shard_local_cfg().sql_batch_max_bytes();
 }
 
 model::shadow_indexing_mode
@@ -309,18 +309,18 @@ bool metadata_cache::get_default_record_key_schema_id_validation() const {
     return false;
 }
 
-pandaproxy::schema_registry::subject_name_strategy
+funesproxy::schema_registry::subject_name_strategy
 metadata_cache::get_default_record_key_subject_name_strategy() const {
-    return pandaproxy::schema_registry::subject_name_strategy::topic_name;
+    return funesproxy::schema_registry::subject_name_strategy::topic_name;
 }
 
 bool metadata_cache::get_default_record_value_schema_id_validation() const {
     return false;
 }
 
-pandaproxy::schema_registry::subject_name_strategy
+funesproxy::schema_registry::subject_name_strategy
 metadata_cache::get_default_record_value_subject_name_strategy() const {
-    return pandaproxy::schema_registry::subject_name_strategy::topic_name;
+    return funesproxy::schema_registry::subject_name_strategy::topic_name;
 }
 
 topic_properties metadata_cache::get_default_properties() const {

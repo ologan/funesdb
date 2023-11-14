@@ -15,8 +15,8 @@
 #include "json/stringbuffer.h"
 #include "json/writer.h"
 #include "oncore.h"
-#include "pandaproxy/schema_registry/schema_id_validation.h"
-#include "pandaproxy/schema_registry/subject_name_strategy.h"
+#include "funesproxy/schema_registry/schema_id_validation.h"
+#include "funesproxy/schema_registry/subject_name_strategy.h"
 #include "reflection/type_traits.h"
 #include "utils/intrusive_list_helpers.h"
 #include "utils/to_string.h"
@@ -91,7 +91,7 @@ public:
     /**
      * Properties aren't moved in normal used on the per-shard
      * cluster configuration objects.  This method exists for
-     * use in unit tests of things like kafka client that carry
+     * use in unit tests of things like sql client that carry
      * around a config_store as a member.
      */
     property(property<T>&& rhs)
@@ -626,12 +626,12 @@ consteval std::string_view property_type_name() {
         return "string";
     } else if constexpr (std::is_same_v<
                            type,
-                           pandaproxy::schema_registry::
+                           funesproxy::schema_registry::
                              subject_name_strategy>) {
         return "string";
     } else if constexpr (std::is_same_v<
                            type,
-                           pandaproxy::schema_registry::
+                           funesproxy::schema_registry::
                              schema_id_validation_mode>) {
         return "string";
     } else {

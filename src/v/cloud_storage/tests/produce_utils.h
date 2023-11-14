@@ -14,7 +14,7 @@
 #include "cloud_storage/remote_segment.h"
 #include "cluster/partition.h"
 #include "config/configuration.h"
-#include "kafka/server/tests/produce_consume_utils.h"
+#include "sql/server/tests/produce_consume_utils.h"
 #include "storage/disk_log_impl.h"
 
 namespace tests {
@@ -22,7 +22,7 @@ namespace tests {
 class remote_segment_generator {
 public:
     remote_segment_generator(
-      kafka::client::transport transport, cluster::partition& partition)
+      sql::client::transport transport, cluster::partition& partition)
       : _producer(std::move(transport))
       , _partition(partition) {}
 
@@ -50,13 +50,13 @@ public:
         _base_timestamp = ts;
         return *this;
     }
-    kafka_produce_transport& producer() { return _producer; }
+    sql_produce_transport& producer() { return _producer; }
 
     // Produces records, flushing and rolling the local log, and uploading
     // according to the given parameters. Once the given segments are produced,
     // the partition manifest is uploaded.
     //
-    // The produced pattern "key<i>", "val<i>" for Kafka offset i.
+    // The produced pattern "key<i>", "val<i>" for SQL offset i.
     // Expects to be the only one mutating the underlying partition state.
     ss::future<int> produce() {
         co_await _producer.start();
@@ -130,7 +130,7 @@ public:
     }
 
 private:
-    kafka_produce_transport _producer;
+    sql_produce_transport _producer;
     cluster::partition& _partition;
     // Number of remote segments to create.
     size_t _num_remote_segs{1};

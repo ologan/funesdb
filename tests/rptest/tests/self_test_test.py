@@ -10,18 +10,18 @@
 import re
 import time
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 from rptest.services.admin import Admin
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from ducktape.utils.util import wait_until
 from rptest.utils.functional import flat_map
 from rptest.util import wait_until_result
 from math import comb
 
 
-class SelfTestTest(RedpandaTest):
-    """Tests for the redpanda self test feature."""
+class SelfTestTest(FunesTest):
+    """Tests for the funes self test feature."""
 
     SELF_TEST_SHUTDOWN_LOG = [
         re.compile(
@@ -30,7 +30,7 @@ class SelfTestTest(RedpandaTest):
 
     def __init__(self, ctx):
         super(SelfTestTest, self).__init__(test_context=ctx)
-        self._rpk = RpkTool(self.redpanda)
+        self._rpk = RpkTool(self.funes)
 
     def wait_for_self_test_completion(self):
         """
@@ -121,9 +121,9 @@ class SelfTestTest(RedpandaTest):
         time.sleep(1)
 
         # Crash a node
-        stopped_nid = self.redpanda.idx(self.redpanda.nodes[0])
+        stopped_nid = self.funes.idx(self.funes.nodes[0])
         self.logger.info(f"Killing node {stopped_nid}")
-        self.redpanda.stop_node(self.redpanda.get_node(stopped_nid))
+        self.funes.stop_node(self.funes.get_node(stopped_nid))
 
         # Wait for completion
         node_reports = self.wait_for_self_test_completion()

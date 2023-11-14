@@ -40,18 +40,18 @@ class TieredStorageEndToEndTest(ABC):
     """Tiered storage interface which is consumed by
     validators and inputs."""
     @abstractclassmethod
-    def set_redpanda_cluster_config(self,
+    def set_funes_cluster_config(self,
                                     config_name: str,
                                     config_value: Any | None,
                                     needs_restart: bool = False):
-        """Set redpanda cluster configuration.
+        """Set funes cluster configuration.
         param config_name: name of the configuration parameter
         param config_value: value of the configuration parameter or None if the parameter should be removed
         param needs_restart: True if the configuration change requires restart"""
         pass
 
     @abstractclassmethod
-    def get_redpanda_service(self):
+    def get_funes_service(self):
         pass
 
     @abstractclassmethod
@@ -655,7 +655,7 @@ class ClusterConfigInput(TestInput):
 
     def run(self, test: TieredStorageEndToEndTest):
         for config, value in self.__configs.items():
-            test.set_redpanda_cluster_config(
+            test.set_funes_cluster_config(
                 config, value, needs_restart=self.__restart_required)
 
     def start(self, test: TieredStorageEndToEndTest):
@@ -677,12 +677,12 @@ class RandomizedClusterConfigInput(TestInput):
     def start(self, test: TieredStorageEndToEndTest):
         choice = random.choice(self.__configs)
         for config, value in choice.items():
-            test.set_redpanda_cluster_config(config, value)
+            test.set_funes_cluster_config(config, value)
 
     def run(self, test: TieredStorageEndToEndTest):
         choice = random.choice(self.__configs)
         for config, value in choice.items():
-            test.set_redpanda_cluster_config(config, value)
+            test.set_funes_cluster_config(config, value)
 
     def need_to_run(self, stage: TestRunStage) -> bool:
         return stage in self.__stages
@@ -848,7 +848,7 @@ class SpilloverManifestUploaded(Expression):
         return [
             MetricBasedValidator(
                 "SpilloverManifestUpload",
-                "redpanda_cloud_storage_spillover_manifest_uploads_total",
+                "funes_cloud_storage_spillover_manifest_uploads_total",
                 confidence_threshold=LOW_THRESHOLD,
                 execution_stage=TestRunStage.Produce),
             LogBasedValidator("TS_SpilloverManifestUploaded",
@@ -932,11 +932,11 @@ class TopicCompactionEnabled(Expression):
 class RemoteWriteTopicConfig(Expression):
     def __init__(self, model: Model = Model.default()):
         super().__init__(model, "RemoteWriteTopicConfig", ExpressionType.Bool,
-                         "redpanda.remote.write topic property is set")
+                         "funes.remote.write topic property is set")
 
     def make_inputs(self) -> List[TestInput]:
         return [
-            TopicConfigInput("RemoteWriteTopicConfig", "redpanda.remote.write",
+            TopicConfigInput("RemoteWriteTopicConfig", "funes.remote.write",
                              "true")
         ]
 
@@ -944,11 +944,11 @@ class RemoteWriteTopicConfig(Expression):
 class RemoteReadTopicConfig(Expression):
     def __init__(self, model: Model = Model.default()):
         super().__init__(model, "RemoteReadTopicConfig", ExpressionType.Bool,
-                         "redpanda.remote.read topic property is set")
+                         "funes.remote.read topic property is set")
 
     def make_inputs(self) -> List[TestInput]:
         return [
-            TopicConfigInput("RemoteReadTopicConfig", "redpanda.remote.read",
+            TopicConfigInput("RemoteReadTopicConfig", "funes.remote.read",
                              "true")
         ]
 

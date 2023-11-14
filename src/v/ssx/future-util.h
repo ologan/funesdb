@@ -322,7 +322,7 @@ inline auto spawn_with_gate_then(seastar::gate& g, Func&& func) noexcept {
 /// \param g Gate to enter, passed through to ss::try_with_gate
 /// \param func Function to invoke, passed through to ss::try_with_gate
 ///
-/// This is a common pattern in redpanda: we might spawn off a fiber to handle
+/// This is a common pattern in funes: we might spawn off a fiber to handle
 /// a request within a gate, but process shutdown might happen at any time,
 /// resulting in gate_closed and/or abort_requested_exception.
 template<typename Func>

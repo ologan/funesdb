@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
-Package redpanda is the SDK for Redpanda's inline Data Transforms, based on WebAssembly.
+Package funes is the SDK for Funes's inline Data Transforms, based on WebAssembly.
 
-This library provides a framework for transforming records written within Redpanda from
+This library provides a framework for transforming records written within Funes from
 an input to an output topic.
 */
-package redpanda
+package funes

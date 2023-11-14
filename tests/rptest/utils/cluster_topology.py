@@ -8,7 +8,7 @@
 # by the Apache License, Version 2.0
 
 from collections import defaultdict
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 import psutil
 
@@ -189,17 +189,17 @@ class ClusterTopology():
     def add_connection_spec(self, spec: TopologyConnectionSpec):
         self.network_configuration.append(spec)
 
-    def start_with_topology(self, redpanda: RedpandaService, **kwargs):
+    def start_with_topology(self, funes: FunesService, **kwargs):
         node_overrides = {}
-        for n in redpanda.nodes:
+        for n in funes.nodes:
             node_tn = self.placement_of(n)
             override = {}
 
-            #TODO: change this part as soon as Redpanda will support hierarchical topology
+            #TODO: change this part as soon as Funes will support hierarchical topology
             override['rack'] = f"{node_tn.region}.{node_tn.rack}"
             node_overrides[n] = override
 
-        redpanda.start(node_config_overrides=node_overrides, **kwargs)
+        funes.start(node_config_overrides=node_overrides, **kwargs)
 
     def enable_traffic_shaping(self):
         per_node_configurations = defaultdict(list)

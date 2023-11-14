@@ -853,17 +853,17 @@ func TestConfig_UnmarshalYAML(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		data   string
-		exp    *RedpandaYaml
+		exp    *FunesYaml
 		expErr bool
 	}{
 		{
 			name: "Config file with normal types",
 			data: `
-redpanda:
-  data_directory: "var/lib/redpanda/data"
+funes:
+  data_directory: "var/lib/funes/data"
   node_id: 1
   enable_admin_api: true
-  admin_api_doc_dir: "/usr/share/redpanda/admin-api-doc"
+  admin_api_doc_dir: "/usr/share/funes/admin-api-doc"
   admin:
   - address: "0.0.0.0"
     port: 9644
@@ -880,52 +880,52 @@ redpanda:
   advertised_rpc_api:
     address: "0.0.0.0"
     port: 33145
-  kafka_api:
+  sql_api:
   - address: "0.0.0.0"
     name: internal
     port: 9092
   - address: "0.0.0.0"
     name: external
     port: 9093
-  kafka_api_tls:
+  sql_api_tls:
   - name: "external"
     key_file: "certs/tls-key.pem"
   - name: "internal"
     enabled: false
-  advertised_kafka_api:
+  advertised_sql_api:
   - address: 0.0.0.0
     name: internal
     port: 9092
-  - address: redpanda-0.my.domain.com.
+  - address: funes-0.my.domain.com.
     name: external
     port: 9093
   seed_servers:
   - address: 192.168.0.1
     port: 33145
   rack: "rack-id"
-pandaproxy:
-  pandaproxy_api:
+funesproxy:
+  funesproxy_api:
   - address: "0.0.0.0"
     name: internal
     port: 8082
   - address: "0.0.0.0"
     name: external
     port: 8083
-  pandaproxy_api_tls:
+  funesproxy_api_tls:
   - name: external
     enabled: false
     truststore_file: "truststore_file"
   - name: internal
     enabled: false
-  advertised_pandaproxy_api:
+  advertised_funesproxy_api:
   - address: 0.0.0.0
     name: internal
     port: 8082
-  - address: "redpanda-rest-0.my.domain.com."
+  - address: "funes-rest-0.my.domain.com."
     name: external
     port: 8083
   consumer_instance_timeout_ms: 60000
-pandaproxy_client:
+funesproxy_client:
   brokers:
   - address: "127.0.0.1"
     port: 9092
@@ -957,7 +957,7 @@ rpk:
     password: pass
   additional_start_flags:
     - "--overprovisioned"
-  kafka_api:
+  sql_api:
     brokers:
     - 192.168.72.34:9092
     - 192.168.72.35:9092
@@ -979,11 +979,11 @@ rpk:
   tune_aio_events: false
   tune_clocksource: true
 `,
-			exp: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					Directory:      "var/lib/redpanda/data",
+			exp: &FunesYaml{
+				Funes: FunesNodeConfig{
+					Directory:      "var/lib/funes/data",
 					ID:             intPtr(1),
-					AdminAPIDocDir: "/usr/share/redpanda/admin-api-doc",
+					AdminAPIDocDir: "/usr/share/funes/admin-api-doc",
 					Rack:           "rack-id",
 					AdminAPI: []NamedSocketAddress{
 						{"0.0.0.0", 9644, "admin"},
@@ -993,17 +993,17 @@ rpk:
 					},
 					RPCServer:        SocketAddress{"0.0.0.0", 33145},
 					AdvertisedRPCAPI: &SocketAddress{"0.0.0.0", 33145},
-					KafkaAPI: []NamedAuthNSocketAddress{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{"0.0.0.0", 9092, "internal", nil},
 						{"0.0.0.0", 9093, "external", nil},
 					},
-					KafkaAPITLS: []ServerTLS{
+					SQLAPITLS: []ServerTLS{
 						{Name: "external", KeyFile: "certs/tls-key.pem"},
 						{Name: "internal", Enabled: false},
 					},
-					AdvertisedKafkaAPI: []NamedSocketAddress{
+					AdvertisedSQLAPI: []NamedSocketAddress{
 						{"0.0.0.0", 9092, "internal"},
-						{"redpanda-0.my.domain.com.", 9093, "external"},
+						{"funes-0.my.domain.com.", 9093, "external"},
 					},
 					SeedServers: []SeedServer{
 						{Host: SocketAddress{"192.168.0.1", 33145}, untabbed: true},
@@ -1019,24 +1019,24 @@ rpk:
 						},
 					},
 				},
-				Pandaproxy: &Pandaproxy{
-					PandaproxyAPI: []NamedAuthNSocketAddress{
+				Funesproxy: &Funesproxy{
+					FunesproxyAPI: []NamedAuthNSocketAddress{
 						{"0.0.0.0", 8082, "internal", nil},
 						{"0.0.0.0", 8083, "external", nil},
 					},
-					PandaproxyAPITLS: []ServerTLS{
+					FunesproxyAPITLS: []ServerTLS{
 						{Name: "external", Enabled: false, TruststoreFile: "truststore_file"},
 						{Name: "internal", Enabled: false},
 					},
-					AdvertisedPandaproxyAPI: []NamedSocketAddress{
+					AdvertisedFunesproxyAPI: []NamedSocketAddress{
 						{"0.0.0.0", 8082, "internal"},
-						{"redpanda-rest-0.my.domain.com.", 8083, "external"},
+						{"funes-rest-0.my.domain.com.", 8083, "external"},
 					},
 					Other: map[string]interface{}{
 						"consumer_instance_timeout_ms": 60000,
 					},
 				},
-				PandaproxyClient: &KafkaClient{
+				FunesproxyClient: &SQLClient{
 					Brokers: []SocketAddress{
 						{"127.0.0.1", 9092},
 					},
@@ -1062,7 +1062,7 @@ rpk:
 				},
 				Rpk: RpkNodeConfig{
 					AdditionalStartFlags: []string{"--overprovisioned"},
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{"192.168.72.34:9092", "192.168.72.35:9092"},
 						TLS:     &TLS{KeyFile: "~/certs/key.pem"},
 						SASL:    &SASL{User: "user", Password: "pass"},
@@ -1084,10 +1084,10 @@ rpk:
 		{
 			name: "Config file with omitted node ID",
 			data: `
-redpanda:
-  data_directory: "var/lib/redpanda/data"
+funes:
+  data_directory: "var/lib/funes/data"
   enable_admin_api: true
-  admin_api_doc_dir: "/usr/share/redpanda/admin-api-doc"
+  admin_api_doc_dir: "/usr/share/funes/admin-api-doc"
   admin:
   - address: "0.0.0.0"
     port: 9644
@@ -1104,23 +1104,23 @@ redpanda:
   advertised_rpc_api:
     address: "0.0.0.0"
     port: 33145
-  kafka_api:
+  sql_api:
   - address: "0.0.0.0"
     name: internal
     port: 9092
   - address: "0.0.0.0"
     name: external
     port: 9093
-  kafka_api_tls:
+  sql_api_tls:
   - name: "external"
     key_file: "certs/tls-key.pem"
   - name: "internal"
     enabled: false
-  advertised_kafka_api:
+  advertised_sql_api:
   - address: 0.0.0.0
     name: internal
     port: 9092
-  - address: redpanda-0.my.domain.com.
+  - address: funes-0.my.domain.com.
     name: external
     port: 9093
   seed_servers:
@@ -1128,11 +1128,11 @@ redpanda:
     port: 33145
   rack: "rack-id"
 `,
-			exp: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					Directory:      "var/lib/redpanda/data",
+			exp: &FunesYaml{
+				Funes: FunesNodeConfig{
+					Directory:      "var/lib/funes/data",
 					ID:             nil,
-					AdminAPIDocDir: "/usr/share/redpanda/admin-api-doc",
+					AdminAPIDocDir: "/usr/share/funes/admin-api-doc",
 					Rack:           "rack-id",
 					AdminAPI: []NamedSocketAddress{
 						{"0.0.0.0", 9644, "admin"},
@@ -1142,17 +1142,17 @@ redpanda:
 					},
 					RPCServer:        SocketAddress{"0.0.0.0", 33145},
 					AdvertisedRPCAPI: &SocketAddress{"0.0.0.0", 33145},
-					KafkaAPI: []NamedAuthNSocketAddress{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{"0.0.0.0", 9092, "internal", nil},
 						{"0.0.0.0", 9093, "external", nil},
 					},
-					KafkaAPITLS: []ServerTLS{
+					SQLAPITLS: []ServerTLS{
 						{Name: "external", KeyFile: "certs/tls-key.pem"},
 						{Name: "internal", Enabled: false},
 					},
-					AdvertisedKafkaAPI: []NamedSocketAddress{
+					AdvertisedSQLAPI: []NamedSocketAddress{
 						{"0.0.0.0", 9092, "internal"},
-						{"redpanda-0.my.domain.com.", 9093, "external"},
+						{"funes-0.my.domain.com.", 9093, "external"},
 					},
 					SeedServers: []SeedServer{
 						{Host: SocketAddress{"192.168.0.1", 33145}, untabbed: true},
@@ -1173,11 +1173,11 @@ redpanda:
 		{
 			name: "Config file with weak types",
 			data: `
-redpanda:
-  data_directory: "var/lib/redpanda/data"
+funes:
+  data_directory: "var/lib/funes/data"
   node_id: 1
   enable_admin_api: true
-  admin_api_doc_dir: "/usr/share/redpanda/admin-api-doc"
+  admin_api_doc_dir: "/usr/share/funes/admin-api-doc"
   admin:
     address: "0.0.0.0"
     port: 9644
@@ -1194,23 +1194,23 @@ redpanda:
   advertised_rpc_api:
     address: "0.0.0.0"
     port: 33145
-  kafka_api:
+  sql_api:
   - address: "0.0.0.0"
     name: internal
     port: "9092"
   - address: "0.0.0.0"
     name: external
     port: "9093"
-  kafka_api_tls:
+  sql_api_tls:
   - name: "external"
     key_file: "certs/tls-key.pem"
   - name: "internal"
     enabled: false
-  advertised_kafka_api:
+  advertised_sql_api:
   - address: 0.0.0.0
     name: internal
     port: 9092
-  - address: redpanda-0.my.domain.com.
+  - address: funes-0.my.domain.com.
     name: external
     port: 9093
   seed_servers:
@@ -1224,29 +1224,29 @@ redpanda:
   - address: 192.168.0.1
     port: 33145
   rack: "rack-id"
-pandaproxy:
-  pandaproxy_api:
+funesproxy:
+  funesproxy_api:
   - address: "0.0.0.0"
     name: internal
     port: 8082
   - address: "0.0.0.0"
     name: external
     port: 8083
-  pandaproxy_api_tls:
+  funesproxy_api_tls:
   - name: external
     enabled: 0
     truststore_file: "truststore_file"
   - name: internal
     enabled: 0
-  advertised_pandaproxy_api:
+  advertised_funesproxy_api:
   - address: 0.0.0.0
     name: internal
     port: 8082
-  - address: "redpanda-rest-0.my.domain.com."
+  - address: "funes-rest-0.my.domain.com."
     name: external
     port: 8083
   consumer_instance_timeout_ms: 60000
-pandaproxy_client:
+funesproxy_client:
   brokers:
   - address: "127.0.0.1"
     port: 9092
@@ -1277,7 +1277,7 @@ rpk:
     user: user
     password: pass
   additional_start_flags: "--overprovisioned"
-  kafka_api:
+  sql_api:
     brokers:
     - 192.168.72.34:9092
     - 192.168.72.35:9092
@@ -1299,11 +1299,11 @@ rpk:
   tune_aio_events: false
   tune_clocksource: 1
 `,
-			exp: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					Directory:      "var/lib/redpanda/data",
+			exp: &FunesYaml{
+				Funes: FunesNodeConfig{
+					Directory:      "var/lib/funes/data",
 					ID:             intPtr(1),
-					AdminAPIDocDir: "/usr/share/redpanda/admin-api-doc",
+					AdminAPIDocDir: "/usr/share/funes/admin-api-doc",
 					Rack:           "rack-id",
 					AdminAPI: []NamedSocketAddress{
 						{"0.0.0.0", 9644, "admin"},
@@ -1313,17 +1313,17 @@ rpk:
 					},
 					RPCServer:        SocketAddress{"0.0.0.0", 33145},
 					AdvertisedRPCAPI: &SocketAddress{"0.0.0.0", 33145},
-					KafkaAPI: []NamedAuthNSocketAddress{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{"0.0.0.0", 9092, "internal", nil},
 						{"0.0.0.0", 9093, "external", nil},
 					},
-					KafkaAPITLS: []ServerTLS{
+					SQLAPITLS: []ServerTLS{
 						{Name: "external", KeyFile: "certs/tls-key.pem"},
 						{Name: "internal", Enabled: false},
 					},
-					AdvertisedKafkaAPI: []NamedSocketAddress{
+					AdvertisedSQLAPI: []NamedSocketAddress{
 						{"0.0.0.0", 9092, "internal"},
-						{"redpanda-0.my.domain.com.", 9093, "external"},
+						{"funes-0.my.domain.com.", 9093, "external"},
 					},
 					SeedServers: []SeedServer{
 						{Host: SocketAddress{"192.168.0.1", 33145}},
@@ -1338,24 +1338,24 @@ rpk:
 						},
 					},
 				},
-				Pandaproxy: &Pandaproxy{
-					PandaproxyAPI: []NamedAuthNSocketAddress{
+				Funesproxy: &Funesproxy{
+					FunesproxyAPI: []NamedAuthNSocketAddress{
 						{"0.0.0.0", 8082, "internal", nil},
 						{"0.0.0.0", 8083, "external", nil},
 					},
-					PandaproxyAPITLS: []ServerTLS{
+					FunesproxyAPITLS: []ServerTLS{
 						{Name: "external", Enabled: false, TruststoreFile: "truststore_file"},
 						{Name: "internal", Enabled: false},
 					},
-					AdvertisedPandaproxyAPI: []NamedSocketAddress{
+					AdvertisedFunesproxyAPI: []NamedSocketAddress{
 						{"0.0.0.0", 8082, "internal"},
-						{"redpanda-rest-0.my.domain.com.", 8083, "external"},
+						{"funes-rest-0.my.domain.com.", 8083, "external"},
 					},
 					Other: map[string]interface{}{
 						"consumer_instance_timeout_ms": 60000,
 					},
 				},
-				PandaproxyClient: &KafkaClient{
+				FunesproxyClient: &SQLClient{
 					Brokers: []SocketAddress{
 						{"127.0.0.1", 9092},
 					},
@@ -1381,7 +1381,7 @@ rpk:
 				},
 				Rpk: RpkNodeConfig{
 					AdditionalStartFlags: []string{"--overprovisioned"},
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{"192.168.72.34:9092", "192.168.72.35:9092"},
 						TLS:     &TLS{KeyFile: "~/certs/key.pem"},
 						SASL:    &SASL{User: "user", Password: "pass"},
@@ -1403,7 +1403,7 @@ rpk:
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var ts struct {
-				RedpandaYaml *RedpandaYaml `yaml:",inline"`
+				FunesYaml *FunesYaml `yaml:",inline"`
 			}
 			err := yaml.Unmarshal([]byte(test.data), &ts)
 
@@ -1416,7 +1416,7 @@ rpk:
 			if test.expErr {
 				return
 			}
-			require.Equal(t, test.exp, ts.RedpandaYaml)
+			require.Equal(t, test.exp, ts.FunesYaml)
 		})
 	}
 }

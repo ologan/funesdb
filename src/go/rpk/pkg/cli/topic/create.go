@@ -16,7 +16,7 @@ import (
 	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -54,8 +54,8 @@ the cleanup.policy=compact config option set.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			cl, err := kafka.NewFranzClient(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			cl, err := sql.NewFranzClient(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer cl.Close()
 
 			configs, err := parseKVs(configKVs)
@@ -68,7 +68,7 @@ the cleanup.policy=compact config option set.
 
 			req := kmsg.NewPtrCreateTopicsRequest()
 			req.ValidateOnly = dry
-			req.TimeoutMillis = 5000 // TODO move to rpk.kafka
+			req.TimeoutMillis = 5000 // TODO move to rpk.sql
 			var reqConfigs []kmsg.CreateTopicsRequestTopicConfig
 			for k, v := range configs {
 				reqConfig := kmsg.NewCreateTopicsRequestTopicConfig()
@@ -101,7 +101,7 @@ the cleanup.policy=compact config option set.
 			for _, topic := range resp.Topics {
 				msg := "OK"
 				if topic.ErrorMessage != nil {
-					zap.L().Sugar().Debugf("redpanda returned error message: %v", *topic.ErrorMessage)
+					zap.L().Sugar().Debugf("funes returned error message: %v", *topic.ErrorMessage)
 				}
 				if err := kerr.ErrorForCode(topic.ErrorCode); err != nil {
 					if errors.Is(err, kerr.InvalidPartitions) && partitions > 0 {

@@ -38,7 +38,7 @@ func TestGatherMetrics(t *testing.T) {
 		expectedErrMsg: "/proc/4194304/stat",
 	}, {
 		name:           "it should fail if the PID file doesn't exist",
-		expectedErrMsg: "the local redpanda process isn't running",
+		expectedErrMsg: "the local funes process isn't running",
 	}, {
 		name: "it should fail if the CPU utime can't be parsed",
 		before: func(fs afero.Fs) error {
@@ -52,7 +52,7 @@ func TestGatherMetrics(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			content := "4194304 (redpanda) S 1 2680757 2680757 0 -1 4194304 18612 8456 1 0 invalid-utime 422288 10 11 20 0 32 0 88937938 17593454493696 811178 18446744073709551615 1 1 0 0 0 0 2143394384 0 17442 0 0 0 17 1 0 0 0 0 0 0 0 0 0 0 0 0 0"
+			content := "4194304 (funes) S 1 2680757 2680757 0 -1 4194304 18612 8456 1 0 invalid-utime 422288 10 11 20 0 32 0 88937938 17593454493696 811178 18446744073709551615 1 1 0 0 0 0 2143394384 0 17442 0 0 0 17 1 0 0 0 0 0 0 0 0 0 0 0 0 0"
 			return afero.WriteFile(
 				fs,
 				"/proc/4194304/stat",
@@ -74,7 +74,7 @@ func TestGatherMetrics(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			content := "4194304 (redpanda) S 1 2680757 2680757 0 -1 4194304 18612 8456 1 0 398600 invalid-stime 10 11 20 0 32 0 88937938 17593454493696 811178 18446744073709551615 1 1 0 0 0 0 2143394384 0 17442 0 0 0 17 1 0 0 0 0 0 0 0 0 0 0 0 0 0"
+			content := "4194304 (funes) S 1 2680757 2680757 0 -1 4194304 18612 8456 1 0 398600 invalid-stime 10 11 20 0 32 0 88937938 17593454493696 811178 18446744073709551615 1 1 0 0 0 0 2143394384 0 17442 0 0 0 17 1 0 0 0 0 0 0 0 0 0 0 0 0 0"
 			return afero.WriteFile(
 				fs,
 				"/proc/4194304/stat",

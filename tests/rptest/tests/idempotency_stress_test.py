@@ -35,7 +35,7 @@ class IdempotencyStressTest(PreallocNodesTest):
 
     @property
     def is_scale_test(self):
-        return self.redpanda.dedicated_nodes
+        return self.funes.dedicated_nodes
 
     @property
     def partition_count(self):
@@ -71,7 +71,7 @@ class IdempotencyStressTest(PreallocNodesTest):
         )
         return KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic_name,
             msg_size=self.msg_size,
             # we use an arbitrary large number here, test scale is controlled by
@@ -83,7 +83,7 @@ class IdempotencyStressTest(PreallocNodesTest):
             msgs_per_producer_id=self.msgs_per_producer)
 
     def validate_metrics(self, expected_size):
-        metrics = self.redpanda.metrics_sample("idempotency_pid_cache_size")
+        metrics = self.funes.metrics_sample("idempotency_pid_cache_size")
         values = [s.value for s in metrics.samples]
         self.logger.debug(
             f"Metrics sample values: {values}, expected cache size: {expected_size}"
@@ -95,12 +95,12 @@ class IdempotencyStressTest(PreallocNodesTest):
     @skip_debug_mode
     def producer_id_stress_test(self, max_producer_ids):
         """
-        Check that Redpanda is handling gracefully large number of producer ids
+        Check that Funes is handling gracefully large number of producer ids
         """
 
         self.topic_name = "idempotency_stress_test"
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"max_concurrent_producer_ids": max_producer_ids})
 
         self.client().create_topic(

@@ -15,8 +15,8 @@
 #include "config/seed_server.h"
 #include "model/metadata.h"
 #include "random/generators.h"
-#include "redpanda/application.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/application.h"
+#include "funes/tests/fixture.h"
 #include "resource_mgmt/cpu_scheduling.h"
 #include "test_utils/async.h"
 
@@ -49,7 +49,7 @@ void set_configuration(ss::sstring p_name, T v) {
 
 class cluster_test_fixture {
 public:
-    using fixture_ptr = std::unique_ptr<redpanda_thread_fixture>;
+    using fixture_ptr = std::unique_ptr<funes_thread_fixture>;
 
     cluster_test_fixture()
       : _sgroups(create_scheduling_groups())
@@ -67,18 +67,18 @@ public:
         std::filesystem::remove_all(std::filesystem::path(_base_dir));
     }
 
-    virtual fixture_ptr make_redpanda_fixture(
+    virtual fixture_ptr make_funes_fixture(
       model::node_id node_id,
-      int16_t kafka_port,
+      int16_t sql_port,
       int16_t rpc_port,
       int16_t proxy_port,
       int16_t schema_reg_port,
       std::vector<config::seed_server> seeds,
       configure_node_id use_node_id,
       empty_seed_starts_cluster empty_seed_starts_cluster_val) {
-        return std::make_unique<redpanda_thread_fixture>(
+        return std::make_unique<funes_thread_fixture>(
           node_id,
-          kafka_port,
+          sql_port,
           rpc_port,
           proxy_port,
           schema_reg_port,
@@ -95,7 +95,7 @@ public:
 
     void add_node(
       model::node_id node_id,
-      int16_t kafka_port,
+      int16_t sql_port,
       int16_t rpc_port,
       int16_t proxy_port,
       int16_t schema_reg_port,
@@ -105,9 +105,9 @@ public:
       = empty_seed_starts_cluster::yes) {
         _instances.emplace(
           node_id,
-          make_redpanda_fixture(
+          make_funes_fixture(
             node_id,
-            kafka_port,
+            sql_port,
             rpc_port,
             proxy_port,
             schema_reg_port,
@@ -135,7 +135,7 @@ public:
 
     application* create_node_application(
       model::node_id node_id,
-      int kafka_port_base = 9092,
+      int sql_port_base = 9092,
       int rpc_port_base = 11000,
       int proxy_port_base = 8082,
       int schema_reg_port_base = 8081,
@@ -149,7 +149,7 @@ public:
         }
         add_node(
           node_id,
-          kafka_port_base + node_id(),
+          sql_port_base + node_id(),
           rpc_port_base + node_id(),
           proxy_port_base + node_id(),
           schema_reg_port_base + node_id(),

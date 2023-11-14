@@ -14,12 +14,12 @@ from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
 from rptest.services.admin import Admin
 from rptest.clients.rpk import RpkTool
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, LoggingConfig
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST, LoggingConfig
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.mode_checks import skip_debug_mode
 
 
-class LargeControllerSnapshotTest(RedpandaTest):
+class LargeControllerSnapshotTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args,
@@ -51,26 +51,26 @@ class LargeControllerSnapshotTest(RedpandaTest):
     @cluster(num_nodes=4, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_join_restart(self):
         """
-        Test that Redpanda can handle controller snapshots with a lot of objects:
+        Test that Funes can handle controller snapshots with a lot of objects:
         * no new oversized allocations and controller stalls
         * snapshot is persisted without problems
         * admin commands can still be executed
         * cluster is able to stabilize (rebalancing on node addition finishes)
         """
 
-        seed_nodes = self.redpanda.nodes[0:3]
-        joiner_node = self.redpanda.nodes[3]
+        seed_nodes = self.funes.nodes[0:3]
+        joiner_node = self.funes.nodes[3]
 
-        self.redpanda.set_seed_servers(seed_nodes)
-        self.redpanda.start(nodes=seed_nodes, omit_seeds_on_idx_one=False)
+        self.funes.set_seed_servers(seed_nodes)
+        self.funes.start(nodes=seed_nodes, omit_seeds_on_idx_one=False)
 
-        admin = Admin(self.redpanda, default_node=seed_nodes[0])
-        rpk = RpkTool(self.redpanda)
+        admin = Admin(self.funes, default_node=seed_nodes[0])
+        rpk = RpkTool(self.funes)
 
-        if self.redpanda.dedicated_nodes:
+        if self.funes.dedicated_nodes:
             # approx. 5k partition replicas per shard
             n_topics = 50
-            n_partitions = min(100 * self.redpanda.get_node_cpu_count(), 1000)
+            n_partitions = min(100 * self.funes.get_node_cpu_count(), 1000)
             n_users = 5_000
         else:
             # more benign numbers for running the test locally
@@ -89,7 +89,7 @@ class LargeControllerSnapshotTest(RedpandaTest):
             rpk.create_topic(tn, partitions=n_partitions, replicas=3)
 
         for n in seed_nodes:
-            self.redpanda.wait_for_controller_snapshot(node=n)
+            self.funes.wait_for_controller_snapshot(node=n)
 
         # create a lot of users
         self.logger.info(f"creating {n_users} users...")
@@ -97,8 +97,8 @@ class LargeControllerSnapshotTest(RedpandaTest):
         def create_users(names):
             # create own admin and rpk instances to avoid concurrent accesses
             # to common ones
-            admin = Admin(self.redpanda, default_node=seed_nodes[0])
-            rpk = RpkTool(self.redpanda)
+            admin = Admin(self.funes, default_node=seed_nodes[0])
+            rpk = RpkTool(self.funes)
             for un in names:
                 admin.create_user(username=un,
                                   password='p4ssw0rd',
@@ -121,17 +121,17 @@ class LargeControllerSnapshotTest(RedpandaTest):
         self.logger.info(f"controller max offset is {controller_max_offset}")
 
         for n in seed_nodes:
-            self.redpanda.wait_for_controller_snapshot(
+            self.funes.wait_for_controller_snapshot(
                 node=n, prev_start_offset=(controller_max_offset - 1))
 
         # add a node to the cluster
         self.logger.info(f"adding a node to the cluster...")
 
         # explicit clean step is needed because we are starting the node manually and not
-        # using redpanda.start()
-        self.redpanda.clean_node(joiner_node)
-        self.redpanda.start_node(joiner_node)
-        wait_until(lambda: self.redpanda.registered(joiner_node),
+        # using funes.start()
+        self.funes.clean_node(joiner_node)
+        self.funes.start_node(joiner_node)
+        wait_until(lambda: self.funes.registered(joiner_node),
                    timeout_sec=60,
                    backoff_sec=5)
 
@@ -140,11 +140,11 @@ class LargeControllerSnapshotTest(RedpandaTest):
         self.logger.info(f"rebooting the cluster...")
 
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=len(self.redpanda.nodes)) as executor:
+                max_workers=len(self.funes.nodes)) as executor:
             futs = []
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 futs.append(
-                    executor.submit(self.redpanda.restart_nodes,
+                    executor.submit(self.funes.restart_nodes,
                                     nodes=[node],
                                     start_timeout=60,
                                     stop_timeout=60 * 5))
@@ -153,10 +153,10 @@ class LargeControllerSnapshotTest(RedpandaTest):
                 # Raise on error
                 f.result()
 
-        self.redpanda.wait_for_membership(first_start=False, timeout_sec=60)
+        self.funes.wait_for_membership(first_start=False, timeout_sec=60)
 
         # check that all created users are there
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             actual = len(admin.list_users(node=n))
             # + 1 comes from the admin user which is created autmatically
             assert actual == n_users + 1, f"unexpected number of users {actual}"

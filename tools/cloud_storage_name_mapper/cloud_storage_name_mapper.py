@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 #
 # Examples:
-# Say you have a segment file like: /var/lib/redpanda/data/kafka/test-si3/0_105/0-1-v1.log
+# Say you have a segment file like: /var/lib/funes/data/sql/test-si3/0_105/0-1-v1.log
 # run the command like below:
 #
-# $ ./cloud_storage_name_mapper.py kafka/test-si3/0_105/0-1-v1.log
+# $ ./cloud_storage_name_mapper.py sql/test-si3/0_105/0-1-v1.log
 #
 # and the expected output looks like:
 #
-# manifest path:       00000000/meta/kafka/test-si3/0_105/manifest.json
-# topic manifest path: 60000000/meta/kafka/test-si3/topic_manifest.json
-# segment path:        924dec9f/kafka/test-si3/0_105/0-1-v1.log.*
+# manifest path:       00000000/meta/sql/test-si3/0_105/manifest.json
+# topic manifest path: 60000000/meta/sql/test-si3/topic_manifest.json
+# segment path:        924dec9f/sql/test-si3/0_105/0-1-v1.log.*
 #
 
 import xxhash
@@ -22,17 +22,17 @@ def main():
 
     def generate_options():
         parser = argparse.ArgumentParser(
-            description='Redpanda Tiered Storage Remote Write Naming Mapper')
+            description='Funes Tiered Storage Remote Write Naming Mapper')
         parser.add_argument('path',
                             type=str,
-                            help='Path to the file, starting with \'kafka/\'')
+                            help='Path to the file, starting with \'sql/\'')
 
         return parser
 
     parser = generate_options()
     options, _ = parser.parse_known_args()
-    if not options.path.startswith('kafka'):
-        print(f"The path should start with 'kafka'")
+    if not options.path.startswith('sql'):
+        print(f"The path should start with 'sql'")
         sys.exit(1)
 
     p = options.path.split('/')

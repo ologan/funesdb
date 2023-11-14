@@ -1,17 +1,17 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/recovery_request.h"
 #include "cloud_storage/tests/s3_imposter.h"
 #include "cluster/topic_recovery_service.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/tests/fixture.h"
 #include "test_utils/fixture.h"
 #include "utils/memory_data_source.h"
 
@@ -51,7 +51,7 @@ const ss::sstring valid_manifest_list = R"XML(
     <ListBucketResult>
       <IsTruncated>false</IsTruncated>
       <Contents>
-          <Key>b0000000/meta/kafka/test/topic_manifest.json</Key>
+          <Key>b0000000/meta/sql/test/topic_manifest.json</Key>
       </Contents>
       <NextContinuationToken>n</NextContinuationToken>
     </ListBucketResult>
@@ -61,7 +61,7 @@ const ss::sstring recovery_results = R"XML(
     <ListBucketResult>
       <IsTruncated>false</IsTruncated>
       <Contents>
-          <Key>recovery_state/kafka/test/0_9c7bc334-a669-4f04-b8c3-81c30b6ef5bf.false</Key>
+          <Key>recovery_state/sql/test/0_9c7bc334-a669-4f04-b8c3-81c30b6ef5bf.false</Key>
       </Contents>
       <NextContinuationToken>n</NextContinuationToken>
     </ListBucketResult>
@@ -69,14 +69,14 @@ const ss::sstring recovery_results = R"XML(
 
 const ss::sstring topic_manifest_json = R"JSON({
       "version": 1,
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test",
       "partition_count": 1,
       "replication_factor": 1,
       "revision_id": 1
     })JSON";
 
-const model::topic_namespace tp_ns{model::ns{"kafka"}, model::topic{"test"}};
+const model::topic_namespace tp_ns{model::ns{"sql"}, model::topic{"test"}};
 
 const s3_imposter_fixture::expectation root_level{
   .url = "/?list-type=2&delimiter=/",
@@ -89,7 +89,7 @@ const s3_imposter_fixture::expectation meta_level{
 };
 
 const s3_imposter_fixture::expectation manifest{
-  .url = "/b0000000/meta/kafka/test/topic_manifest.json",
+  .url = "/b0000000/meta/sql/test/topic_manifest.json",
   .body = topic_manifest_json,
 };
 
@@ -126,12 +126,12 @@ bool is_manifest_list_request(const http_test_utils::request_info& req) {
 
 class fixture
   : public s3_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public enable_cloud_storage_fixture {
 public:
     fixture()
-      : redpanda_thread_fixture(
-        redpanda_thread_fixture::init_cloud_storage_tag{},
+      : funes_thread_fixture(
+        funes_thread_fixture::init_cloud_storage_tag{},
         httpd_port_number()) {
         // This test will manually set expectations for list requests.
         set_search_on_get_list(false);
@@ -277,7 +277,7 @@ FIXTURE_TEST(recovery_with_missing_topic_manifest, fixture) {
 
 FIXTURE_TEST(recovery_with_existing_topic, fixture) {
     cluster::topic_configuration cfg{
-      model::ns{"kafka"}, model::topic{"test"}, 1, 1};
+      model::ns{"sql"}, model::topic{"test"}, 1, 1};
     std::vector<cluster::custom_assignable_topic_configuration> topic_cfg = {
       cluster::custom_assignable_topic_configuration{std::move(cfg)}};
     auto topic_create_result = app.controller->get_topics_frontend()

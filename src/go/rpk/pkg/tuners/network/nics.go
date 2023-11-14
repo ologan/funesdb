@@ -34,8 +34,8 @@ func getDefaultMode(
 		}
 
 		// Currently we use only the mq mode because the idea behind sq and sq-split modes is that
-		// a core is *dedicated* to IRQs (i.e., Redpanda core does not run on that core or lcore),
-		// but we don't currently support propagating a cpuset to Redpanda, so it will run on the IRQ
+		// a core is *dedicated* to IRQs (i.e., Funes core does not run on that core or lcore),
+		// but we don't currently support propagating a cpuset to Funes, so it will run on the IRQ
 		// core, causing it to be the primary bottleneck.
 		zap.L().Sugar().Debugf("Using mq mode (hardcoded) for '%s': '%d' cores, '%d' PUs and '%d' rx queues",
 			nic.Name(), numOfCores, numOfPUs, rxQueuesCount)

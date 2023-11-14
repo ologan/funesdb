@@ -12,7 +12,7 @@ class RpkProducer(BackgroundThreadService):
     """
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic: str,
                  msg_size: int,
                  msg_count: int,
@@ -24,7 +24,7 @@ class RpkProducer(BackgroundThreadService):
                  partition: Optional[int] = None,
                  max_message_bytes: Optional[int] = None):
         super(RpkProducer, self).__init__(context, num_nodes=1)
-        self._redpanda = redpanda
+        self._funes = funes
         self._topic = topic
         self._msg_size = msg_size
         self._msg_count = msg_count
@@ -43,8 +43,8 @@ class RpkProducer(BackgroundThreadService):
     def _worker(self, _idx, node):
         # NOTE: since this runs on separate nodes from the service, the binary
         # path used by each node may differ from that returned by
-        # redpanda.find_binary(), e.g. if using a RedpandaInstaller.
-        rp_install_path_root = self._redpanda._context.globals.get(
+        # funes.find_binary(), e.g. if using a FunesInstaller.
+        rp_install_path_root = self._funes._context.globals.get(
             "rp_install_path_root", None)
         rpk_binary = f"{rp_install_path_root}/bin/rpk"
         key_size = 16
@@ -53,7 +53,7 @@ class RpkProducer(BackgroundThreadService):
         if self._printable:
             cmd += ' | hexdump -e "1/1 \\"%02x\\""'
 
-        cmd += f" | {rpk_binary} topic --brokers {self._redpanda.brokers()} produce --compression none {self._topic} -f '%V{{{self._msg_size}}}%K{{{key_size}}}%k%v'"
+        cmd += f" | {rpk_binary} topic --brokers {self._funes.brokers()} produce --compression none {self._topic} -f '%V{{{self._msg_size}}}%K{{{key_size}}}%k%v'"
 
         if self._acks is not None:
             cmd += f" --acks {self._acks}"
@@ -80,7 +80,7 @@ class RpkProducer(BackgroundThreadService):
             else:
                 raise
 
-        self._redpanda.logger.debug(
+        self._funes.logger.debug(
             f"Finished sending {self._msg_count} messages")
 
     @property

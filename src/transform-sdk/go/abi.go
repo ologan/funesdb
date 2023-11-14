@@ -14,7 +14,7 @@
 
 //go:build wasip1 || tinygo
 
-package redpanda
+package funes
 
 import (
 	"unsafe"
@@ -25,7 +25,7 @@ import (
 
 // An imported function to ensure that the broker supports this ABI version.
 //
-//go:wasmimport redpanda_transform check_abi_version_1
+//go:wasmimport funes_transform check_abi_version_1
 func checkAbiVersion()
 
 // readRecordHeader reads all the data from the batch header into memory.
@@ -33,7 +33,7 @@ func checkAbiVersion()
 // Returns maximum record size for the batch in bytes (which is useful
 // when you want to allocate a single buffer for the entire batch).
 //
-//go:wasmimport redpanda_transform read_batch_header
+//go:wasmimport funes_transform read_batch_header
 func readBatchHeader(
 	baseOffset unsafe.Pointer,
 	recordCount unsafe.Pointer,
@@ -51,7 +51,7 @@ func readBatchHeader(
 //
 // In addition to the record metadata, into `buf` the serialized the "payload"
 // of a record will be written.
-// The payload is the key, value and headers as specified by kafka's serialized
+// The payload is the key, value and headers as specified by sql's serialized
 // wire protocol. In particular, the following fields should be as included:
 //
 // keyLength: varint
@@ -63,7 +63,7 @@ func readBatchHeader(
 // Returns the amount that was written into `buf` on success, otherwise
 // returns a negative number to indicate an error.
 //
-//go:wasmimport redpanda_transform read_next_record
+//go:wasmimport funes_transform read_next_record
 func readNextRecord(
 	attributes unsafe.Pointer,
 	timestamp unsafe.Pointer,
@@ -75,7 +75,7 @@ func readNextRecord(
 // writeRecord writes a new record by copying the data pointed to.
 //
 // The `buf` here is expected to be the serialized the "payload" of a record
-// as specified by kafka's serialized wire protocol. In particular, the following
+// as specified by sql's serialized wire protocol. In particular, the following
 // fields should be as included:
 //
 // keyLength: varint
@@ -87,9 +87,9 @@ func readNextRecord(
 // The record metdata such as the total length, attributes, timestamp and offset
 // should be omitted - the broker will handle adding that information as required.
 //
-// See: https://kafka.apache.org/documentation/#record for more information.
+// See: https://sql.apache.org/documentation/#record for more information.
 //
 // Returns a negative number to indicate an error.
 //
-//go:wasmimport redpanda_transform write_record
+//go:wasmimport funes_transform write_record
 func writeRecord(data unsafe.Pointer, length int32) int32

@@ -76,7 +76,7 @@ public:
     try_init_mapping(model::term_id term, int32_t partitions_count);
 
     std::optional<model::partition_id>
-      find_hosting_partition(kafka::transactional_id);
+      find_hosting_partition(sql::transactional_id);
 
     bool seen_unknown_batch_subtype() const {
         return _seen_unknown_batch_subtype;

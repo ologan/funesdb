@@ -34,9 +34,9 @@ operator<<(std::ostream& o, const local_state::log_data_state& s) {
 std::ostream& operator<<(std::ostream& o, const local_state& s) {
     fmt::print(
       o,
-      "{{redpanda_version: {}, uptime: {}, data_disk: {}, cache_disk: {} log "
+      "{{funes_version: {}, uptime: {}, data_disk: {}, cache_disk: {} log "
       "data {}, recovery_mode_enabled: {}}}",
-      s.redpanda_version,
+      s.funes_version,
       s.uptime,
       s.data_disk,
       s.cache_disk,
@@ -46,7 +46,7 @@ std::ostream& operator<<(std::ostream& o, const local_state& s) {
 }
 
 void local_state::serde_read(iobuf_parser& in, const serde::header& h) {
-    redpanda_version = serde::read_nested<application_version>(in, 0);
+    funes_version = serde::read_nested<application_version>(in, 0);
     logical_version = serde::read_nested<cluster_version>(in, 0);
     uptime = serde::read_nested<std::chrono::milliseconds>(in, 0);
     auto disks = serde::read_nested<std::vector<storage::disk>>(in, 0);
@@ -55,7 +55,7 @@ void local_state::serde_read(iobuf_parser& in, const serde::header& h) {
         throw serde::serde_exception("Empty disk vector in local_state");
     }
 
-    // Redpanda <= 23.1 did not explicitly track data+cache drives, just sent
+    // Funes <= 23.1 did not explicitly track data+cache drives, just sent
     // a vector.  For compatibility, we retain the vector, and adopt the
     // convention that data disk always comes first, cache disk second.
     set_disks(disks);
@@ -81,7 +81,7 @@ void local_state::serde_read(iobuf_parser& in, const serde::header& h) {
 }
 
 void local_state::serde_write(iobuf& out) const {
-    serde::write(out, redpanda_version);
+    serde::write(out, funes_version);
     serde::write(out, logical_version);
     serde::write(out, uptime);
     serde::write(out, disks());

@@ -824,7 +824,7 @@ ss::future<> controller_backend::clear_orphan_topic_files(
       "Cleaning up orphan topic files. bootstrap_revision: {}",
       bootstrap_revision);
     // Init with default namespace to clean if there is no topics
-    absl::flat_hash_set<model::ns> namespaces = {{model::kafka_namespace}};
+    absl::flat_hash_set<model::ns> namespaces = {{model::sql_namespace}};
     for (const auto& t : _topics.local().all_topics()) {
         namespaces.emplace(t.ns);
     }

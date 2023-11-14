@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -31,7 +31,7 @@ struct stream_stats {
 };
 
 /// This instance of this class is supposed to be used to
-/// translate from redpanda offsets to kafka offsets in the
+/// translate from funes offsets to sql offsets in the
 /// shadow-indexing and recovery contexts.
 /// It consumes information stored in the manifest.
 class offset_translator final {

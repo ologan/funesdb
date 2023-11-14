@@ -181,21 +181,21 @@ SEASTAR_THREAD_TEST_CASE(test_config_extracting_reader) {
 
 model::internal::broker_v0 node_0{
   model::node_id(0),           // id
-  tests::random_net_address(), // kafka api address
+  tests::random_net_address(), // sql api address
   tests::random_net_address(), // rpc address
   std::nullopt,
   model::broker_properties{.cores = random_generators::get_int<uint32_t>(96)}};
 
 model::internal::broker_v0 node_1{
   model::node_id(1),           // id
-  tests::random_net_address(), // kafka api address
+  tests::random_net_address(), // sql api address
   tests::random_net_address(), // rpc address
   std::nullopt,
   model::broker_properties{.cores = random_generators::get_int<uint32_t>(96)}};
 
 model::internal::broker_v0 node_2{
   model::node_id(2),           // id
-  tests::random_net_address(), // kafka api address
+  tests::random_net_address(), // sql api address
   tests::random_net_address(), // rpc address
   std::nullopt,
   model::broker_properties{.cores = random_generators::get_int<uint32_t>(96)}};
@@ -508,12 +508,12 @@ SEASTAR_THREAD_TEST_CASE(configuration_broker_many_endpoints) {
       std::move(buffer));
 
     BOOST_REQUIRE_EQUAL(cfg.brokers().size(), 2);
-    BOOST_REQUIRE_EQUAL(node_0.kafka_advertised_listeners().size(), 2);
-    BOOST_REQUIRE_EQUAL(node_1.kafka_advertised_listeners().size(), 3);
+    BOOST_REQUIRE_EQUAL(node_0.sql_advertised_listeners().size(), 2);
+    BOOST_REQUIRE_EQUAL(node_1.sql_advertised_listeners().size(), 3);
     BOOST_REQUIRE_EQUAL(
-      cfg.brokers()[0].kafka_advertised_listeners(),
-      node_0.kafka_advertised_listeners());
+      cfg.brokers()[0].sql_advertised_listeners(),
+      node_0.sql_advertised_listeners());
     BOOST_REQUIRE_EQUAL(
-      cfg.brokers()[1].kafka_advertised_listeners(),
-      node_1.kafka_advertised_listeners());
+      cfg.brokers()[1].sql_advertised_listeners(),
+      node_1.sql_advertised_listeners());
 }

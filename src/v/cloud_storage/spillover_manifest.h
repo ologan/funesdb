@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -32,8 +32,8 @@ remote_manifest_path generate_spillover_manifest_path(
       path().string(),
       c.base(),
       c.last(),
-      c.base_kafka(),
-      c.next_kafka(),
+      c.base_sql(),
+      c.next_sql(),
       c.base_ts.value(),
       c.last_ts.value()));
 }
@@ -57,8 +57,8 @@ public:
         spillover_manifest_path_components smc{
           .base = fs.base_offset,
           .last = ls->committed_offset,
-          .base_kafka = fs.base_kafka_offset(),
-          .next_kafka = ls->next_kafka_offset(),
+          .base_sql = fs.base_sql_offset(),
+          .next_sql = ls->next_sql_offset(),
           .base_ts = fs.base_timestamp,
           .last_ts = ls->max_timestamp,
         };

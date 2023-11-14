@@ -17,14 +17,14 @@ import (
 )
 
 const (
-	DefaultKafkaPort     = 9092
+	DefaultSQLPort     = 9092
 	DefaultSchemaRegPort = 8081
 	DefaultProxyPort     = 8082
 	DefaultAdminPort     = 9644
 	DefaultRPCPort       = 33145
 	DefaultListenAddress = "0.0.0.0"
 
-	DefaultBallastFilePath = "/var/lib/redpanda/data/ballast"
+	DefaultBallastFilePath = "/var/lib/funes/data/ballast"
 	DefaultBallastFileSize = "1GiB"
 )
 
@@ -41,7 +41,7 @@ type DevOverrides struct {
 	// CloudAuthAppClientID is used by `rpk cloud` to override the client
 	// ID we use when talking to auth0.
 	CloudAuthAppClientID string `env:"RPK_AUTH_APP_CLIENT_ID"`
-	// CloudAPIURL is used by `rpk cloud` to override the Redpanda Cloud
+	// CloudAPIURL is used by `rpk cloud` to override the Funes Cloud
 	// URL we talk to.
 	CloudAPIURL string `env:"RPK_CLOUD_URL"`
 	// BYOCSkipVersionCheck is used by `rpk cloud byoc` and skips any byoc
@@ -56,16 +56,16 @@ type DevOverrides struct {
 	CloudToken string `env:"RPK_CLOUD_TOKEN"`
 }
 
-// Config encapsulates a redpanda.yaml and/or an rpk.yaml. This is the
+// Config encapsulates a funes.yaml and/or an rpk.yaml. This is the
 // entrypoint that params.Config returns, after which you can get either the
 // Virtual or actual configurations.
 type Config struct {
 	p *Params
 
-	redpandaYaml       RedpandaYaml // processed, defaults/env/flags
-	redpandaYamlActual RedpandaYaml // unprocessed
-	redpandaYamlExists bool         // whether the redpanda.yaml file exists
-	redpandaYamlInitd  bool         // if OrDefaults was returned to initialize a new "actual" file that has not yet been written
+	funesYaml       FunesYaml // processed, defaults/env/flags
+	funesYamlActual FunesYaml // unprocessed
+	funesYamlExists bool         // whether the funes.yaml file exists
+	funesYamlInitd  bool         // if OrDefaults was returned to initialize a new "actual" file that has not yet been written
 
 	rpkYaml       RpkYaml // processed, defaults/env/flags
 	rpkYamlActual RpkYaml // unprocessed
@@ -75,32 +75,32 @@ type Config struct {
 	devOverrides DevOverrides
 }
 
-// VirtualRedpandaYaml returns a redpanda.yaml, starting with defaults,
+// VirtualFunesYaml returns a funes.yaml, starting with defaults,
 // then decoding a potential file, then applying env vars and then flags.
-func (c *Config) VirtualRedpandaYaml() *RedpandaYaml {
-	return &c.redpandaYaml
+func (c *Config) VirtualFunesYaml() *FunesYaml {
+	return &c.funesYaml
 }
 
-// ActualRedpandaYaml returns an actual redpanda.yaml if it exists, with no
+// ActualFunesYaml returns an actual funes.yaml if it exists, with no
 // other defaults over overrides applied.
-func (c *Config) ActualRedpandaYaml() (*RedpandaYaml, bool) {
-	return &c.redpandaYamlActual, c.redpandaYamlExists
+func (c *Config) ActualFunesYaml() (*FunesYaml, bool) {
+	return &c.funesYamlActual, c.funesYamlExists
 }
 
-// ActualRedpandaYamlOrDefaults returns an actual redpanda.yaml if it exists,
+// ActualFunesYamlOrDefaults returns an actual funes.yaml if it exists,
 // otherwise this returns dev defaults. This function is meant to be used
-// for writing a redpanda.yaml file, populating it with defaults if needed.
-func (c *Config) ActualRedpandaYamlOrDefaults() *RedpandaYaml {
-	if c.redpandaYamlExists || c.redpandaYamlInitd {
-		return &c.redpandaYamlActual
+// for writing a funes.yaml file, populating it with defaults if needed.
+func (c *Config) ActualFunesYamlOrDefaults() *FunesYaml {
+	if c.funesYamlExists || c.funesYamlInitd {
+		return &c.funesYamlActual
 	}
-	defer func() { c.redpandaYamlInitd = true }()
-	redpandaYaml := DevDefault()
+	defer func() { c.funesYamlInitd = true }()
+	funesYaml := DevDefault()
 	if c.p.ConfigFlag != "" { // --config set but the file does not yet exist
-		redpandaYaml.fileLocation = c.p.ConfigFlag
+		funesYaml.fileLocation = c.p.ConfigFlag
 	}
-	c.redpandaYamlActual = *redpandaYaml
-	return &c.redpandaYamlActual
+	c.funesYamlActual = *funesYaml
+	return &c.funesYamlActual
 }
 
 // VirtualRpkYaml returns an rpk.yaml, starting with defaults, then
@@ -150,24 +150,24 @@ func (c *Config) DevOverrides() DevOverrides {
 	return c.devOverrides
 }
 
-// LoadVirtualRedpandaYaml is a shortcut for p.Load followed by
-// cfg.VirtualRedpandaYaml.
-func (p *Params) LoadVirtualRedpandaYaml(fs afero.Fs) (*RedpandaYaml, error) {
+// LoadVirtualFunesYaml is a shortcut for p.Load followed by
+// cfg.VirtualFunesYaml.
+func (p *Params) LoadVirtualFunesYaml(fs afero.Fs) (*FunesYaml, error) {
 	cfg, err := p.Load(fs)
 	if err != nil {
 		return nil, err
 	}
-	return cfg.VirtualRedpandaYaml(), nil
+	return cfg.VirtualFunesYaml(), nil
 }
 
-// LoadActualRedpandaYaml is a shortcut for p.Load followed by
-// cfg.ActualRedpandaYaml.
-func (p *Params) LoadActualRedpandaYamlOrDefaults(fs afero.Fs) (*RedpandaYaml, error) {
+// LoadActualFunesYaml is a shortcut for p.Load followed by
+// cfg.ActualFunesYaml.
+func (p *Params) LoadActualFunesYamlOrDefaults(fs afero.Fs) (*FunesYaml, error) {
 	cfg, err := p.Load(fs)
 	if err != nil {
 		return nil, err
 	}
-	return cfg.ActualRedpandaYamlOrDefaults(), nil
+	return cfg.ActualFunesYamlOrDefaults(), nil
 }
 
 // LoadVirtualProfile is a shortcut for p.Load followed by
@@ -191,26 +191,26 @@ const (
 )
 
 func (c *Config) SetMode(fs afero.Fs, mode string) error {
-	yRedpanda := c.ActualRedpandaYamlOrDefaults()
+	yFunes := c.ActualFunesYamlOrDefaults()
 	switch {
 	case mode == "" || strings.HasPrefix("development", mode):
-		yRedpanda.setDevMode()
+		yFunes.setDevMode()
 	case strings.HasPrefix("production", mode):
-		yRedpanda.setProdMode()
+		yFunes.setProdMode()
 	case strings.HasPrefix("recovery", mode):
-		yRedpanda.setRecoveryMode()
+		yFunes.setRecoveryMode()
 	default:
 		return fmt.Errorf("unknown mode %q", mode)
 	}
-	return yRedpanda.Write(fs)
+	return yFunes.Write(fs)
 }
 
-func (y *RedpandaYaml) setDevMode() {
-	y.Redpanda.DeveloperMode = true
-	y.Redpanda.RecoveryModeEnabled = false
+func (y *FunesYaml) setDevMode() {
+	y.Funes.DeveloperMode = true
+	y.Funes.RecoveryModeEnabled = false
 	// Defaults to setting all tuners to false
 	y.Rpk = RpkNodeConfig{
-		KafkaAPI:             y.Rpk.KafkaAPI,
+		SQLAPI:             y.Rpk.SQLAPI,
 		AdminAPI:             y.Rpk.AdminAPI,
 		AdditionalStartFlags: y.Rpk.AdditionalStartFlags,
 		SMP:                  DevDefault().Rpk.SMP,
@@ -223,9 +223,9 @@ func (y *RedpandaYaml) setDevMode() {
 	}
 }
 
-func (y *RedpandaYaml) setProdMode() {
-	y.Redpanda.DeveloperMode = false
-	y.Redpanda.RecoveryModeEnabled = false
+func (y *FunesYaml) setProdMode() {
+	y.Funes.DeveloperMode = false
+	y.Funes.RecoveryModeEnabled = false
 	y.Rpk.Overprovisioned = false
 	y.Rpk.Tuners.TuneNetwork = true
 	y.Rpk.Tuners.TuneDiskScheduler = true
@@ -240,6 +240,6 @@ func (y *RedpandaYaml) setProdMode() {
 	y.Rpk.Tuners.TuneBallastFile = true
 }
 
-func (y *RedpandaYaml) setRecoveryMode() {
-	y.Redpanda.RecoveryModeEnabled = true
+func (y *FunesYaml) setRecoveryMode() {
+	y.Funes.RecoveryModeEnabled = true
 }

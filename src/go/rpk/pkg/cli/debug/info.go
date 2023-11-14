@@ -30,8 +30,8 @@ func NewInfoCommand() *cobra.Command {
 			// no-op: keeping the command for backompat.
 		},
 	}
-	cmd.Flags().BoolVar(&send, "send", false, "If true, send resource usage data to Redpanda")
-	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Second, "How long to wait to calculate the Redpanda CPU % utilization")
+	cmd.Flags().BoolVar(&send, "send", false, "If true, send resource usage data to Funes")
+	cmd.Flags().DurationVar(&timeout, "timeout", 2*time.Second, "How long to wait to calculate the Funes CPU % utilization")
 	cmd.Flags().MarkHidden("send")
 	cmd.Flags().MarkHidden("timeout")
 	return cmd

@@ -235,7 +235,7 @@ ss::future<> state_machine_manager::do_apply_raft_snapshot(
       snapshot_content_sz,
       last_offset);
     /**
-     * Previously all the STMs in Redpanda (excluding controller) were
+     * Previously all the STMs in Funes (excluding controller) were
      * using empty Raft snapshots. If snapshot is empty we still apply
      * it to maintain backward compatibility.
      */

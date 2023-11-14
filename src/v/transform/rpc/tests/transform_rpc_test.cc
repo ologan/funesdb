@@ -14,7 +14,7 @@
 #include "cluster/types.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "kafka/server/partition_proxy.h"
+#include "sql/server/partition_proxy.h"
 #include "model/fundamental.h"
 #include "model/ktp.h"
 #include "model/metadata.h"
@@ -324,7 +324,7 @@ public:
       ss::shard_id shard_id,
       const model::ntp& ntp,
       ss::noncopyable_function<
-        ss::future<cluster::errc>(kafka::partition_proxy*)> fn) final {
+        ss::future<cluster::errc>(sql::partition_proxy*)> fn) final {
         auto owner = shard_owner(ntp);
         if (!owner || shard_id != *owner) {
             co_return cluster::errc::not_leader;
@@ -333,7 +333,7 @@ public:
             --_errors_to_inject;
             co_return cluster::errc::timeout;
         }
-        auto pp = kafka::partition_proxy(
+        auto pp = sql::partition_proxy(
           std::make_unique<in_memory_proxy>(ntp, &_produced_batches));
         co_return co_await fn(&pp);
     }
@@ -410,7 +410,7 @@ public:
     }
 
 private:
-    class in_memory_proxy : public kafka::partition_proxy::impl {
+    class in_memory_proxy : public sql::partition_proxy::impl {
     public:
         in_memory_proxy(
           model::ntp ntp, ss::chunked_fifo<produced_batch>* produced_batches)
@@ -418,7 +418,7 @@ private:
           , _produced_batches(produced_batches) {}
 
         const model::ntp& ntp() const final { return _ntp; }
-        ss::future<result<model::offset, kafka::error_code>>
+        ss::future<result<model::offset, sql::error_code>>
         sync_effective_start(model::timeout_clock::duration) final {
             throw std::runtime_error("unimplemented");
         }
@@ -428,15 +428,15 @@ private:
         model::offset high_watermark() const final {
             throw std::runtime_error("unimplemented");
         }
-        checked<model::offset, kafka::error_code>
+        checked<model::offset, sql::error_code>
         last_stable_offset() const final {
             throw std::runtime_error("unimplemented");
         }
-        kafka::leader_epoch leader_epoch() const final {
+        sql::leader_epoch leader_epoch() const final {
             throw std::runtime_error("unimplemented");
         }
         ss::future<std::optional<model::offset>>
-        get_leader_epoch_last_offset(kafka::leader_epoch) const final {
+        get_leader_epoch_last_offset(sql::leader_epoch) const final {
             throw std::runtime_error("unimplemented");
         }
         bool is_elected_leader() const final { return true; }
@@ -444,7 +444,7 @@ private:
         ss::future<std::error_code> linearizable_barrier() final {
             throw std::runtime_error("unimplemented");
         }
-        ss::future<kafka::error_code>
+        ss::future<sql::error_code>
         prefix_truncate(model::offset, ss::lowres_clock::time_point) final {
             throw std::runtime_error("unimplemented");
         }
@@ -482,7 +482,7 @@ private:
           ss::lw_shared_ptr<const storage::offset_translator_state>) final {
             throw std::runtime_error("unimplemented");
         }
-        ss::future<kafka::error_code> validate_fetch_offset(
+        ss::future<sql::error_code> validate_fetch_offset(
           model::offset, bool, model::timeout_clock::time_point) final {
             throw std::runtime_error("unimplemented");
         }
@@ -507,7 +507,7 @@ private:
             throw std::runtime_error("unimplemented");
         }
 
-        result<kafka::partition_info> get_partition_info() const override {
+        result<sql::partition_info> get_partition_info() const override {
             throw std::runtime_error("unimplemented");
         }
         cluster::partition_probe& probe() override {
@@ -775,7 +775,7 @@ private:
 
 model::ntp make_ntp(std::string_view topic) {
     return {
-      model::kafka_namespace, model::topic(topic), model::partition_id(0)};
+      model::sql_namespace, model::topic(topic), model::partition_id(0)};
 }
 
 model::transform_metadata make_transform_meta() {
@@ -841,7 +841,7 @@ TEST_P(TransformRpcTest, TestTransformOffsetRPCs) {
     create_topic(model::transform_offsets_nt, num_partitions);
     for (int i = 0; i < num_partitions; ++i) {
         model::ntp ntp(
-          model::kafka_internal_namespace,
+          model::sql_internal_namespace,
           model::transform_offsets_topic,
           model::partition_id(i));
         elect_leader(ntp, i % 2 == 0 ? leader_node() : non_leader_node());
@@ -859,7 +859,7 @@ TEST_P(TransformRpcTest, TestTransformOffsetRPCs) {
             ASSERT_TRUE(!read_result.has_error());
             ASSERT_EQ(read_result.value(), std::nullopt);
             auto request_val = model::transform_offsets_value{
-              .offset = kafka::offset{j}};
+              .offset = sql::offset{j}};
             auto coordinator = client()->find_coordinator(request_key).get();
             ASSERT_TRUE(coordinator.has_value());
             auto result = client()

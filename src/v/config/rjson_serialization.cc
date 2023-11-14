@@ -168,13 +168,13 @@ void rjson_serialize(
 
 void rjson_serialize(
   json::Writer<json::StringBuffer>& w,
-  const pandaproxy::schema_registry::subject_name_strategy& v) {
+  const funesproxy::schema_registry::subject_name_strategy& v) {
     stringize(w, v);
 }
 
 void rjson_serialize(
   json::Writer<json::StringBuffer>& w,
-  const pandaproxy::schema_registry::schema_id_validation_mode& v) {
+  const funesproxy::schema_registry::schema_id_validation_mode& v) {
     stringize(w, v);
 }
 

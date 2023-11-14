@@ -16,7 +16,7 @@
 #include "model/metadata.h"
 #include "model/record.h"
 #include "model/timestamp.h"
-#include "pandaproxy/schema_registry/subject_name_strategy.h"
+#include "funesproxy/schema_registry/subject_name_strategy.h"
 #include "random/generators.h"
 #include "test_utils/randoms.h"
 
@@ -108,9 +108,9 @@ inline model::broker_properties random_broker_properties() {
 }
 
 inline model::broker random_broker(model::node_id node_id) {
-    std::vector<model::broker_endpoint> kafka_advertised_listeners;
+    std::vector<model::broker_endpoint> sql_advertised_listeners;
     for (int i = 0; i < random_generators::get_int(10); i++) {
-        kafka_advertised_listeners.push_back(random_broker_endpoint());
+        sql_advertised_listeners.push_back(random_broker_endpoint());
     }
 
     std::optional<model::rack_id> rack;
@@ -120,7 +120,7 @@ inline model::broker random_broker(model::node_id node_id) {
 
     return {
       node_id,
-      std::move(kafka_advertised_listeners),
+      std::move(sql_advertised_listeners),
       tests::random_net_address(),
       rack,
       random_broker_properties(),
@@ -164,13 +164,13 @@ inline model::broker_shard random_broker_shard() {
     };
 }
 
-inline pandaproxy::schema_registry::subject_name_strategy
+inline funesproxy::schema_registry::subject_name_strategy
 random_subject_name_strategy() {
     return random_generators::random_choice(
-      std::vector<pandaproxy::schema_registry::subject_name_strategy>{
-        pandaproxy::schema_registry::subject_name_strategy::topic_name,
-        pandaproxy::schema_registry::subject_name_strategy::record_name,
-        pandaproxy::schema_registry::subject_name_strategy::topic_record_name});
+      std::vector<funesproxy::schema_registry::subject_name_strategy>{
+        funesproxy::schema_registry::subject_name_strategy::topic_name,
+        funesproxy::schema_registry::subject_name_strategy::record_name,
+        funesproxy::schema_registry::subject_name_strategy::topic_record_name});
 }
 
 } // namespace model

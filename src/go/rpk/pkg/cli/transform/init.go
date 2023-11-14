@@ -238,7 +238,7 @@ func installDeps(ctx context.Context, fs afero.Fs, p transformProject) error {
 			return c.Run()
 		}
 		if err := runGoCli("get", "github.com/redpanda-data/redpanda/src/go/transform-sdk"); err != nil {
-			return fmt.Errorf("unable to go get redpanda transform-sdk: %v", err)
+			return fmt.Errorf("unable to go get funes transform-sdk: %v", err)
 		}
 		if err := runGoCli("mod", "tidy"); err != nil {
 			return fmt.Errorf("unable to run go mod tidy: %v", err)

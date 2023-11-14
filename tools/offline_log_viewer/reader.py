@@ -84,11 +84,11 @@ class Reader:
         len = self.read_int32()
         return self.stream.read(len).decode('utf-8')
 
-    def read_kafka_string(self):
+    def read_sql_string(self):
         len = self.read_int16()
         return self.stream.read(len).decode('utf-8')
 
-    def read_kafka_bytes(self):
+    def read_sql_bytes(self):
         len = self.read_int32()
         return self.stream.read(len)
 
@@ -98,7 +98,7 @@ class Reader:
             return None
         return type_read(self)
 
-    def read_kafka_optional_string(self):
+    def read_sql_optional_string(self):
         len = self.read_int16()
         if len == -1:
             return None

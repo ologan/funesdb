@@ -7,15 +7,15 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 
 class ConsumerOffsetsRecovery:
     """
     Wrap tools/consumer_offsets_recovery for use in tests
     """
-    def __init__(self, redpanda: RedpandaService):
-        self._redpanda = redpanda
+    def __init__(self, funes: FunesService):
+        self._funes = funes
         self._cfg_path = '/tmp/cgr.properties'
         self._offsets_cache_path = '/tmp/offsets'
 
@@ -30,7 +30,7 @@ class ConsumerOffsetsRecovery:
         return cmd
 
     def _render_config(self, node):
-        properties = {"bootstrap_servers": self._redpanda.brokers()}
+        properties = {"bootstrap_servers": self._funes.brokers()}
         content = ""
         for k, v in properties.items():
             content += f"{k}={v}\n"
@@ -43,4 +43,4 @@ class ConsumerOffsetsRecovery:
         self._render_config(node)
         cmd = self._cmd(partition_count, dry_run)
         output = node.account.ssh_output(cmd, combine_stderr=True)
-        self._redpanda.logger.info(f"out: {output}")
+        self._funes.logger.info(f"out: {output}")

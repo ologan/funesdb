@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -89,8 +89,8 @@ Seek group G to the beginning of a topic it was not previously consuming:
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			var n int
@@ -273,7 +273,7 @@ func seek(
 		}
 		se := seekCommitErr{c.Topic, c.Partition, -1, -1, ""}
 		if c.Err != nil {
-			// Redpanda / Kafka send UnknownMemberID when issuing OffsetCommit
+			// Funes / SQL send UnknownMemberID when issuing OffsetCommit
 			// if the group is not empty. This error is unclear to end users, so
 			// we remap it here.
 			if errors.Is(c.Err, kerr.UnknownMemberID) {

@@ -14,7 +14,7 @@ import (
 	"errors"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -55,8 +55,8 @@ For example,
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			if re {
@@ -73,7 +73,7 @@ For example,
 				if t.Err != nil {
 					msg = t.Err.Error()
 					if t.ErrMessage != "" {
-						zap.L().Sugar().Debugf("redpanda returned error message: %v", t.ErrMessage)
+						zap.L().Sugar().Debugf("funes returned error message: %v", t.ErrMessage)
 						if ke := (*kerr.Error)(nil); errors.As(t.Err, &ke) {
 							msg = ke.Message + ": " + t.ErrMessage
 						}

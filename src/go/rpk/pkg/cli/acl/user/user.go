@@ -21,15 +21,15 @@ func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short: "Manage SASL users",
 		Long: `Manage SASL users.
 
-If SASL is enabled, a SASL user is what you use to talk to Redpanda, and ACLs
+If SASL is enabled, a SASL user is what you use to talk to Funes, and ACLs
 control what your user has access to. See 'rpk acl --help' for more information
 about ACLs, and 'rpk acl user create --help' for more information about
 creating SASL users. Using SASL requires setting "enable_sasl: true" in the
-redpanda section of your redpanda.yaml.
+funes section of your funes.yaml.
 `,
 	}
 	p.InstallAdminFlags(cmd)
-	p.InstallKafkaFlags(cmd) // old ACL user commands have this, and Kafka SASL creds are used for admin API basic auth
+	p.InstallSQLFlags(cmd) // old ACL user commands have this, and SQL SASL creds are used for admin API basic auth
 	p.InstallFormatFlag(cmd)
 	cmd.AddCommand(
 		newCreateUserCommand(fs, p),

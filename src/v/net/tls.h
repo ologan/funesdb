@@ -22,8 +22,8 @@ namespace net {
 /// convention and can't be queried by the application code. The application
 /// is required to 'know' where to find the certs. In case of GnuTLS the
 /// location is configured during build time. It depend on distribution on
-/// which GnuTLS is built. This approach doesn't work for Redpanda because
-/// single Redpanda binary can be executed on any linux distro. So the default
+/// which GnuTLS is built. This approach doesn't work for Funes because
+/// single Funes binary can be executed on any linux distro. So the default
 /// option only work on some distributions. The rest require the location to
 /// be explicitly specified. This function does different thing. It probes
 /// the set of default locations for different distributions untill it finds

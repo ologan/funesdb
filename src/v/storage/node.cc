@@ -23,7 +23,7 @@ ss::future<> node::start() {
      * Data disk override via environment variable for control in early boot.
      * Currently restricted to data disk only.
      */
-    const char* test_disk_size_str = std::getenv("__REDPANDA_TEST_DISK_SIZE");
+    const char* test_disk_size_str = std::getenv("__FUNES_TEST_DISK_SIZE");
     if (test_disk_size_str) {
         _data_overrides.total_bytes = std::stoul(
           std::string(test_disk_size_str));

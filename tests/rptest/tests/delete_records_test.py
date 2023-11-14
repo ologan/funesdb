@@ -12,7 +12,7 @@ import random
 import signal
 import string
 import threading
-import confluent_kafka as ck
+import confluent_sql as ck
 import ducktape
 
 from ducktape.mark import parametrize, matrix
@@ -20,13 +20,13 @@ from rptest.services.admin import Admin
 from rptest.tests.partition_movement import PartitionMovementMixin
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.tests.funes_test import FunesTest
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool, RpkException
 from ducktape.utils.util import wait_until
 from rptest.clients.types import TopicSpec
 from rptest.util import produce_until_segments, wait_until_result, expect_exception
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 from rptest.utils.si_utils import BucketView, NTP
 
 TEST_TOPIC_NAME = "test-topic-1"
@@ -34,7 +34,7 @@ TEST_COMPACTED_TOPIC_NAME = "test-topic-2-compact"
 TEST_DELETE_POLICY_CHANGE_TOPIC_NAME = "test-topic-3-compact-then-delete"
 
 
-class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
+class DeleteRecordsTest(FunesTest, PartitionMovementMixin):
     """
     The purpose of this test is to exercise the delete-records API which
     prefix truncates the log at a user defined offset.
@@ -69,8 +69,8 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
                                                 extra_rp_conf=extra_rp_conf)
         self._ctx = test_context
 
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
 
     def setUp(self):
         # Defer cluster startup so we can tweak configs based on the type of
@@ -81,7 +81,7 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
                cloud_storage_enabled,
                start_with_data=True,
                apply_retention_settings=True):
-        # Tests will invoke this method to start redpanda with the correctly
+        # Tests will invoke this method to start funes with the correctly
         # applied test settings
         if cloud_storage_enabled:
             si_settings = SISettings(
@@ -92,25 +92,25 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
             extra_rp_conf = dict(
                 log_compaction_interval_ms=2000,
                 compacted_log_segment_size=self.log_segment_size)
-            self.redpanda.set_extra_rp_conf(extra_rp_conf)
-            self.redpanda.set_si_settings(si_settings)
+            self.funes.set_extra_rp_conf(extra_rp_conf)
+            self.funes.set_si_settings(si_settings)
 
-        self.redpanda.start()
+        self.funes.start()
         self._create_initial_topics()
 
         if start_with_data is True:
             produce_until_segments(
-                self.redpanda,
+                self.funes,
                 topic=TEST_TOPIC_NAME,
                 partition_idx=0,
                 count=10,
                 acks=-1,
             )
 
-        local_snapshot = self.redpanda.storage().segments_by_node(
-            "kafka", TEST_TOPIC_NAME, 0)
+        local_snapshot = self.funes.storage().segments_by_node(
+            "sql", TEST_TOPIC_NAME, 0)
         assert len(local_snapshot) > 0, "empty snapshot"
-        self.redpanda.logger.info(f"Snapshot: {local_snapshot}")
+        self.funes.logger.info(f"Snapshot: {local_snapshot}")
 
         if cloud_storage_enabled and apply_retention_settings:
             self._apply_local_retention_settings()
@@ -122,7 +122,7 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
         # stress the TS path of delete-records where the data only exists in cloud
         # and not locally
         self.local_retention = self.log_segment_size * 2
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Turning on aggressive local retention, log_segment_size: {self.log_segment_size} retention.local.target.bytes: {self.local_retention}"
         )
         self.rpk.alter_topic_config(
@@ -262,8 +262,8 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
         self._start(cloud_storage_enabled, start_with_data=False)
 
         # Produce some data, wait for it all to arrive
-        kafka_tools = KafkaCliTools(self.redpanda)
-        kafka_tools.produce(topic, num_records, records_size)
+        sql_tools = SQLCliTools(self.funes)
+        sql_tools.produce(topic, num_records, records_size)
         self.wait_until_records(topic,
                                 num_records,
                                 timeout_sec=10,
@@ -320,14 +320,14 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
 
             boundaries = sorted([to_final_indicies(seg) for seg in node])
             boundaries = [idx for idx in boundaries if idx >= 0]
-            self.redpanda.logger.debug(f"Local boundaries: {boundaries}")
+            self.funes.logger.debug(f"Local boundaries: {boundaries}")
             return boundaries
 
         def get_segment_boundaries_via_cloud_manifest(manifest):
             boundaries = sorted([
                 int(idx.split('-')[0]) for idx in manifest['segments'].keys()
             ])
-            self.redpanda.logger.debug(f"Cloud boundaries: {boundaries}")
+            self.funes.logger.debug(f"Cloud boundaries: {boundaries}")
             return boundaries
 
         # Tests for 4 different types of scenarios
@@ -353,15 +353,15 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
             else:
                 assert False, "unknown test parameter encountered"
 
-            # Cannot compare kafka offsets to redpanda offsets returned by storage utilities,
+            # Cannot compare sql offsets to funes offsets returned by storage utilities,
             # so conversion must occur to compare
             response = self.admin.get_local_offsets_translated(
-                [truncate_offset], TEST_TOPIC_NAME, 0, translate_to="redpanda")
+                [truncate_offset], TEST_TOPIC_NAME, 0, translate_to="funes")
             assert len(response) == 1 and 'rp_offset' in response[0], response
             rp_truncate_offset = response[0]['rp_offset']
 
-            self.redpanda.logger.info(
-                f"Truncate kafka offset: {truncate_offset} truncate redpanda offset: {rp_truncate_offset} high watermark: {high_watermark}"
+            self.funes.logger.info(
+                f"Truncate sql offset: {truncate_offset} truncate funes offset: {rp_truncate_offset} high watermark: {high_watermark}"
             )
             return (truncate_offset, rp_truncate_offset, high_watermark)
 
@@ -379,14 +379,14 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
             assert low_watermark == truncate_offset, f"Expected low watermark: {truncate_offset} observed: {low_watermark}"
         except Exception as e:
             topic_info = self.get_topic_info(TEST_TOPIC_NAME)
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f"Start offset: {topic_info.start_offset}")
             raise e
 
         # Restart one node while the effect is propogating
-        stopped_node = random.choice(self.redpanda.nodes)
-        self.redpanda.signal_redpanda(stopped_node, signal=signal.SIGKILL)
-        self.redpanda.start_node(stopped_node)
+        stopped_node = random.choice(self.funes.nodes)
+        self.funes.signal_funes(stopped_node, signal=signal.SIGKILL)
+        self.funes.start_node(stopped_node)
 
         # Assert start offset is correct and there aren't any off-by-one errors
         self.assert_new_partition_boundaries(TEST_TOPIC_NAME, low_watermark,
@@ -397,13 +397,13 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
             return num_below_watermark <= 1
 
         try:
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f"Waiting until all segments below low watermark {low_watermark} are deleted"
             )
 
             def are_all_local_segments_removed():
-                local_snapshot = self.redpanda.storage(
-                    all_nodes=True).segments_by_node("kafka", TEST_TOPIC_NAME,
+                local_snapshot = self.funes.storage(
+                    all_nodes=True).segments_by_node("sql", TEST_TOPIC_NAME,
                                                      0)
                 return all([
                     all_segments_removed(
@@ -420,14 +420,14 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
                 f"Failed while waiting on all segments below lwm: {low_watermark} to be removed"
             )
         except ducktape.errors.TimeoutError as e:
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f"Timed out waiting for segments, ensure no orphaned segments exist nodes that didn't crash"
             )
-            snapshot = self.redpanda.storage(all_nodes=True).segments_by_node(
-                "kafka", TEST_TOPIC_NAME, 0)
+            snapshot = self.funes.storage(all_nodes=True).segments_by_node(
+                "sql", TEST_TOPIC_NAME, 0)
             for node_name, segments in snapshot.items():
                 if node_name != stopped_node.name:
-                    self.redpanda.logger.debug(
+                    self.funes.logger.debug(
                         f"Verifying storage on node {node_name}...")
                     assert all_segments_removed(
                         get_segment_boundaries_via_local_storage(segments),
@@ -436,9 +436,9 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
         if cloud_storage_enabled:
 
             def are_all_cloud_segments_removed():
-                bv = BucketView(self.redpanda)
+                bv = BucketView(self.funes)
                 cloud_manifest = bv.get_partition_manifest(
-                    NTP("kafka", TEST_TOPIC_NAME, 0))
+                    NTP("sql", TEST_TOPIC_NAME, 0))
                 return all_segments_removed(
                     get_segment_boundaries_via_cloud_manifest(cloud_manifest),
                     rp_truncate_offset)
@@ -576,8 +576,8 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
                                     TopicSpec.CLEANUP_COMPACT_DELETE)
 
         # Produce some data, wait for it all to arrive
-        kafka_tools = KafkaCliTools(self.redpanda)
-        kafka_tools.produce(topic, num_records, records_size)
+        sql_tools = SQLCliTools(self.funes)
+        sql_tools.produce(topic, num_records, records_size)
         self.wait_until_records(topic,
                                 num_records,
                                 timeout_sec=10,
@@ -609,7 +609,7 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
         payload = ''.join(
             random.choice(string.ascii_letters) for _ in range(512))
         producer = ck.Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': '0',
         })
         producer.init_transactions()
@@ -665,13 +665,13 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
 
         # Should complete producing within 20s
         producer = KgoVerifierProducer(self._ctx,
-                                       self.redpanda,
+                                       self.funes,
                                        TEST_TOPIC_NAME,
                                        msg_size=512,
                                        msg_count=20000,
                                        rate_limit_bps=500000)  # 0.5/mbs
         consumer = KgoVerifierConsumerGroupConsumer(self._ctx,
-                                                    self.redpanda,
+                                                    self.funes,
                                                     TEST_TOPIC_NAME,
                                                     512,
                                                     1,
@@ -682,10 +682,10 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
             start_offset = topic_info.start_offset + 1
             high_watermark = topic_info.high_watermark - 1
             if high_watermark - start_offset <= 0:
-                self.redpanda.logger.info("Waiting on log to populate")
+                self.funes.logger.info("Waiting on log to populate")
                 return
             truncate_point = random.randint(start_offset, high_watermark)
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f"Issuing delete_records request at offset: {truncate_point}")
             response = self.rpk.trim_prefix(TEST_TOPIC_NAME, truncate_point,
                                             [0])
@@ -753,15 +753,15 @@ class DeleteRecordsTest(RedpandaTest, PartitionMovementMixin):
         consumer.start()
 
         # Shut down all threads started above
-        self.redpanda.logger.info("Joining on delete-records thread")
+        self.funes.logger.info("Joining on delete-records thread")
         delete_records_thread.join()
-        self.redpanda.logger.info("Joining on partition move thread")
+        self.funes.logger.info("Joining on partition move thread")
         partition_move_thread.join()
-        self.redpanda.logger.info("Joining on producer thread")
+        self.funes.logger.info("Joining on producer thread")
         producer.wait()
-        self.redpanda.logger.info("Calling consumer::stop")
+        self.funes.logger.info("Calling consumer::stop")
         consumer.stop()
-        self.redpanda.logger.info("Joining on consumer thread")
+        self.funes.logger.info("Joining on consumer thread")
         consumer.wait()
         if DeleteRecordsExceptionReporter.exc is not None:
             raise DeleteRecordsExceptionReporter.exc

@@ -206,7 +206,7 @@ ss::future<std::vector<delete_acls_result>> security_frontend::do_delete_acls(
      * For the purpose of this call the limitation results in some overhead (the
      * dry run) and the removed bindings being calculated in a non-atomic
      * context with the command execution. This later point should be ok: there
-     * does not seem to be any particular guarantee on the kafka side that this
+     * does not seem to be any particular guarantee on the sql side that this
      * be atomic.
      */
     auto removed_bindings = _authorizer.local().remove_bindings(filters, true);

@@ -54,10 +54,10 @@ type CloudStorageStatus struct {
 	LocalLogBytes             int    `json:"local_log_size_bytes"`                  // Total size of the addressable local log for the partition.
 	CloudLogSegmentCount      int    `json:"cloud_log_segment_count"`               // Number of segments in the cloud log (does not include segments queued for removal).
 	LocalLogSegmentCount      int    `json:"local_log_segment_count"`               // Number of segments in the local log.
-	CloudLogStartOffset       int    `json:"cloud_log_start_offset"`                // The first Kafka offset accessible from the cloud (inclusive).
-	CloudLogLastOffset        int    `json:"cloud_log_last_offset"`                 // The last Kafka offset accessible from the cloud (inclusive).
-	LocalLogStartOffset       int    `json:"local_log_start_offset"`                // The first Kafka offset accessible locally (inclusive).
-	LocalLogLastOffset        int    `json:"local_log_last_offset"`                 // The last Kafka offset accessible locally (inclusive).
+	CloudLogStartOffset       int    `json:"cloud_log_start_offset"`                // The first SQL offset accessible from the cloud (inclusive).
+	CloudLogLastOffset        int    `json:"cloud_log_last_offset"`                 // The last SQL offset accessible from the cloud (inclusive).
+	LocalLogStartOffset       int    `json:"local_log_start_offset"`                // The first SQL offset accessible locally (inclusive).
+	LocalLogLastOffset        int    `json:"local_log_last_offset"`                 // The last SQL offset accessible locally (inclusive).
 	MetadataUpdatePending     bool   `json:"metadata_update_pending"`               // If true, the remote metadata may not yet include all segments that have been uploaded.
 }
 

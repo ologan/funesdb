@@ -14,7 +14,7 @@ from rptest.clients.types import TopicSpec
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.util import firewall_blocked
 from rptest.clients.rpk import RpkTool
-from confluent_kafka import (admin, Producer, KafkaException, Consumer)
+from confluent_sql import (admin, Producer, SQLException, Consumer)
 from ducktape.mark import parametrize
 
 import time
@@ -24,7 +24,7 @@ import time
 
 def on_delivery(err, msg):
     if err is not None:
-        raise KafkaException(err)
+        raise SQLException(err)
 
 
 class IsolatedDecommissionedNodeTest(PreallocNodesTest):
@@ -42,7 +42,7 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
                              extra_rp_conf=extra_rp_conf)
 
         self.internal_port = 33145
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
         self.isolated_node = None
         self.max_records = 40
 
@@ -55,7 +55,7 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
         retries_count = 0
 
         consumer = Consumer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'group.id': f"consumer-{uuid.uuid4()}",
             'auto.offset.reset': 'earliest',
             'isolation.level': 'read_committed',
@@ -89,13 +89,13 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
     def create_topic_on_isolated_node_test(self):
         # Idea of this test it to pass only isolated broker to client and expect that client will get another brokers list and will communicate with them
         topic = self.topics[0]
-        self.isolated_node = self.redpanda.nodes[0]
+        self.isolated_node = self.funes.nodes[0]
         with firewall_blocked([self.isolated_node], self.internal_port, True):
             wait_until(self.is_node_isolated, timeout_sec=90, backoff_sec=1)
 
             confluent_admin = admin.AdminClient({
                 "bootstrap.servers":
-                self.redpanda.broker_address(self.isolated_node),
+                self.funes.broker_address(self.isolated_node),
             })
 
             confluent_admin.create_topics([
@@ -118,7 +118,7 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
         def wait_leader():
             try:
                 self.leader_for_all = self.admin.get_partition_leader(
-                    namespace="kafka", topic=str(topic), partition=0)
+                    namespace="sql", topic=str(topic), partition=0)
                 return True
             except:
                 return False
@@ -128,18 +128,18 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
                    backoff_sec=1,
                    err_msg="Can not get leader for first topic")
 
-        self.admin.partition_transfer_leadership('redpanda', 'controller', 0,
+        self.admin.partition_transfer_leadership('funes', 'controller', 0,
                                                  self.leader_for_all)
         wait_until(lambda: self.admin.get_partition_leader(
-            namespace="redpanda", topic="controller", partition=0) == self.
+            namespace="funes", topic="controller", partition=0) == self.
                    leader_for_all,
                    timeout_sec=10,
                    backoff_sec=1,
                    err_msg="Leadership did not stabilize")
 
         self.not_isolated_node = None
-        for node in self.redpanda.nodes:
-            if self.redpanda.idx(node) == self.leader_for_all:
+        for node in self.funes.nodes:
+            if self.funes.idx(node) == self.leader_for_all:
                 self.isolated_node = node
             else:
                 self.not_isolated_node = node
@@ -150,7 +150,7 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
 
             producer = Producer({
                 "bootstrap.servers":
-                self.redpanda.broker_address(self.isolated_node),
+                self.funes.broker_address(self.isolated_node),
             })
 
             for i in range(self.max_records):
@@ -160,11 +160,11 @@ class IsolatedDecommissionedNodeTest(PreallocNodesTest):
                                  callback=on_delivery)
             try:
                 producer.flush(10.0)
-            except ck.cimpl.KafkaException as e:
+            except ck.cimpl.SQLException as e:
                 # We can get timeout only with switched off handler for isolation node
                 assert isolation_handler_mode == False
-                kafka_error = e.args[0]
-                assert kafka_error.code() == ck.cimpl.KafkaError._MSG_TIMED_OUT
+                sql_error = e.args[0]
+                assert sql_error.code() == ck.cimpl.SQLError._MSG_TIMED_OUT
 
         if isolation_handler_mode:
             self.check_consume(isolation_handler_mode)

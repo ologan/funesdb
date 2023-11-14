@@ -44,9 +44,9 @@ TEST_F(WasmTestFixture, Wasi) {
     // The order here doesn't matter, so sort the values.
     std::sort(environment_variables.begin(), environment_variables.end());
     std::vector<std::string> expected_env{
-      ss::format("REDPANDA_INPUT_TOPIC={}", meta().input_topic.tp()),
+      ss::format("FUNES_INPUT_TOPIC={}", meta().input_topic.tp()),
       ss::format(
-        "REDPANDA_OUTPUT_TOPIC={}", meta().output_topics.begin()->tp()),
+        "FUNES_OUTPUT_TOPIC={}", meta().output_topics.begin()->tp()),
     };
     ASSERT_EQ(environment_variables, expected_env);
 

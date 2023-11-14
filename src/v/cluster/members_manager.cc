@@ -30,7 +30,7 @@
 #include "raft/group_configuration.h"
 #include "raft/types.h"
 #include "random/generators.h"
-#include "redpanda/application.h"
+#include "funes/application.h"
 #include "reflection/adl.h"
 #include "seastarx.h"
 #include "storage/api.h"
@@ -155,7 +155,7 @@ ss::future<> members_manager::maybe_update_current_node_configuration() {
     }
     vlog(
       clusterlog.debug,
-      "Redpanda broker configuration changed from {} to {}",
+      "Funes broker configuration changed from {} to {}",
       current_properties.value().get().broker,
       _self);
     return dispatch_configuration_update(_self)
@@ -1389,7 +1389,7 @@ members_manager::handle_join_request(join_node_request const req) {
             });
     }
 
-    // Older versions of Redpanda don't support having multiple servers pointed
+    // Older versions of Funes don't support having multiple servers pointed
     // at the same address.
     if (
       !node_id_assignment_supported
@@ -1627,7 +1627,7 @@ members_manager::initialize_broker_connection(const model::broker& broker) {
       [self = _self.id()](controller_client_protocol c) {
           hello_request req{
             .peer = self,
-            .start_time = redpanda_start_time,
+            .start_time = funes_start_time,
           };
           return c.hello(std::move(req), rpc::client_opts(2s))
             .then(&rpc::get_ctx_data<hello_reply>);

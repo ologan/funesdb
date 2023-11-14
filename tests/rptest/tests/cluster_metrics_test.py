@@ -14,15 +14,15 @@ from ducktape.cluster.cluster import ClusterNode
 from ducktape.utils.util import wait_until, TimeoutError
 
 from rptest.clients.rpk import RpkTool
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.metrics_check import MetricCheck
-from rptest.services.redpanda import MetricSamples, MetricsEndpoint
+from rptest.services.funes import MetricSamples, MetricsEndpoint
 
 
-class ClusterMetricsTest(RedpandaTest):
+class ClusterMetricsTest(FunesTest):
     cluster_level_metrics: list[str] = [
         "cluster_brokers",
         "cluster_topics",
@@ -32,14 +32,14 @@ class ClusterMetricsTest(RedpandaTest):
 
     def __init__(self, test_context):
         super(ClusterMetricsTest, self).__init__(test_context=test_context)
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     def _stop_controller_node(self) -> ClusterNode:
         """
         Stop the current controller node
         """
-        prev = self.redpanda.controller()
-        self.redpanda.stop_node(prev)
+        prev = self.funes.controller()
+        self.funes.stop_node(prev)
 
         return prev
 
@@ -50,12 +50,12 @@ class ClusterMetricsTest(RedpandaTest):
                             bool] = lambda node_id: True) -> ClusterNode:
         node_id = self.admin.await_stable_leader(topic="controller",
                                                  partition=0,
-                                                 namespace="redpanda",
+                                                 namespace="funes",
                                                  timeout_s=30,
                                                  check=check,
                                                  hosts=hosts)
 
-        return self.redpanda.get_node(node_id)
+        return self.funes.get_node(node_id)
 
     def _restart_controller_node(self) -> ClusterNode:
         """
@@ -66,14 +66,14 @@ class ClusterMetricsTest(RedpandaTest):
         prev = self._stop_controller_node()
 
         started_hosts = [
-            n.account.hostname for n in self.redpanda.started_nodes()
+            n.account.hostname for n in self.funes.started_nodes()
         ]
 
         self._wait_until_controller_leader_is_stable(
             hosts=started_hosts,
-            check=lambda node_id: node_id != self.redpanda.idx(prev))
+            check=lambda node_id: node_id != self.funes.idx(prev))
 
-        self.redpanda.start_node(prev)
+        self.funes.start_node(prev)
         return self._wait_until_controller_leader_is_stable()
 
     def _failover(self) -> ClusterNode:
@@ -84,11 +84,11 @@ class ClusterMetricsTest(RedpandaTest):
         prev = self._stop_controller_node()
 
         started_hosts = [
-            n.account.hostname for n in self.redpanda.started_nodes()
+            n.account.hostname for n in self.funes.started_nodes()
         ]
         return self._wait_until_controller_leader_is_stable(
             hosts=started_hosts,
-            check=lambda node_id: node_id != self.redpanda.idx(prev))
+            check=lambda node_id: node_id != self.funes.idx(prev))
 
     def _get_metrics_value_from_node(self, node: ClusterNode, pattern: str):
         samples = self._get_metrics_from_node(node, [pattern])
@@ -125,7 +125,7 @@ class ClusterMetricsTest(RedpandaTest):
             self, node: ClusterNode,
             patterns: list[str]) -> Optional[dict[str, MetricSamples]]:
         def get_metrics_from_node_sync(patterns: list[str]):
-            samples = self.redpanda.metrics_samples(
+            samples = self.funes.metrics_samples(
                 patterns, [node], MetricsEndpoint.PUBLIC_METRICS)
             success = samples is not None
             return success, samples
@@ -164,7 +164,7 @@ class ClusterMetricsTest(RedpandaTest):
                                          expect_metrics=True)
 
         # Make sure that followers are not reporting cluster metrics.
-        for node in self.redpanda.started_nodes():
+        for node in self.funes.started_nodes():
             if node == current_controller:
                 continue
 
@@ -205,23 +205,23 @@ class ClusterMetricsTest(RedpandaTest):
 
         cluster_metrics = MetricCheck(
             self.logger,
-            self.redpanda,
+            self.funes,
             controller, [
-                "redpanda_cluster_brokers", "redpanda_cluster_topics",
-                "redpanda_cluster_partitions",
-                "redpanda_cluster_unavailable_partitions"
+                "funes_cluster_brokers", "funes_cluster_topics",
+                "funes_cluster_partitions",
+                "funes_cluster_unavailable_partitions"
             ],
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
 
-        RpkTool(self.redpanda).create_topic("test-topic", partitions=3)
+        RpkTool(self.funes).create_topic("test-topic", partitions=3)
 
         # Check that the metrics have moved in the expected way by the creation
         # of one topic with three partitions.
         cluster_metrics.expect([
-            ("redpanda_cluster_brokers", lambda a, b: a == b == 3),
-            ("redpanda_cluster_topics", lambda a, b: b - a == 1),
-            ("redpanda_cluster_partitions", lambda a, b: b - a == 3),
-            ("redpanda_cluster_unavailable_partitions",
+            ("funes_cluster_brokers", lambda a, b: a == b == 3),
+            ("funes_cluster_topics", lambda a, b: b - a == 1),
+            ("funes_cluster_partitions", lambda a, b: b - a == 3),
+            ("funes_cluster_unavailable_partitions",
              lambda a, b: a == b == 0)
         ])
 
@@ -236,7 +236,7 @@ class ClusterMetricsTest(RedpandaTest):
         controller = self._wait_until_controller_leader_is_stable()
         self._assert_reported_by_controller(controller)
 
-        self.redpanda.set_cluster_config({"disable_public_metrics": "true"},
+        self.funes.set_cluster_config({"disable_public_metrics": "true"},
                                          expect_restart=True)
 
         # The 'public_metrics' endpoint that serves cluster level
@@ -255,34 +255,34 @@ class ClusterMetricsTest(RedpandaTest):
                                               "cluster_partitions",
                                               value=0)
 
-            RpkTool(self.redpanda).create_topic("topic-a",
+            RpkTool(self.funes).create_topic("topic-a",
                                                 partitions=20,
                                                 replicas=3)
-            RpkTool(self.redpanda).create_topic("topic-b",
+            RpkTool(self.funes).create_topic("topic-b",
                                                 partitions=10,
                                                 replicas=3)
             self._wait_until_metric_holds_value(controller,
                                                 "cluster_partitions",
                                                 value=30)
 
-            RpkTool(self.redpanda).delete_topic("topic-a")
+            RpkTool(self.funes).delete_topic("topic-a")
             self._wait_until_metric_holds_value(controller,
                                                 "cluster_partitions",
                                                 value=10)
 
-            RpkTool(self.redpanda).create_topic("topic-a",
+            RpkTool(self.funes).create_topic("topic-a",
                                                 partitions=30,
                                                 replicas=3)
             self._wait_until_metric_holds_value(controller,
                                                 "cluster_partitions",
                                                 value=40)
         except Exception as e:
-            topics_info = RpkTool(self.redpanda).list_topics()
+            topics_info = RpkTool(self.funes).list_topics()
             raise e
 
     @cluster(num_nodes=3)
     def max_offset_matches_committed_group_offset_test(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         topic = "topic"
         rpk.create_topic(topic)
@@ -297,18 +297,18 @@ class ClusterMetricsTest(RedpandaTest):
         rpk.consume(topic, n=count, group=group)
 
         def check():
-            samples = self.redpanda.metrics_sample(
+            samples = self.funes.metrics_sample(
                 "max_offset", metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
-            samples = samples.label_filter({"redpanda_topic": topic})
+            samples = samples.label_filter({"funes_topic": topic})
             self.logger.debug(f"Read max offset metrics: {samples.samples}")
             max_offset = samples.samples[0].value
 
-            samples = self.redpanda.metrics_sample(
+            samples = self.funes.metrics_sample(
                 "group_committed_offset",
                 metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
             samples = samples.label_filter({
-                "redpanda_group": group,
-                "redpanda_topic": topic
+                "funes_group": group,
+                "funes_topic": topic
             })
             self.logger.debug(
                 f"Read group committed offset metrics: {samples.samples}")

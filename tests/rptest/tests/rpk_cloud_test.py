@@ -12,7 +12,7 @@ import os
 from rptest.services.cluster import cluster
 
 from rptest.utils.rpk_config import read_rpk_cfg
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk_remote import RpkRemoteTool
 
 
@@ -27,7 +27,7 @@ def get_ci_env_var(env_var):
     return out
 
 
-class RpkCloudTest(RedpandaTest):
+class RpkCloudTest(FunesTest):
     def __init__(self, ctx):
         super(RpkCloudTest, self).__init__(test_context=ctx)
         self._ctx = ctx
@@ -46,8 +46,8 @@ class RpkCloudTest(RedpandaTest):
                 "Skipping test, client credentials env vars not found")
             return
 
-        node = self.redpanda.get_node(0)
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.get_node(0)
+        rpk = RpkRemoteTool(self.funes, node)
 
         output = rpk.cloud_login_cc(id, secret)
         assert "Successfully logged in" in output

@@ -15,7 +15,7 @@
 #include "cluster/errc.h"
 #include "cluster/fwd.h"
 #include "cluster/tx_hash_ranges.h"
-#include "kafka/types.h"
+#include "sql/types.h"
 #include "model/adl_serde.h"
 #include "model/fundamental.h"
 #include "model/metadata.h"
@@ -23,7 +23,7 @@
 #include "model/record_batch_types.h"
 #include "model/timeout_clock.h"
 #include "model/transform.h"
-#include "pandaproxy/schema_registry/subject_name_strategy.h"
+#include "funesproxy/schema_registry/subject_name_strategy.h"
 #include "raft/types.h"
 #include "security/acl.h"
 #include "security/license.h"
@@ -161,18 +161,18 @@ inline std::error_code make_error_code(tx_errc e) noexcept {
     return std::error_code(static_cast<int>(e), tx_error_category());
 }
 
-struct kafka_result {
-    kafka::offset last_offset;
+struct sql_result {
+    sql::offset last_offset;
 };
-struct kafka_stages {
-    kafka_stages(ss::future<>, ss::future<result<kafka_result>>);
-    explicit kafka_stages(raft::errc);
+struct sql_stages {
+    sql_stages(ss::future<>, ss::future<result<sql_result>>);
+    explicit sql_stages(raft::errc);
     // after this future is ready, request in enqueued in raft and it will not
     // be reorderd
     ss::future<> request_enqueued;
     // after this future is ready, request was successfully replicated with
     // requested consistency level
-    ss::future<result<kafka_result>> replicate_finished;
+    ss::future<result<sql_result>> replicate_finished;
 };
 
 /**
@@ -262,14 +262,14 @@ struct init_tm_tx_request
       init_tm_tx_request,
       serde::version<0>,
       serde::compat_version<0>> {
-    kafka::transactional_id tx_id{};
+    sql::transactional_id tx_id{};
     std::chrono::milliseconds transaction_timeout_ms{};
     model::timeout_clock::duration timeout{};
 
     init_tm_tx_request() noexcept = default;
 
     init_tm_tx_request(
-      kafka::transactional_id tx_id,
+      sql::transactional_id tx_id,
       std::chrono::milliseconds tx_timeout,
       model::timeout_clock::duration timeout)
       : tx_id(std::move(tx_id))
@@ -317,8 +317,8 @@ struct add_paritions_tx_request {
         std::vector<model::partition_id> partitions{};
         friend std::ostream& operator<<(std::ostream&, const topic&);
     };
-    kafka::transactional_id transactional_id{};
-    kafka::producer_id producer_id{};
+    sql::transactional_id transactional_id{};
+    sql::producer_id producer_id{};
     int16_t producer_epoch{};
     std::vector<topic> topics{};
 };
@@ -334,17 +334,17 @@ struct add_paritions_tx_reply {
     std::vector<add_paritions_tx_reply::topic_result> results{};
 };
 struct add_offsets_tx_request {
-    kafka::transactional_id transactional_id{};
-    kafka::producer_id producer_id{};
+    sql::transactional_id transactional_id{};
+    sql::producer_id producer_id{};
     int16_t producer_epoch{};
-    kafka::group_id group_id{};
+    sql::group_id group_id{};
 };
 struct add_offsets_tx_reply {
     tx_errc error_code{};
 };
 struct end_tx_request {
-    kafka::transactional_id transactional_id{};
-    kafka::producer_id producer_id{};
+    sql::transactional_id transactional_id{};
+    sql::producer_id producer_id{};
     int16_t producer_epoch{};
     bool committed{};
 };
@@ -356,14 +356,14 @@ struct fetch_tx_request
       envelope<fetch_tx_request, serde::version<1>, serde::compat_version<0>> {
     using rpc_adl_exempt = std::true_type;
 
-    kafka::transactional_id tx_id{};
+    sql::transactional_id tx_id{};
     model::term_id term{};
     model::partition_id tm{0};
 
     fetch_tx_request() noexcept = default;
 
     fetch_tx_request(
-      kafka::transactional_id tx_id,
+      sql::transactional_id tx_id,
       model::term_id term,
       model::partition_id tm)
       : tx_id(tx_id)
@@ -424,12 +424,12 @@ struct fetch_tx_reply
       : serde::envelope<tx_group, serde::version<0>, serde::compat_version<0>> {
         using rpc_adl_exempt = std::true_type;
 
-        kafka::group_id group_id;
+        sql::group_id group_id;
         model::term_id etag;
 
         tx_group() noexcept = default;
 
-        tx_group(kafka::group_id group_id, model::term_id etag)
+        tx_group(sql::group_id group_id, model::term_id etag)
           : group_id(group_id)
           , etag(etag) {}
 
@@ -709,7 +709,7 @@ struct begin_group_tx_request
       serde::version<1>,
       serde::compat_version<0>> {
     model::ntp ntp;
-    kafka::group_id group_id;
+    sql::group_id group_id;
     model::producer_identity pid;
     model::tx_seq tx_seq;
     model::timeout_clock::duration timeout{};
@@ -719,7 +719,7 @@ struct begin_group_tx_request
 
     begin_group_tx_request(
       model::ntp ntp,
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::producer_identity pid,
       model::tx_seq tx_seq,
       model::timeout_clock::duration timeout,
@@ -733,10 +733,10 @@ struct begin_group_tx_request
 
     /*
      * construct with default value model::ntp
-     * https://github.com/redpanda-data/redpanda/issues/5055
+     * https://github.com/redpanda-data/funes/issues/5055
      */
     begin_group_tx_request(
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::producer_identity pid,
       model::tx_seq tx_seq,
       model::timeout_clock::duration timeout,
@@ -789,7 +789,7 @@ struct prepare_group_tx_request
       serde::version<0>,
       serde::compat_version<0>> {
     model::ntp ntp;
-    kafka::group_id group_id;
+    sql::group_id group_id;
     model::term_id etag;
     model::producer_identity pid;
     model::tx_seq tx_seq;
@@ -799,7 +799,7 @@ struct prepare_group_tx_request
 
     prepare_group_tx_request(
       model::ntp ntp,
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::term_id etag,
       model::producer_identity pid,
       model::tx_seq tx_seq,
@@ -813,10 +813,10 @@ struct prepare_group_tx_request
 
     /*
      * construct with default value model::ntp
-     * https://github.com/redpanda-data/redpanda/issues/5055
+     * https://github.com/redpanda-data/funes/issues/5055
      */
     prepare_group_tx_request(
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::term_id etag,
       model::producer_identity pid,
       model::tx_seq tx_seq,
@@ -866,7 +866,7 @@ struct commit_group_tx_request
     model::ntp ntp;
     model::producer_identity pid;
     model::tx_seq tx_seq;
-    kafka::group_id group_id;
+    sql::group_id group_id;
     model::timeout_clock::duration timeout{};
 
     commit_group_tx_request() noexcept = default;
@@ -875,7 +875,7 @@ struct commit_group_tx_request
       model::ntp ntp,
       model::producer_identity pid,
       model::tx_seq tx_seq,
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::timeout_clock::duration timeout)
       : ntp(std::move(ntp))
       , pid(pid)
@@ -885,12 +885,12 @@ struct commit_group_tx_request
 
     /*
      * construct with default value model::ntp
-     * https://github.com/redpanda-data/redpanda/issues/5055
+     * https://github.com/redpanda-data/funes/issues/5055
      */
     commit_group_tx_request(
       model::producer_identity pid,
       model::tx_seq tx_seq,
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::timeout_clock::duration timeout)
       : commit_group_tx_request(
         model::ntp(), pid, tx_seq, std::move(group_id), timeout) {}
@@ -935,7 +935,7 @@ struct abort_group_tx_request
       serde::version<0>,
       serde::compat_version<0>> {
     model::ntp ntp;
-    kafka::group_id group_id;
+    sql::group_id group_id;
     model::producer_identity pid;
     model::tx_seq tx_seq;
     model::timeout_clock::duration timeout{};
@@ -944,7 +944,7 @@ struct abort_group_tx_request
 
     abort_group_tx_request(
       model::ntp ntp,
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::producer_identity pid,
       model::tx_seq tx_seq,
       model::timeout_clock::duration timeout)
@@ -956,10 +956,10 @@ struct abort_group_tx_request
 
     /*
      * construct with default value model::ntp
-     * https://github.com/redpanda-data/redpanda/issues/5055
+     * https://github.com/redpanda-data/funes/issues/5055
      */
     abort_group_tx_request(
-      kafka::group_id group_id,
+      sql::group_id group_id,
       model::producer_identity pid,
       model::tx_seq tx_seq,
       model::timeout_clock::duration timeout)
@@ -1058,11 +1058,11 @@ struct find_coordinator_request
     using reply = find_coordinator_reply;
     static constexpr const std::string_view name = "find_coordinator";
 
-    kafka::transactional_id tid;
+    sql::transactional_id tid;
 
     find_coordinator_request() noexcept = default;
 
-    find_coordinator_request(kafka::transactional_id tid)
+    find_coordinator_request(sql::transactional_id tid)
       : tid(std::move(tid)) {}
 
     friend bool
@@ -1188,7 +1188,7 @@ struct join_node_reply
 
     std::optional<iobuf> controller_snapshot;
 
-    // Optional because old Redpandas just set the success boolean.
+    // Optional because old Funess just set the success boolean.
     // See status() for reading the status, do not read this directly.
     std::optional<status_code> raw_status;
 
@@ -1208,7 +1208,7 @@ struct join_node_reply
         case status_code::busy:
             return "busy: cluster currently adding another node";
         case status_code::incompatible:
-            return "incompatible: cluster is too new or old for this Redpanda "
+            return "incompatible: cluster is too new or old for this Funes "
                    "version";
         case status_code::conflict:
             return "conflict: adding this node would conflict with another "
@@ -1435,15 +1435,15 @@ struct topic_properties
       tristate<std::chrono::milliseconds> segment_ms,
       std::optional<bool> record_key_schema_id_validation,
       std::optional<bool> record_key_schema_id_validation_compat,
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>
         record_key_subject_name_strategy,
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>
         record_key_subject_name_strategy_compat,
       std::optional<bool> record_value_schema_id_validation,
       std::optional<bool> record_value_schema_id_validation_compat,
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>
         record_value_subject_name_strategy,
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>
         record_value_subject_name_strategy_compat,
       tristate<size_t> initial_retention_local_target_bytes,
       tristate<std::chrono::milliseconds> initial_retention_local_target_ms)
@@ -1506,15 +1506,15 @@ struct topic_properties
 
     std::optional<bool> record_key_schema_id_validation;
     std::optional<bool> record_key_schema_id_validation_compat;
-    std::optional<pandaproxy::schema_registry::subject_name_strategy>
+    std::optional<funesproxy::schema_registry::subject_name_strategy>
       record_key_subject_name_strategy;
-    std::optional<pandaproxy::schema_registry::subject_name_strategy>
+    std::optional<funesproxy::schema_registry::subject_name_strategy>
       record_key_subject_name_strategy_compat;
     std::optional<bool> record_value_schema_id_validation;
     std::optional<bool> record_value_schema_id_validation_compat;
-    std::optional<pandaproxy::schema_registry::subject_name_strategy>
+    std::optional<funesproxy::schema_registry::subject_name_strategy>
       record_value_subject_name_strategy;
-    std::optional<pandaproxy::schema_registry::subject_name_strategy>
+    std::optional<funesproxy::schema_registry::subject_name_strategy>
       record_value_subject_name_strategy_compat;
 
     tristate<size_t> initial_retention_local_target_bytes{std::nullopt};
@@ -1681,19 +1681,19 @@ struct incremental_topic_updates
     property_update<std::optional<bool>> record_key_schema_id_validation;
     property_update<std::optional<bool>> record_key_schema_id_validation_compat;
     property_update<
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>>
       record_key_subject_name_strategy;
     property_update<
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>>
       record_key_subject_name_strategy_compat;
     property_update<std::optional<bool>> record_value_schema_id_validation;
     property_update<std::optional<bool>>
       record_value_schema_id_validation_compat;
     property_update<
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>>
       record_value_subject_name_strategy;
     property_update<
-      std::optional<pandaproxy::schema_registry::subject_name_strategy>>
+      std::optional<funesproxy::schema_registry::subject_name_strategy>>
       record_value_subject_name_strategy_compat;
     property_update<tristate<size_t>> initial_retention_local_target_bytes;
     property_update<tristate<std::chrono::milliseconds>>
@@ -1834,8 +1834,8 @@ struct topic_configuration
       model::initial_revision_id) const;
 
     bool is_internal() const {
-        return tp_ns.ns == model::kafka_internal_namespace
-               || tp_ns == model::kafka_consumer_offsets_nt;
+        return tp_ns.ns == model::sql_internal_namespace
+               || tp_ns == model::sql_consumer_offsets_nt;
     }
     bool is_read_replica() const {
         return properties.read_replica && properties.read_replica.value();
@@ -1845,9 +1845,9 @@ struct topic_configuration
     }
 
     model::topic_namespace tp_ns;
-    // using signed integer because Kafka protocol defines it as signed int
+    // using signed integer because SQL protocol defines it as signed int
     int32_t partition_count;
-    // using signed integer because Kafka protocol defines it as signed int
+    // using signed integer because SQL protocol defines it as signed int
     int16_t replication_factor;
 
     topic_properties properties;
@@ -2923,9 +2923,9 @@ struct feature_update_license_update_cmd_data
     // Struct encoding version
     static constexpr int8_t current_version = 1;
 
-    security::license redpanda_license;
+    security::license funes_license;
 
-    auto serde_fields() { return std::tie(redpanda_license); }
+    auto serde_fields() { return std::tie(funes_license); }
 
     friend std::ostream&
     operator<<(std::ostream&, const feature_update_license_update_cmd_data&);
@@ -2979,7 +2979,7 @@ struct bootstrap_cluster_cmd_data
     absl::flat_hash_map<model::node_uuid, model::node_id> node_ids_by_uuid;
 
     // If this is set, fast-forward the feature_table to enable features
-    // from this version. Indicates the version of Redpanda of
+    // from this version. Indicates the version of Funes of
     // the node that generated the bootstrap record.
     cluster_version founding_version{invalid_version};
     std::vector<model::broker> initial_nodes;
@@ -4222,12 +4222,12 @@ struct partition_cloud_storage_status {
     // Friendlier name for archival_metadata_stm::get_dirty
     bool cloud_metadata_update_pending{false};
 
-    std::optional<kafka::offset> cloud_log_start_offset;
-    std::optional<kafka::offset> stm_region_start_offset;
-    std::optional<kafka::offset> local_log_last_offset;
+    std::optional<sql::offset> cloud_log_start_offset;
+    std::optional<sql::offset> stm_region_start_offset;
+    std::optional<sql::offset> local_log_last_offset;
 
-    std::optional<kafka::offset> cloud_log_last_offset;
-    std::optional<kafka::offset> local_log_start_offset;
+    std::optional<sql::offset> cloud_log_last_offset;
+    std::optional<sql::offset> local_log_start_offset;
 };
 
 struct metrics_reporter_cluster_info
@@ -4637,7 +4637,7 @@ struct adl<cluster::abort_group_tx_request> {
     }
     cluster::abort_group_tx_request from(iobuf_parser& in) {
         auto ntp = adl<model::ntp>{}.from(in);
-        auto group_id = adl<kafka::group_id>{}.from(in);
+        auto group_id = adl<sql::group_id>{}.from(in);
         auto pid = adl<model::producer_identity>{}.from(in);
         auto tx_seq = adl<model::tx_seq>{}.from(in);
         auto timeout = adl<model::timeout_clock::duration>{}.from(in);
@@ -4671,7 +4671,7 @@ struct adl<cluster::commit_group_tx_request> {
         auto ntp = adl<model::ntp>{}.from(in);
         auto pid = adl<model::producer_identity>{}.from(in);
         auto tx_seq = adl<model::tx_seq>{}.from(in);
-        auto group_id = adl<kafka::group_id>{}.from(in);
+        auto group_id = adl<sql::group_id>{}.from(in);
         auto timeout = adl<model::timeout_clock::duration>{}.from(in);
         return {std::move(ntp), pid, tx_seq, std::move(group_id), timeout};
     }
@@ -4702,7 +4702,7 @@ struct adl<cluster::prepare_group_tx_request> {
     }
     cluster::prepare_group_tx_request from(iobuf_parser& in) {
         auto ntp = adl<model::ntp>{}.from(in);
-        auto group_id = adl<kafka::group_id>{}.from(in);
+        auto group_id = adl<sql::group_id>{}.from(in);
         auto etag = adl<model::term_id>{}.from(in);
         auto pid = adl<model::producer_identity>{}.from(in);
         auto tx_seq = adl<model::tx_seq>{}.from(in);
@@ -4737,7 +4737,7 @@ struct adl<cluster::begin_group_tx_request> {
     }
     cluster::begin_group_tx_request from(iobuf_parser& in) {
         auto ntp = adl<model::ntp>{}.from(in);
-        auto group_id = adl<kafka::group_id>{}.from(in);
+        auto group_id = adl<sql::group_id>{}.from(in);
         auto pid = adl<model::producer_identity>{}.from(in);
         auto tx_seq = adl<model::tx_seq>{}.from(in);
         auto timeout = adl<model::timeout_clock::duration>{}.from(in);
@@ -4905,7 +4905,7 @@ struct adl<cluster::init_tm_tx_request> {
         serialize(out, std::move(r.tx_id), r.transaction_timeout_ms, r.timeout);
     }
     cluster::init_tm_tx_request from(iobuf_parser& in) {
-        auto tx_id = adl<kafka::transactional_id>{}.from(in);
+        auto tx_id = adl<sql::transactional_id>{}.from(in);
         auto tx_timeout = adl<std::chrono::milliseconds>{}.from(in);
         auto timeout = adl<model::timeout_clock::duration>{}.from(in);
         return {std::move(tx_id), tx_timeout, timeout};

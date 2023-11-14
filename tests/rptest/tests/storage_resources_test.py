@@ -11,7 +11,7 @@ import signal
 
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.rpk_producer import RpkProducer
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.clients.rpk import RpkTool
@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.cluster.cluster_spec import ClusterSpec
 
 
-class StorageResourceTest(RedpandaTest):
+class StorageResourceTest(FunesTest):
     """
     Validate that the storage system is using the expected
     resources, in terms of how many files are created and how
@@ -38,8 +38,8 @@ class StorageResourceTest(RedpandaTest):
             segment_bytes=SEGMENT_SIZE), )
 
     def _get_segments(self):
-        storage = self.redpanda.storage()
-        partitions = storage.partitions("kafka", self.topic)
+        storage = self.funes.storage()
+        partitions = storage.partitions("sql", self.topic)
         p = list(partitions)[0]
         segments = list(p.segments.values())
 
@@ -52,18 +52,18 @@ class StorageResourceTest(RedpandaTest):
 
     def _topic_fd_count(self):
         """
-        How many file descriptors is redpanda consuming for our topic?
+        How many file descriptors is funes consuming for our topic?
         """
-        for f in self.redpanda.lsof_node(self.redpanda.nodes[0],
+        for f in self.funes.lsof_node(self.funes.nodes[0],
                                          filter=self.topic):
             self.logger.info(f"Open file: {f}")
 
-        return sum(1 for _ in self.redpanda.lsof_node(self.redpanda.nodes[0],
+        return sum(1 for _ in self.funes.lsof_node(self.funes.nodes[0],
                                                       filter=self.topic))
 
     def _write(self, msg_size, msg_count):
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                msg_size,
                                msg_count=msg_count,
@@ -112,7 +112,7 @@ class StorageResourceTest(RedpandaTest):
         assert live_seg.compaction_index is None
 
 
-class StorageResourceRestartTest(RedpandaTest):
+class StorageResourceRestartTest(FunesTest):
     PARTITION_COUNT = 64
     TARGET_REPLAY_BYTES = 1024 * 1024 * 1024
 
@@ -135,7 +135,7 @@ class StorageResourceRestartTest(RedpandaTest):
         """
         Block until all partitions are available
         """
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def ready():
             partitions = list(rpk.describe_topic(self.topic))
@@ -148,7 +148,7 @@ class StorageResourceRestartTest(RedpandaTest):
 
     def _write(self, msg_size, msg_count, acks):
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                msg_size,
                                msg_count=msg_count,
@@ -159,7 +159,7 @@ class StorageResourceRestartTest(RedpandaTest):
 
     def _read_all(self, msg_count):
         consumer = RpkConsumer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                offset='oldest',
                                save_msgs=False,
@@ -169,7 +169,7 @@ class StorageResourceRestartTest(RedpandaTest):
         consumer.free()
 
     def _read_tips(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         partition_meta = list(rpk.describe_topic(self.topic))
         assert len(partition_meta) == self.PARTITION_COUNT
         for p in partition_meta:
@@ -180,15 +180,15 @@ class StorageResourceRestartTest(RedpandaTest):
                         quiet=True)
 
     def _sum_metrics(self, metric_name):
-        samples = self.redpanda.metrics_sample(metric_name).samples
+        samples = self.funes.metrics_sample(metric_name).samples
         self.logger.info(f"{metric_name} samples:")
         for s in samples:
             self.logger.info(f"{s.value} {s.labels}")
         return sum(s.value for s in samples)
 
     def _get_partition_segments(self, partition_idx):
-        storage = self.redpanda.storage(all_nodes=True)
-        partitions = list(storage.partitions("kafka", self.topic))
+        storage = self.funes.storage(all_nodes=True)
+        partitions = list(storage.partitions("sql", self.topic))
         p = partitions[partition_idx]
         segments = list(p.segments.values())
 
@@ -227,7 +227,7 @@ class StorageResourceRestartTest(RedpandaTest):
         # for meeting the target replay threshold.
         assert msg_count * msg_size > self.TARGET_REPLAY_BYTES
 
-        # This value is hardcoded in Redpanda, the threshold for checkpointing
+        # This value is hardcoded in Funes, the threshold for checkpointing
         # offset translator and/or state machines on each partition.
         per_partition_checkpoint_threshold = 64 * 1024 * 1024
 
@@ -250,10 +250,10 @@ class StorageResourceRestartTest(RedpandaTest):
         # =========
         if clean_shutdown:
             # Clean shutdown: stop with SIGTERM
-            self.redpanda.stop_node(self.redpanda.nodes[0])
+            self.funes.stop_node(self.funes.nodes[0])
         else:
             # Unclean shutdown: stop with SIGKILL
-            self.redpanda.signal_redpanda(self.redpanda.nodes[0],
+            self.funes.signal_funes(self.funes.nodes[0],
                                           signal=signal.SIGKILL)
 
         # Inspect disk
@@ -269,7 +269,7 @@ class StorageResourceRestartTest(RedpandaTest):
 
         # Start node
         # ==========
-        self.redpanda.start_node(self.redpanda.nodes[0])
+        self.funes.start_node(self.funes.nodes[0])
         self._await_replay()
 
         if clean_shutdown:

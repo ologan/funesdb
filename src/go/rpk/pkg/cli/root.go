@@ -68,14 +68,14 @@ func Execute() {
 	})
 	root := &cobra.Command{
 		Use:     "rpk",
-		Short:   "rpk is the Redpanda CLI & toolbox",
+		Short:   "rpk is the Funes CLI & toolbox",
 		Long:    "",
 		Version: version.Pretty(),
 
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 	}
 	pf := root.PersistentFlags()
-	pf.StringVar(&p.ConfigFlag, "config", "", "Redpanda or rpk config file; default search paths are ~/.config/rpk/rpk.yaml, $PWD, and /etc/redpanda/redpanda.yaml")
+	pf.StringVar(&p.ConfigFlag, "config", "", "Funes or rpk config file; default search paths are ~/.config/rpk/rpk.yaml, $PWD, and /etc/funes/funes.yaml")
 	pf.StringVar(&p.Profile, "profile", "", "rpk profile to use")
 	pf.StringArrayVarP(&p.FlagOverrides, "config-opt", "X", nil, "Override rpk configuration settings; '-X help' for detail or '-X list' for terser detail")
 	pf.BoolVarP(&p.DebugLogs, "verbose", "v", false, "Enable verbose logging")

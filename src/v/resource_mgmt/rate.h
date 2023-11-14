@@ -21,7 +21,7 @@
 // rate_tracker tracks the rate of a metric over time using a sliding window
 // average. configure with number of windows and the width of each window.
 //
-// this class effectively merges Kafka's SampledStat and Rate classes together
+// this class effectively merges SQL's SampledStat and Rate classes together
 // so that the same computation is done with a single pass over the samples for
 // the common case of recording a new value and sampling the rate.
 class rate_tracker final {
@@ -74,7 +74,7 @@ public:
         // compute window size and current rate. the reason that the elapsed
         // time is adjusted up is to error conservatively to allow utilization
         // to ramp up until a steady state is hit in which all the windows are
-        // fully used. this is an identical approach taken by the kafka broker.
+        // fully used. this is an identical approach taken by the sql broker.
         auto elapsed = now - oldest->time;
         auto num_windows = elapsed / _window_size;
         auto min_windows = _windows.size() - 1;

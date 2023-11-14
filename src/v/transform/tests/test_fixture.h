@@ -65,14 +65,14 @@ public:
 
     ss::future<> start() override;
     ss::future<> stop() override;
-    kafka::offset latest_offset() override;
+    sql::offset latest_offset() override;
     ss::future<model::record_batch_reader>
-    read_batch(kafka::offset offset, ss::abort_source* as) override;
+    read_batch(sql::offset offset, ss::abort_source* as) override;
 
     ss::future<> push_batch(model::record_batch batch);
 
 private:
-    absl::btree_map<kafka::offset, model::record_batch> _batches;
+    absl::btree_map<sql::offset, model::record_batch> _batches;
     ss::condition_variable _cond_var;
 };
 
@@ -93,14 +93,14 @@ public:
     ss::future<> stop() override;
     ss::future<> wait_for_previous_flushes(ss::abort_source*) override;
 
-    ss::future<std::optional<kafka::offset>> load_committed_offset() override;
+    ss::future<std::optional<sql::offset>> load_committed_offset() override;
 
-    ss::future<> commit_offset(kafka::offset o) override;
+    ss::future<> commit_offset(sql::offset o) override;
 
-    ss::future<> wait_for_committed_offset(kafka::offset);
+    ss::future<> wait_for_committed_offset(sql::offset);
 
 private:
-    std::optional<kafka::offset> _committed;
+    std::optional<sql::offset> _committed;
     ss::condition_variable _cond_var;
 };
 

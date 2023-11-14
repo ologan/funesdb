@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	CalcBin    = "hwloc-calc-redpanda"
-	DistribBin = "hwloc-distrib-redpanda"
+	CalcBin    = "hwloc-calc-funes"
+	DistribBin = "hwloc-distrib-funes"
 )
 
 type hwLocCmd struct {

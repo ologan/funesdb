@@ -17,15 +17,15 @@ from rptest.util import wait_until_result
 
 from rptest.services.cluster import cluster
 from ducktape.mark import parametrize
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import SISettings
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import SISettings
 
 
-class AlterTopicConfiguration(RedpandaTest):
+class AlterTopicConfiguration(FunesTest):
     """
     Change a partition's replica set.
     """
@@ -35,7 +35,7 @@ class AlterTopicConfiguration(RedpandaTest):
         super(AlterTopicConfiguration,
               self).__init__(test_context=test_context, num_brokers=3)
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
 
     @cluster(num_nodes=3)
     @parametrize(property=TopicSpec.PROPERTY_CLEANUP_POLICY, value="compact")
@@ -49,8 +49,8 @@ class AlterTopicConfiguration(RedpandaTest):
     def test_altering_topic_configuration(self, property, value):
         topic = self.topics[0].name
         self.client().alter_topic_configs(topic, {property: value})
-        kafka_tools = KafkaCliTools(self.redpanda)
-        spec = kafka_tools.describe_topic(topic)
+        sql_tools = SQLCliTools(self.funes)
+        spec = sql_tools.describe_topic(topic)
 
         # e.g. retention.ms is TopicSpec.retention_ms
         attr_name = property.replace(".", "_")
@@ -60,16 +60,16 @@ class AlterTopicConfiguration(RedpandaTest):
     def test_alter_config_does_not_change_replication_factor(self):
         topic = self.topics[0].name
         # change default replication factor
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"default_topic_replications": str(5)})
-        kcl = RawKCL(self.redpanda)
+        kcl = RawKCL(self.funes)
         kcl.raw_alter_topic_config(
             1, topic, {
                 TopicSpec.PROPERTY_RETENTION_TIME: 360000,
                 TopicSpec.PROPERTY_TIMESTAMP_TYPE: "LogAppendTime"
             })
-        kafka_tools = KafkaCliTools(self.redpanda)
-        spec = kafka_tools.describe_topic(topic)
+        sql_tools = SQLCliTools(self.funes)
+        spec = sql_tools.describe_topic(topic)
 
         assert spec.replication_factor == 3
         assert spec.retention_ms == 360000
@@ -78,14 +78,14 @@ class AlterTopicConfiguration(RedpandaTest):
     @cluster(num_nodes=3)
     def test_altering_multiple_topic_configurations(self):
         topic = self.topics[0].name
-        kafka_tools = KafkaCliTools(self.redpanda)
+        sql_tools = SQLCliTools(self.funes)
         self.client().alter_topic_configs(
             topic, {
                 TopicSpec.PROPERTY_SEGMENT_SIZE: 1024 * 1024,
                 TopicSpec.PROPERTY_RETENTION_TIME: 360000,
                 TopicSpec.PROPERTY_TIMESTAMP_TYPE: "LogAppendTime"
             })
-        spec = kafka_tools.describe_topic(topic)
+        spec = sql_tools.describe_topic(topic)
 
         assert spec.segment_bytes == 1024 * 1024
         assert spec.retention_ms == 360000
@@ -99,13 +99,13 @@ class AlterTopicConfiguration(RedpandaTest):
     @cluster(num_nodes=3)
     def test_set_config_from_describe(self):
         topic = self.topics[0].name
-        kafka_tools = KafkaCliTools(self.redpanda)
-        topic_config = kafka_tools.describe_topic_config(topic=topic)
+        sql_tools = SQLCliTools(self.funes)
+        topic_config = sql_tools.describe_topic_config(topic=topic)
         self.client().alter_topic_configs(topic, topic_config)
 
     @cluster(num_nodes=3)
-    def test_configuration_properties_kafka_config_allowlist(self):
-        rpk = RpkTool(self.redpanda)
+    def test_configuration_properties_sql_config_allowlist(self):
+        rpk = RpkTool(self.funes)
         config = rpk.describe_topic_configs(self.topic)
 
         new_segment_bytes = int(config['segment.bytes'][0]) + 1
@@ -121,8 +121,8 @@ class AlterTopicConfiguration(RedpandaTest):
     @cluster(num_nodes=3)
     def test_configuration_properties_name_validation(self):
         topic = self.topics[0].name
-        kafka_tools = KafkaCliTools(self.redpanda)
-        spec = kafka_tools.describe_topic(topic)
+        sql_tools = SQLCliTools(self.funes)
+        spec = sql_tools.describe_topic(topic)
         for _ in range(0, 5):
             key = self.random_string(5)
             try:
@@ -133,28 +133,28 @@ class AlterTopicConfiguration(RedpandaTest):
             else:
                 raise RuntimeError("Alter should have failed but succeeded!")
 
-        new_spec = kafka_tools.describe_topic(topic)
+        new_spec = sql_tools.describe_topic(topic)
         # topic spec shouldn't change
         assert new_spec == spec
 
     @cluster(num_nodes=3)
     def test_segment_size_validation(self):
         topic = self.topics[0].name
-        kafka_tools = KafkaCliTools(self.redpanda)
-        initial_spec = kafka_tools.describe_topic(topic)
-        self.redpanda.set_cluster_config({"log_segment_size_min": 1024})
+        sql_tools = SQLCliTools(self.funes)
+        initial_spec = sql_tools.describe_topic(topic)
+        self.funes.set_cluster_config({"log_segment_size_min": 1024})
         try:
             self.client().alter_topic_configs(
                 topic, {TopicSpec.PROPERTY_SEGMENT_SIZE: 16})
         except subprocess.CalledProcessError as e:
             assert "is outside of allowed range" in e.output
 
-        assert initial_spec.segment_bytes == kafka_tools.describe_topic(
+        assert initial_spec.segment_bytes == sql_tools.describe_topic(
             topic
         ).segment_bytes, "segment.bytes shouldn't be changed to invalid value"
 
-        # change min segment bytes redpanda property
-        self.redpanda.set_cluster_config({"log_segment_size_min": 1024 * 1024})
+        # change min segment bytes funes property
+        self.funes.set_cluster_config({"log_segment_size_min": 1024 * 1024})
         # try setting value that is smaller than requested min
         try:
             self.client().alter_topic_configs(
@@ -162,16 +162,16 @@ class AlterTopicConfiguration(RedpandaTest):
         except subprocess.CalledProcessError as e:
             assert "is outside of allowed range" in e.output
 
-        assert initial_spec.segment_bytes == kafka_tools.describe_topic(
+        assert initial_spec.segment_bytes == sql_tools.describe_topic(
             topic
         ).segment_bytes, "segment.bytes shouldn't be changed to invalid value"
         valid_segment_size = 1024 * 1024 + 1
         self.client().alter_topic_configs(
             topic, {TopicSpec.PROPERTY_SEGMENT_SIZE: valid_segment_size})
-        assert kafka_tools.describe_topic(
+        assert sql_tools.describe_topic(
             topic).segment_bytes == valid_segment_size
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"log_segment_size_max": 10 * 1024 * 1024})
         # try to set value greater than max allowed segment size
         try:
@@ -181,7 +181,7 @@ class AlterTopicConfiguration(RedpandaTest):
             assert "is outside of allowed range" in e.output
 
         # check that segment size didn't change
-        assert kafka_tools.describe_topic(
+        assert sql_tools.describe_topic(
             topic).segment_bytes == valid_segment_size
 
     @cluster(num_nodes=3)
@@ -189,59 +189,59 @@ class AlterTopicConfiguration(RedpandaTest):
         topic = self.topics[0].name
         original_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"original_output={original_output}")
-        assert original_output["redpanda.remote.read"] == "false"
-        assert original_output["redpanda.remote.write"] == "false"
+        assert original_output["funes.remote.read"] == "false"
+        assert original_output["funes.remote.write"] == "false"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read", "true")
+        self.client().alter_topic_config(topic, "funes.remote.read", "true")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "true"
-        assert altered_output["redpanda.remote.write"] == "false"
+        assert altered_output["funes.remote.read"] == "true"
+        assert altered_output["funes.remote.write"] == "false"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read",
+        self.client().alter_topic_config(topic, "funes.remote.read",
                                          "false")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "false"
-        assert altered_output["redpanda.remote.write"] == "false"
+        assert altered_output["funes.remote.read"] == "false"
+        assert altered_output["funes.remote.write"] == "false"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read", "true")
-        self.client().alter_topic_config(topic, "redpanda.remote.write",
+        self.client().alter_topic_config(topic, "funes.remote.read", "true")
+        self.client().alter_topic_config(topic, "funes.remote.write",
                                          "true")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "true"
-        assert altered_output["redpanda.remote.write"] == "true"
+        assert altered_output["funes.remote.read"] == "true"
+        assert altered_output["funes.remote.write"] == "true"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read",
+        self.client().alter_topic_config(topic, "funes.remote.read",
                                          "false")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "false"
-        assert altered_output["redpanda.remote.write"] == "true"
+        assert altered_output["funes.remote.read"] == "false"
+        assert altered_output["funes.remote.write"] == "true"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read", "true")
+        self.client().alter_topic_config(topic, "funes.remote.read", "true")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "true"
-        assert altered_output["redpanda.remote.write"] == "true"
+        assert altered_output["funes.remote.read"] == "true"
+        assert altered_output["funes.remote.write"] == "true"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.write",
+        self.client().alter_topic_config(topic, "funes.remote.write",
                                          "false")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "true"
-        assert altered_output["redpanda.remote.write"] == "false"
+        assert altered_output["funes.remote.read"] == "true"
+        assert altered_output["funes.remote.write"] == "false"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read",
+        self.client().alter_topic_config(topic, "funes.remote.read",
                                          "false")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "false"
-        assert altered_output["redpanda.remote.write"] == "false"
+        assert altered_output["funes.remote.read"] == "false"
+        assert altered_output["funes.remote.write"] == "false"
 
 
-class ShadowIndexingGlobalConfig(RedpandaTest):
+class ShadowIndexingGlobalConfig(FunesTest):
     topics = (TopicSpec(partition_count=1, replication_factor=3), )
 
     def __init__(self, test_context):
@@ -260,62 +260,62 @@ class ShadowIndexingGlobalConfig(RedpandaTest):
         topic = self.topics[0].name
         original_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"original_output={original_output}")
-        assert original_output["redpanda.remote.read"] == "true"
-        assert original_output["redpanda.remote.write"] == "true"
+        assert original_output["funes.remote.read"] == "true"
+        assert original_output["funes.remote.write"] == "true"
 
-        self.client().alter_topic_config(topic, "redpanda.remote.read",
+        self.client().alter_topic_config(topic, "funes.remote.read",
                                          "false")
-        self.client().alter_topic_config(topic, "redpanda.remote.write",
+        self.client().alter_topic_config(topic, "funes.remote.write",
                                          "false")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "false"
-        assert altered_output["redpanda.remote.write"] == "false"
+        assert altered_output["funes.remote.read"] == "false"
+        assert altered_output["funes.remote.write"] == "false"
 
     @cluster(num_nodes=3)
     def test_overrides_remove(self):
         topic = self.topics[0].name
         original_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"original_output={original_output}")
-        assert original_output["redpanda.remote.read"] == "true"
-        assert original_output["redpanda.remote.write"] == "true"
+        assert original_output["funes.remote.read"] == "true"
+        assert original_output["funes.remote.write"] == "true"
 
         # disable shadow indexing for topic
-        self.client().alter_topic_config(topic, "redpanda.remote.read",
+        self.client().alter_topic_config(topic, "funes.remote.read",
                                          "false")
-        self.client().alter_topic_config(topic, "redpanda.remote.write",
+        self.client().alter_topic_config(topic, "funes.remote.write",
                                          "false")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "false"
-        assert altered_output["redpanda.remote.write"] == "false"
+        assert altered_output["funes.remote.read"] == "false"
+        assert altered_output["funes.remote.write"] == "false"
 
         # delete topic configs (value from configuration should be used)
-        self.client().delete_topic_config(topic, "redpanda.remote.read")
-        self.client().delete_topic_config(topic, "redpanda.remote.write")
+        self.client().delete_topic_config(topic, "funes.remote.read")
+        self.client().delete_topic_config(topic, "funes.remote.write")
         altered_output = self.client().describe_topic_configs(topic)
         self.logger.info(f"altered_output={altered_output}")
-        assert altered_output["redpanda.remote.read"] == "true"
-        assert altered_output["redpanda.remote.write"] == "true"
+        assert altered_output["funes.remote.read"] == "true"
+        assert altered_output["funes.remote.write"] == "true"
 
     @cluster(num_nodes=3)
     def test_topic_manifest_reupload(self):
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
         initial = wait_until_result(
             lambda: bucket_view.get_topic_manifest(
-                NT(ns="kafka", topic=self.topic)),
+                NT(ns="sql", topic=self.topic)),
             timeout_sec=10,
             backoff_sec=1,
             err_msg="Failed to fetch initial topic manifest",
             retry_on_exc=True)
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.alter_topic_config(self.topic, "retention.bytes", "400")
 
         def check():
-            bucket_view = BucketView(self.redpanda)
+            bucket_view = BucketView(self.funes)
             manifest = bucket_view.get_topic_manifest(
-                NT(ns="kafka", topic=self.topic))
+                NT(ns="sql", topic=self.topic))
             return manifest["retention_bytes"] == 400
 
         wait_until(check,

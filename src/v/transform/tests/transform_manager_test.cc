@@ -396,7 +396,7 @@ private:
               ss::format("invalid partition: {}", parts[1]));
         }
         return {
-          model::kafka_namespace,
+          model::sql_namespace,
           model::topic(parts[0]),
           model::partition_id(partition_id)};
     }
@@ -428,9 +428,9 @@ private:
         }
         return {
           .name = model::transform_name(str),
-          .input_topic = {model::kafka_namespace, model::topic(topic_parts[0])},
+          .input_topic = {model::sql_namespace, model::topic(topic_parts[0])},
           .output_topics
-          = {{model::kafka_namespace, model::topic(topic_parts[1])}},
+          = {{model::sql_namespace, model::topic(topic_parts[1])}},
           .environment = {},
           .uuid = uuid_t::create(),
           // As a hack to track the version, we use the source ptr

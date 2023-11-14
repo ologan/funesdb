@@ -381,7 +381,7 @@ func Test_encodeProtoRecordWithReferences(t *testing.T) {
 			defer ts.Close()
 
 			fs := afero.NewMemMapFs()
-			params := &config.Params{ConfigFlag: "/some/path/redpanda.yaml"}
+			params := &config.Params{ConfigFlag: "/some/path/funes.yaml"}
 			p, err := params.LoadVirtualProfile(fs)
 			require.NoError(t, err)
 

@@ -29,7 +29,7 @@ type (
 		NodesCount         int      `json:"nodesCount"`
 		MachineType        string   `json:"machineType"`
 
-		KafkaListeners struct {
+		SQLListeners struct {
 			Listeners []struct {
 				SASL *struct {
 					Protocol string `json:"protocol"`
@@ -38,10 +38,10 @@ type (
 					RequireClientAuth bool `json:"requireClientAuth"` // if true, requires mTLS
 				} `json:"tls"`
 			} `json:"listeners"`
-		} `json:"kafkaListeners"`
+		} `json:"sqlListeners"`
 	}
 
-	// Cluster contains information about a Redpanda cluster.
+	// Cluster contains information about a Funes cluster.
 	Cluster struct {
 		NameID
 		NamespaceUUID string    `json:"namespaceUuid"`
@@ -52,21 +52,21 @@ type (
 		Status struct {
 			Health    string `json:"health"`
 			Listeners struct {
-				Kafka struct {
+				SQL struct {
 					Default struct {
 						URLs []string `json:"urls"`
 					} `json:"default"`
-				} `json:"kafka"`
+				} `json:"sql"`
 				Console struct {
 					Default struct {
 						URLs []string `json:"urls"`
 					} `json:"default"`
-				} `json:"redpandaConsole"`
+				} `json:"funesConsole"`
 			} `json:"listeners"`
 		} `json:"status"`
 	}
 
-	// Clusters is a set of Redpanda clusters.
+	// Clusters is a set of Funes clusters.
 	Clusters []Cluster
 )
 
@@ -82,14 +82,14 @@ func (cs Clusters) FilterNamespaceUUID(uuid string) Clusters {
 	return ret
 }
 
-// Clusters returns the list of clusters in a Redpanda org.
+// Clusters returns the list of clusters in a Funes org.
 func (cl *Client) Clusters(ctx context.Context) (Clusters, error) {
 	var cs []Cluster
 	err := cl.cl.Get(ctx, clusterPath, nil, &cs)
 	return cs, err
 }
 
-// Cluster returns information about a Redpanda cluster.
+// Cluster returns information about a Funes cluster.
 func (cl *Client) Cluster(ctx context.Context, clusterID string) (Cluster, error) {
 	path := httpapi.Pathfmt(clusterPath+"/%s", clusterID)
 	var c Cluster

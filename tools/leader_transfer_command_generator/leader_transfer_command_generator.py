@@ -20,8 +20,8 @@
 #     -p 0,1,2,3,4,5 \
 #     -c 2
 #  transfer leadership for topics ['test', 'test2', 'test3'] / partitions [0, 1, 2, 3, 4, 5] on core [2] from 1 to [2, 3]
-#  curl -XPOST http://localhost:9644/v1/partitions/kafka/test/1/transfer_leadership?target=2
-#  curl -XPOST http://localhost:9644/v1/partitions/kafka/test3/4/transfer_leadership?target=3
+#  curl -XPOST http://localhost:9644/v1/partitions/sql/test/1/transfer_leadership?target=2
+#  curl -XPOST http://localhost:9644/v1/partitions/sql/test3/4/transfer_leadership?target=3
 #
 
 
@@ -33,7 +33,7 @@ def main():
 
     def generate_options():
         parser = argparse.ArgumentParser(
-            description='Redpanda Granular Leader Transfer Command Generator')
+            description='Funes Granular Leader Transfer Command Generator')
         parser.add_argument('-f',
                             '--file',
                             required=True,

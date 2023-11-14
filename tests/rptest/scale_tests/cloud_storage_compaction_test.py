@@ -9,11 +9,11 @@
 
 import time
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, make_redpanda_service, MetricsEndpoint, SISettings, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, make_funes_service, MetricsEndpoint, SISettings, get_cloud_storage_type
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.util import wait_until
 from ducktape.mark import matrix
@@ -65,10 +65,10 @@ class CloudStorageCompactionTest(EndToEndTest):
         self.topic = CloudStorageCompactionTest.topic
         self.test_context = test_context
 
-        self._init_redpanda(test_context, extra_rp_conf, environment)
-        self.kafka_tools = KafkaCliTools(self.redpanda)
+        self._init_funes(test_context, extra_rp_conf, environment)
+        self.sql_tools = SQLCliTools(self.funes)
 
-    def _init_redpanda(self, test_context, extra_rp_conf, environment):
+    def _init_funes(self, test_context, extra_rp_conf, environment):
         self.si_settings = SISettings(
             test_context,
             cloud_storage_max_connections=5,
@@ -94,16 +94,16 @@ class CloudStorageCompactionTest(EndToEndTest):
             self.configuration["max_compacted_log_segment_size"],
         })
 
-        self.redpanda = make_redpanda_service(context=self.test_context,
+        self.funes = make_funes_service(context=self.test_context,
                                               num_brokers=3,
                                               si_settings=self.si_settings,
                                               extra_rp_conf=extra_rp_conf,
                                               environment=environment)
 
     def setUp(self):
-        assert self.redpanda
-        self.redpanda.start()
-        rpk = RpkTool(self.redpanda)
+        assert self.funes
+        self.funes.start()
+        rpk = RpkTool(self.funes)
         rpk.cluster_config_set(
             "log_compaction_interval_ms",
             str(self.configuration["log_compaction_interval_ms"]))
@@ -118,10 +118,10 @@ class CloudStorageCompactionTest(EndToEndTest):
             cleanup_policy="compact,delete",
             segment_bytes=self.configuration["segment_size"],
             retention_bytes=self.configuration["retention.local.target.bytes"],
-            redpanda_remote_write=True,
-            redpanda_remote_read=True,
-            redpanda_remote_delete=True)
-        self.kafka_tools.create_topic(self.topic_spec)
+            funes_remote_write=True,
+            funes_remote_read=True,
+            funes_remote_delete=True)
+        self.sql_tools.create_topic(self.topic_spec)
 
     def start_workload(self):
         self.start_producer(
@@ -130,7 +130,7 @@ class CloudStorageCompactionTest(EndToEndTest):
             repeating_keys=self.configuration["key_set_cardinality"])
         wait_until(lambda: len(self.producer.last_acked_offsets) != 0, 30)
 
-    def _init_redpanda_read_replica(self):
+    def _init_funes_read_replica(self):
         self.rr_si_settings = SISettings(
             self.test_context,
             bypass_bucket_creation=True,
@@ -140,14 +140,14 @@ class CloudStorageCompactionTest(EndToEndTest):
             cloud_storage_segment_max_upload_interval_sec=self.
             configuration["cloud_storage_segment_max_upload_interval_sec"])
         self.rr_si_settings.load_context(self.logger, self.test_context)
-        self.rr_cluster = make_redpanda_service(
+        self.rr_cluster = make_funes_service(
             self.test_context, num_brokers=3, si_settings=self.rr_si_settings)
 
     def _create_read_repica_topic_success(self):
         try:
             rpk_rr_cluster = RpkTool(self.rr_cluster)
             conf = {
-                'redpanda.remote.readreplica':
+                'funes.remote.readreplica':
                 self.si_settings.cloud_storage_bucket,
             }
             rpk_rr_cluster.create_topic(self.topic, config=conf)
@@ -160,7 +160,7 @@ class CloudStorageCompactionTest(EndToEndTest):
                 raise
 
     def _setup_read_replica(self):
-        self._init_redpanda_read_replica()
+        self._init_funes_read_replica()
         self.rr_cluster.start(start_si=False)
         wait_until(self._create_read_repica_topic_success,
                    timeout_sec=30,
@@ -172,7 +172,7 @@ class CloudStorageCompactionTest(EndToEndTest):
     def test_read_from_replica(self, cloud_storage_type):
         self.start_workload()
         self.start_consumer(num_nodes=2,
-                            redpanda_cluster=self.rr_cluster,
+                            funes_cluster=self.rr_cluster,
                             verify_offsets=False)
         while sum(self.producer.last_acked_offsets.copy().values()
                   ) < self.configuration["produce_offsets"]:
@@ -187,12 +187,12 @@ class CloudStorageCompactionTest(EndToEndTest):
                                      consumer_timeout_sec=600)
 
         upload_sucess = sum([
-            sample.value for sample in self.redpanda.metrics_sample(
+            sample.value for sample in self.funes.metrics_sample(
                 "cloud_storage_successful_uploads",
                 metrics_endpoint=MetricsEndpoint.METRICS).samples
         ])
         upload_fails = sum([
-            sample.value for sample in self.redpanda.metrics_sample(
+            sample.value for sample in self.funes.metrics_sample(
                 "cloud_storage_failed_uploads",
                 metrics_endpoint=MetricsEndpoint.METRICS).samples
         ])

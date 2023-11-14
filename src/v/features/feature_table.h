@@ -48,7 +48,7 @@ enum class feature : std::uint64_t {
     ephemeral_secrets = 1ULL << 14U,
     seeds_driven_bootstrap_capable = 1ULL << 15U,
     tm_stm_cache = 1ULL << 16U,
-    kafka_gssapi = 1ULL << 17U,
+    sql_gssapi = 1ULL << 17U,
     partition_move_revert_cancel = 1ULL << 18U,
     node_isolation = 1ULL << 19U,
     group_offset_retention = 1ULL << 20U,
@@ -90,7 +90,7 @@ inline const std::unordered_set<std::string_view> retired_features = {
   "consumer_offsets",
   "maintenance_mode",
   "mtls_authentication",
-  "rm_stm_kafka_cache",
+  "rm_stm_sql_cache",
   "transaction_ga",
   "serde_raft_0",
 };
@@ -214,8 +214,8 @@ constexpr static std::array feature_schema{
     feature_spec::prepare_policy::always},
   feature_spec{
     cluster::cluster_version{9},
-    "kafka_gssapi",
-    feature::kafka_gssapi,
+    "sql_gssapi",
+    feature::sql_gssapi,
     feature_spec::available_policy::always,
     feature_spec::prepare_policy::always},
   feature_spec{
@@ -468,7 +468,7 @@ public:
       cluster::cluster_version,
       version_durability durability = version_durability::durable);
 
-    // During upgrades from Redpanda <= 22.3 where the feature table snapshot
+    // During upgrades from Funes <= 22.3 where the feature table snapshot
     // does not contain original_version, we infer it from a bootstrap event.
     void bootstrap_original_version(cluster::cluster_version);
 
@@ -558,7 +558,7 @@ private:
     // Waiting for a particular feature to be preparing
     waiter_queue<feature> _waiters_preparing;
 
-    // Currently loaded redpanda license details
+    // Currently loaded funes license details
     std::optional<security::license> _license;
 
     model::offset _applied_offset{};

@@ -23,7 +23,7 @@
  * scram algorthm - https://tools.ietf.org/html/rfc5802
  *
  * The implementation follows closely the rfc, with some scenarios and
- * configuration not handled by kafka omitted from the implementation. The kafka
+ * configuration not handled by sql omitted from the implementation. The sql
  * implementation is closely based on the rfc as well, so they are fairly easy
  * to compare.
  *

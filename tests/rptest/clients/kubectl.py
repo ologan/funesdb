@@ -15,7 +15,7 @@ SUPPORTED_PROVIDERS = ['aws', 'gcp']
 
 class KubectlTool:
     """
-    Wrapper around kubectl for operating on a redpanda cluster.
+    Wrapper around kubectl for operating on a funes cluster.
     """
 
     KUBECTL_VERSION = '1.24.10'
@@ -24,17 +24,17 @@ class KubectlTool:
 
     def __init__(
         self,
-        redpanda,
+        funes,
         *,
         remote_uri=None,
-        namespace='redpanda',
+        namespace='funes',
         cluster_id='',
         cluster_privider='aws',
         cluster_region='us-west-2',
         tp_proxy=None,
         tp_token=None,
     ):
-        self._redpanda = redpanda
+        self._funes = funes
         self._remote_uri = remote_uri
         self._namespace = namespace
         self._cluster_id = cluster_id
@@ -106,13 +106,13 @@ class KubectlTool:
     def _aws_config_cmd(self):
         return [
             'awscli2', 'eks', 'update-kubeconfig', '--name',
-            f'redpanda-{self._cluster_id}', '--region', self._region
+            f'funes-{self._cluster_id}', '--region', self._region
         ]
 
     def _gcp_config_cmd(self):
         return [
             'gcloud', 'container', 'clusters', 'get-credentials',
-            f'redpanda-{self._cluster_id}', '--region', self._region
+            f'funes-{self._cluster_id}', '--region', self._region
         ]
 
     def _install(self):
@@ -136,13 +136,13 @@ class KubectlTool:
             elif self._provider == 'gcp':
                 config_cmd = ssh_prefix + self._gcp_config_cmd()
 
-            self._redpanda.logger.info(download_cmd)
+            self._funes.logger.info(download_cmd)
             res = subprocess.check_output(download_cmd)
-            self._redpanda.logger.info(install_cmd)
+            self._funes.logger.info(install_cmd)
             res = subprocess.check_output(install_cmd)
-            self._redpanda.logger.info(cleanup_cmd)
+            self._funes.logger.info(cleanup_cmd)
             res = subprocess.check_output(cleanup_cmd)
-            self._redpanda.logger.info(config_cmd)
+            self._funes.logger.info(config_cmd)
             res = subprocess.check_output(config_cmd)
             self._kubectl_installed = True
         return
@@ -151,10 +151,10 @@ class KubectlTool:
         self._install()
         ssh_prefix = self._ssh_prefix()
         cmd = ssh_prefix + [
-            'kubectl', 'exec', '-n', self._namespace, '-c', 'redpanda',
+            'kubectl', 'exec', '-n', self._namespace, '-c', 'funes',
             f'rp-{self._cluster_id}-0', '--', 'bash', '-c'
         ] + ['"' + remote_cmd + '"']
-        self._redpanda.logger.info(cmd)
+        self._funes.logger.info(cmd)
         res = subprocess.check_output(cmd)
         return res
 
@@ -162,7 +162,7 @@ class KubectlTool:
         self._install()
         ssh_prefix = self._ssh_prefix()
         cmd = ssh_prefix + [
-            'kubectl', 'exec', '-n', self._namespace, '-c', 'redpanda',
+            'kubectl', 'exec', '-n', self._namespace, '-c', 'funes',
             f'rp-{self._cluster_id}-0', '--', 'stat'
         ] + [remote_path]
         try:
@@ -187,15 +187,15 @@ class KubectlTool:
             '-o',
             'custom-columns=NODE:.spec.nodeName,NAME:.metadata.name',
         ]
-        self._redpanda.logger.info(cmd)
+        self._funes.logger.info(cmd)
         res = subprocess.run(cmd, capture_output=True, text=True)
         ip_to_priv_pods = {}
         for line in res.stdout.splitlines():
             s = line.split()
             ip_to_priv_pods[s[0]] = s[1]
-        self._redpanda.logger.info(ip_to_priv_pods)
+        self._funes.logger.info(ip_to_priv_pods)
 
-        # kubectl -n redpanda get pod -l app.kubernetes.io/name=redpanda --no-headers -o custom-columns=NODE:.spec.nodeName,NAME:.metadata.name
+        # kubectl -n funes get pod -l app.kubernetes.io/name=funes --no-headers -o custom-columns=NODE:.spec.nodeName,NAME:.metadata.name
         # ip-10-1-1-139.us-west-2.compute.internal   rp-ci0motok30vsi89l501g-0
         # ip-10-1-1-101.us-west-2.compute.internal   rp-ci0motok30vsi89l501g-1
         # ip-10-1-1-26.us-west-2.compute.internal    rp-ci0motok30vsi89l501g-2
@@ -203,41 +203,41 @@ class KubectlTool:
         cmd = ssh_prefix + [
             'kubectl',
             '-n',
-            'redpanda',
+            'funes',
             'get',
             'pod',
             '-l',
-            'app.kubernetes.io/name=redpanda',
+            'app.kubernetes.io/name=funes',
             '--no-headers',
             '-o',
             'custom-columns=NODE:.spec.nodeName,NAME:.metadata.name',
         ]
-        self._redpanda.logger.info(cmd)
+        self._funes.logger.info(cmd)
         res = subprocess.run(cmd, capture_output=True, text=True)
-        ip_to_redpanda_pods = {}
+        ip_to_funes_pods = {}
         for line in res.stdout.splitlines():
             s = line.split()
-            ip_to_redpanda_pods[s[0]] = s[1]
-        self._redpanda.logger.info(ip_to_redpanda_pods)
+            ip_to_funes_pods[s[0]] = s[1]
+        self._funes.logger.info(ip_to_funes_pods)
 
-        redpanda_to_priv_pods = {}
-        for ip, redpanda_pod in ip_to_redpanda_pods.items():
-            redpanda_to_priv_pods[redpanda_pod] = ip_to_priv_pods[ip]
+        funes_to_priv_pods = {}
+        for ip, funes_pod in ip_to_funes_pods.items():
+            funes_to_priv_pods[funes_pod] = ip_to_priv_pods[ip]
 
-        self._redpanda.logger.info(redpanda_to_priv_pods)
-        redpanda_pod = f'rp-{self._cluster_id}-0'
-        return redpanda_to_priv_pods[redpanda_pod]
+        self._funes.logger.info(funes_to_priv_pods)
+        funes_pod = f'rp-{self._cluster_id}-0'
+        return funes_to_priv_pods[funes_pod]
 
     def _setup_tbot(self):
         if self._tp_proxy is None or self._tp_token is None:
-            self._redpanda.logger.info(
+            self._funes.logger.info(
                 'skipping tbot start to generate identity')
             return None
         # Select method to join
         _method = "iam"
         if self._provider == 'gcp':
             _method = "gcp"
-        self._redpanda.logger.info('starting tbot to generate identity')
+        self._funes.logger.info('starting tbot to generate identity')
         cmd = [
             'tbot', 'start', '--data-dir=/tmp/tbot-data',
             f'--destination-dir={self.TELEPORT_DEST_DIR}',
@@ -252,14 +252,14 @@ class KubectlTool:
             filename = 'everything-allowed-exec-pod.yml'
             filename_path = os.path.join(os.path.dirname(__file__),
                                          'everything-allowed-exec-pod.yml')
-            self._redpanda.logger.info(filename_path)
+            self._funes.logger.info(filename_path)
             setup_cmd = self._scp_cmd(filename_path, f'{self._remote_uri}:')
             ssh_prefix = self._ssh_prefix()
             apply_cmd = ssh_prefix + ['kubectl', 'apply', '-f', filename]
             if len(setup_cmd) > 0:
-                self._redpanda.logger.info(setup_cmd)
+                self._funes.logger.info(setup_cmd)
                 res = subprocess.check_output(setup_cmd)
-            self._redpanda.logger.info(apply_cmd)
+            self._funes.logger.info(apply_cmd)
             res = subprocess.check_output(apply_cmd)
             self._privileged_pod_installed = True
 
@@ -269,7 +269,7 @@ class KubectlTool:
         ssh_prefix = self._ssh_prefix()
         cmd = ssh_prefix + ['kubectl', 'exec', priv_pod, '--', 'bash', '-c'
                             ] + ['"' + remote_cmd + '"']
-        self._redpanda.logger.debug(cmd)
+        self._funes.logger.debug(cmd)
         res = subprocess.run(cmd, capture_output=True, text=True)
-        self._redpanda.logger.debug(res.stdout)
+        self._funes.logger.debug(res.stdout)
         return res

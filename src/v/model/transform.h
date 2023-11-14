@@ -107,7 +107,7 @@ struct transform_offsets_value
       transform_offsets_value,
       serde::version<0>,
       serde::compat_version<0>> {
-    kafka::offset offset;
+    sql::offset offset;
 
     friend std::ostream&
     operator<<(std::ostream&, const transform_offsets_value&);
@@ -117,7 +117,7 @@ struct transform_offsets_value
 
 static const model::topic transform_offsets_topic("transform_offsets");
 static const model::topic_namespace transform_offsets_nt(
-  model::kafka_internal_namespace, transform_offsets_topic);
+  model::sql_internal_namespace, transform_offsets_topic);
 
 /**
  * A (possibly inconsistent) snapshot of a transform.
@@ -202,7 +202,7 @@ struct cluster_transform_report
 /**
  * The output of a user's transformed function.
  *
- * It is a buffer formatted with the "payload" of a record using Kafka's wire
+ * It is a buffer formatted with the "payload" of a record using SQL's wire
  * format. Specifically the following fields are included:
  *
  * keyLength: varint
@@ -218,7 +218,7 @@ struct cluster_transform_report
  * headerValueLength: varint
  * Value: byte[]
  *
- * See: https://kafka.apache.org/documentation/#record for more information.
+ * See: https://sql.apache.org/documentation/#record for more information.
  *
  */
 class transformed_data {

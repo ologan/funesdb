@@ -10,7 +10,7 @@
 from rptest.services.cluster import cluster
 from ducktape.errors import DucktapeError
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 
 import subprocess
@@ -18,12 +18,12 @@ import subprocess
 # Expected log errors in tests that test misbehaving
 # transactional clients.
 TX_ERROR_LOGS = [
-    # e.g. tx - [{kafka/topic1/0}] - rm_stm.cc:461 - Can't prepare pid:{producer_identity: id=1, epoch=27} - unknown session
+    # e.g. tx - [{sql/topic1/0}] - rm_stm.cc:461 - Can't prepare pid:{producer_identity: id=1, epoch=27} - unknown session
     "tx -.*rm_stm.*unknown session"
 ]
 
 
-class TxVerifierTest(RedpandaTest):
+class TxVerifierTest(FunesTest):
     """
     Verify that segment indices are recovered on startup.
     """
@@ -41,29 +41,29 @@ class TxVerifierTest(RedpandaTest):
     def verify(self, tests):
         verifier_jar = "/opt/verifiers/verifiers.jar"
 
-        self.redpanda.logger.info("creating topics")
+        self.funes.logger.info("creating topics")
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic("topic1")
         rpk.create_topic("topic2")
 
         errors = ""
 
         for test in tests:
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 "testing txn test \"{test}\"".format(test=test))
             try:
                 cmd = "{java} -cp {verifier_jar} io.vectorized.tx_verifier.Verifier {test} {brokers}".format(
                     java="java",
                     verifier_jar=verifier_jar,
                     test=test,
-                    brokers=self.redpanda.brokers())
+                    brokers=self.funes.brokers())
                 subprocess.check_output(["/bin/sh", "-c", cmd],
                                         stderr=subprocess.STDOUT)
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     "txn test \"{test}\" passed".format(test=test))
             except subprocess.CalledProcessError as e:
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     "txn test \"{test}\" failed".format(test=test))
                 errors += test + "\n"
                 errors += str(e.output) + "\n"

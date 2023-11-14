@@ -34,7 +34,7 @@ import (
 func newCreateCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	var (
 		set               []string
-		fromRedpanda      string
+		fromFunes      string
 		fromProfile       string
 		fromCloud         string
 		fromContainer     bool
@@ -51,9 +51,9 @@ func newCreateCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 There are multiple ways to create a profile. A name must be provided if not
 using --from-cloud or --from-rpk-container.
 
-* You can use --from-redpanda to generate a new profile from an existing
-  redpanda.yaml file. The special values "current" create a profile from the
-  current redpanda.yaml as it is loaded within rpk.
+* You can use --from-funes to generate a new profile from an existing
+  funes.yaml file. The special values "current" create a profile from the
+  current funes.yaml as it is loaded within rpk.
 
 * You can use --from-profile to generate a profile from an existing profile or
   from from a profile in a yaml file. First, the filename is checked, then an
@@ -70,12 +70,12 @@ using --from-cloud or --from-rpk-container.
 
 * You can use --set key=value to directly set fields. The key can either be
   the name of a -X flag or the path to the field in the profile's YAML format.
-  For example, using --set tls.enabled=true OR --set kafka_api.tls.enabled=true
+  For example, using --set tls.enabled=true OR --set sql_api.tls.enabled=true
   is equivalent. The former corresponds to the -X flag tls.enabled, while the
-  latter corresponds to the path kafka_api.tls.enabled in the profile's YAML.
+  latter corresponds to the path sql_api.tls.enabled in the profile's YAML.
 
 The --set flag is always applied last and can be used to set additional fields
-in tandem with --from-redpanda or --from-cloud.
+in tandem with --from-funes or --from-cloud.
 
 The --set flag supports autocompletion, suggesting the -X key format. If you
 begin writing a YAML path, the flag will suggest the rest of the path.
@@ -106,7 +106,7 @@ rpk always switches to the newly created profile.
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
 			defer cancel()
-			name, msg, err := createProfile(ctx, fs, y, cfg, fromRedpanda, fromProfile, fromCloud, fromContainer, set, name, description)
+			name, msg, err := createProfile(ctx, fs, y, cfg, fromFunes, fromProfile, fromCloud, fromContainer, set, name, description)
 			out.MaybeDieErr(err)
 
 			fmt.Printf("Created and switched to new profile %q.\n", name)
@@ -117,9 +117,9 @@ rpk always switches to the newly created profile.
 	}
 
 	cmd.Flags().StringArrayVarP(&set, "set", "s", nil, "Create and switch to a new profile, setting profile fields with key=value pairs")
-	cmd.Flags().StringVar(&fromRedpanda, "from-redpanda", "", "Create and switch to a new profile from a redpanda.yaml file")
+	cmd.Flags().StringVar(&fromFunes, "from-funes", "", "Create and switch to a new profile from a funes.yaml file")
 	cmd.Flags().StringVar(&fromProfile, "from-profile", "", "Create and switch to a new profile from an existing profile or from a profile in a yaml file")
-	cmd.Flags().StringVar(&fromCloud, fromCloudFlag, "", "Create and switch to a new profile generated from a Redpanda Cloud cluster ID")
+	cmd.Flags().StringVar(&fromCloud, fromCloudFlag, "", "Create and switch to a new profile generated from a Funes Cloud cluster ID")
 	cmd.Flags().BoolVar(&fromContainer, fromContainerFlag, false, "Create and switch to a new profile generated from a running cluster created with rpk container")
 	cmd.Flags().StringVarP(&description, "description", "d", "", "Optional description of the profile")
 
@@ -127,7 +127,7 @@ rpk always switches to the newly created profile.
 
 	cmd.RegisterFlagCompletionFunc("set", validSetArgs)
 
-	cmd.MarkFlagsMutuallyExclusive("from-redpanda", "from-cloud", "from-profile")
+	cmd.MarkFlagsMutuallyExclusive("from-funes", "from-cloud", "from-profile")
 
 	return cmd
 }
@@ -138,7 +138,7 @@ func createProfile(
 	fs afero.Fs,
 	y *config.RpkYaml,
 	cfg *config.Config,
-	fromRedpanda string,
+	fromFunes string,
 	fromProfile string,
 	fromCloud string,
 	fromContainer bool,
@@ -206,24 +206,24 @@ func createProfile(
 			}
 		}
 
-	case fromRedpanda != "":
+	case fromFunes != "":
 		var nodeCfg config.RpkNodeConfig
 		switch {
-		case fromRedpanda == "current":
-			nodeCfg = cfg.VirtualRedpandaYaml().Rpk
+		case fromFunes == "current":
+			nodeCfg = cfg.VirtualFunesYaml().Rpk
 		default:
-			raw, err := afero.ReadFile(fs, fromRedpanda)
+			raw, err := afero.ReadFile(fs, fromFunes)
 			if err != nil {
-				return "", "", fmt.Errorf("unable to read file %q: %v", fromRedpanda, err)
+				return "", "", fmt.Errorf("unable to read file %q: %v", fromFunes, err)
 			}
-			var rpyaml config.RedpandaYaml
+			var rpyaml config.FunesYaml
 			if err := yaml.Unmarshal(raw, &rpyaml); err != nil {
-				return "", "", fmt.Errorf("unable to yaml decode file %q: %v", fromRedpanda, err)
+				return "", "", fmt.Errorf("unable to yaml decode file %q: %v", fromFunes, err)
 			}
 			nodeCfg = rpyaml.Rpk
 		}
 		p = config.RpkProfile{
-			KafkaAPI: nodeCfg.KafkaAPI,
+			SQLAPI: nodeCfg.SQLAPI,
 			AdminAPI: nodeCfg.AdminAPI,
 		}
 	}
@@ -246,10 +246,10 @@ func createProfile(
 	// message if this is a cloud based profile.
 	if fromCloud != "" {
 		msg += CloudClusterMessage(p, o.ClusterName, o.ClusterID)
-		if o.MessageSASL && p.KafkaAPI.SASL == nil {
+		if o.MessageSASL && p.SQLAPI.SASL == nil {
 			msg += RequiresSASLMessage()
 		}
-		if o.MessageMTLS && p.KafkaAPI.TLS == nil {
+		if o.MessageMTLS && p.SQLAPI.TLS == nil {
 			msg += RequiresMTLSMessage()
 		}
 	}
@@ -296,11 +296,11 @@ func fromCloudCluster(c cloudapi.Cluster) CloudClusterOutputs {
 		Name:      c.Name,
 		FromCloud: true,
 	}
-	p.KafkaAPI.Brokers = c.Status.Listeners.Kafka.Default.URLs
+	p.SQLAPI.Brokers = c.Status.Listeners.SQL.Default.URLs
 	var isMTLS, isSASL bool
-	if l := c.Spec.KafkaListeners.Listeners; len(l) > 0 {
+	if l := c.Spec.SQLListeners.Listeners; len(l) > 0 {
 		if l[0].TLS != nil {
-			p.KafkaAPI.TLS = new(config.TLS)
+			p.SQLAPI.TLS = new(config.TLS)
 			isMTLS = l[0].TLS.RequireClientAuth
 		}
 		isSASL = l[0].SASL != nil
@@ -318,7 +318,7 @@ func fromVirtualCluster(vc cloudapi.VirtualCluster, selectedNamespaceCluster str
 	p := config.RpkProfile{
 		Name:      vc.Name,
 		FromCloud: true,
-		KafkaAPI: config.RpkKafkaAPI{
+		SQLAPI: config.RpkSQLAPI{
 			Brokers: vc.Status.Listeners.SeedAddresses,
 			TLS:     new(config.TLS),
 			SASL: &config.SASL{
@@ -373,8 +373,8 @@ func CloudClusterMessage(p config.RpkProfile, clusterName, clusterID string) str
 	return fmt.Sprintf(`
 Cluster %s
   Web UI: https://cloudv2.redpanda.com/clusters/%s/overview
-  Redpanda Seed Brokers: [%s]
-`, clusterName, clusterID, strings.Join(p.KafkaAPI.Brokers, ", "))
+  Funes Seed Brokers: [%s]
+`, clusterName, clusterID, strings.Join(p.SQLAPI.Brokers, ", "))
 }
 
 // ServerlessHelloMessage returns the message to print if the cluster

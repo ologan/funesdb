@@ -1,11 +1,11 @@
 /*
  * Copyright 2020 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -63,7 +63,7 @@ public:
               //   a shared_ptr reference to it.
               // - Abort source must stay alive until this lease is dropped.
               // This
-              //   is by convention, that Redpanda subsystems shut down their
+              //   is by convention, that Funes subsystems shut down their
               //   inner objects first before the enclosing parent (and its
               //   abort source) are destroyed.
               [client = &(*client)]() noexcept { client->shutdown(); });
@@ -98,7 +98,7 @@ public:
     /// \param policy controls what happens when the pool is empty (wait or try
     ///               to borrow from another shard)
     /// \param application_abort_source abort source which can be used to stop
-    /// Redpanda gracefully
+    /// Funes gracefully
     client_pool(
       size_t size,
       client_configuration conf,

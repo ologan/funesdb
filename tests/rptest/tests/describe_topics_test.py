@@ -10,10 +10,10 @@ import random
 
 from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 from rptest.clients.types import TopicSpec
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.kcl import KCL
 import re
 
@@ -30,7 +30,7 @@ class ConfigProperty:
         self.source_type = source_type.lower()
 
 
-class DescribeTopicsTest(RedpandaTest):
+class DescribeTopicsTest(FunesTest):
     @cluster(num_nodes=3)
     def test_describe_topics(self):
         big = self.scale.ci or self.scale.release
@@ -45,7 +45,7 @@ class DescribeTopicsTest(RedpandaTest):
         self.client().create_topic(topics)
 
         def check():
-            client = KafkaCliTools(self.redpanda)
+            client = SQLCliTools(self.funes)
             # bulk describe
             output = client.describe_topics()
             for topic in topics:
@@ -93,18 +93,18 @@ class DescribeTopicsTest(RedpandaTest):
             ConfigProperty(config_type="STRING",
                            value="CreateTime",
                            doc_string="Default topic messages timestamp type"),
-            "redpanda.remote.delete":
+            "funes.remote.delete":
             ConfigProperty(
                 config_type="BOOLEAN",
                 value="true",
                 doc_string=
                 "Controls whether topic deletion should imply deletion in S3"),
-            "redpanda.remote.read":
+            "funes.remote.read":
             ConfigProperty(
                 config_type="BOOLEAN",
                 value="false",
                 doc_string="Default remote read config value for new topics"),
-            "redpanda.remote.write":
+            "funes.remote.write":
             ConfigProperty(
                 config_type="BOOLEAN",
                 value="false",
@@ -149,31 +149,31 @@ class DescribeTopicsTest(RedpandaTest):
                 doc_string=
                 "Default log segment lifetime in ms for topics which do not set segment.ms"
             ),
-            "redpanda.key.schema.id.validation":
+            "funes.key.schema.id.validation":
             ConfigProperty(
                 config_type="BOOLEAN",
                 value="false",
                 doc_string=
                 "Enable validation of the schema id for keys on a record"),
-            "redpanda.key.subject.name.strategy":
+            "funes.key.subject.name.strategy":
             ConfigProperty(
                 config_type="STRING",
                 value="TopicNameStrategy",
                 doc_string=
-                "The subject name strategy for keys if redpanda.key.schema.id.validation is enabled"
+                "The subject name strategy for keys if funes.key.schema.id.validation is enabled"
             ),
-            "redpanda.value.schema.id.validation":
+            "funes.value.schema.id.validation":
             ConfigProperty(
                 config_type="BOOLEAN",
                 value="false",
                 doc_string=
                 "Enable validation of the schema id for values on a record"),
-            "redpanda.value.subject.name.strategy":
+            "funes.value.subject.name.strategy":
             ConfigProperty(
                 config_type="STRING",
                 value="TopicNameStrategy",
                 doc_string=
-                "The subject name strategy for values if redpanda.value.schema.id.validation is enabled"
+                "The subject name strategy for values if funes.value.schema.id.validation is enabled"
             ),
             "confluent.key.schema.validation":
             ConfigProperty(
@@ -185,7 +185,7 @@ class DescribeTopicsTest(RedpandaTest):
             ConfigProperty(
                 config_type="STRING",
                 value=
-                "io.confluent.kafka.serializers.subject.TopicNameStrategy",
+                "io.confluent.sql.serializers.subject.TopicNameStrategy",
                 doc_string=
                 "The subject name strategy for keys if confluent.key.schema.validation is enabled"
             ),
@@ -199,7 +199,7 @@ class DescribeTopicsTest(RedpandaTest):
             ConfigProperty(
                 config_type="STRING",
                 value=
-                "io.confluent.kafka.serializers.subject.TopicNameStrategy",
+                "io.confluent.sql.serializers.subject.TopicNameStrategy",
                 doc_string=
                 "The subject name strategy for values if confluent.value.schema.validation is enabled"
             ),
@@ -225,7 +225,7 @@ class DescribeTopicsTest(RedpandaTest):
 
         tp_spec = TopicSpec()
         self.client().create_topic([tp_spec])
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         output = kcl.describe_topic(tp_spec.name,
                                     with_docs=True,
                                     with_types=True).lower().splitlines()

@@ -5,7 +5,7 @@ from collections import namedtuple
 from ducktape.cluster.remoteaccount import RemoteCommandError, RemoteAccount
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 KADM5_ACL_TMPL = """
 {kadmin_principal}@{realm} *
@@ -57,7 +57,7 @@ KINIT_TMPL = 'kinit {principal} -kt {keytab_file}'
 CLIENT_PROPERTIES_TPL = """
 security.protocol=SASL_PLAINTEXT
 sasl.mechanism=GSSAPI
-sasl.kerberos.service.name=redpanda
+sasl.kerberos.service.name=funes
 sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
     useKeyTab=true \
     storeKey=false \
@@ -67,7 +67,7 @@ sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
 """
 
 PRODUCER_SCRIPT = """
-from confluent_kafka import Producer
+from confluent_sql import Producer
 import time
 from ducktape.utils.util import wait_until
 
@@ -341,10 +341,10 @@ class KrbClient(Service):
     """
     A Kerberos KDC implementation backed by krb5-kdc (MIT).
     """
-    def __init__(self, context, kdc: KrbKdc, redpanda):
+    def __init__(self, context, kdc: KrbKdc, funes):
         super(KrbClient, self).__init__(context, num_nodes=1)
         self.kdc = kdc
-        self.redpanda = redpanda
+        self.funes = funes
         self.krb5_conf_path = KRB5_CONF_PATH
         self.keytab_file = DEFAULT_KEYTAB_FILE
 
@@ -408,7 +408,7 @@ class KrbClient(Service):
     def clean_node(self, node, **kwargs):
         self.logger.warn(f"Cleaning Client node {node.name}")
         node.account.ssh(
-            f"rm -fr {self.redpanda.PERSISTENT_ROOT}/client.keytab /etc/krb5.keytab",
+            f"rm -fr {self.funes.PERSISTENT_ROOT}/client.keytab /etc/krb5.keytab",
             allow_fail=True)
         node.account.ssh(f"rm -fr /tmp/*.krb5ccache", allow_fail=True)
 
@@ -425,11 +425,11 @@ class KrbClient(Service):
         client_cache = f"/tmp/{principal.replace('/', '_')[0]}.krb5ccache"
         kinit_args = f"-kt {self.keytab_file} -c {client_cache} {principal}"
         kinit_cmd = f"kinit -R {kinit_args} || kinit {kinit_args}"
-        sasl_conf = f"-X security.protocol=sasl_plaintext -X sasl.mechanisms=GSSAPI '-Xsasl.kerberos.kinit.cmd={kinit_cmd}' -X sasl.kerberos.service.name=redpanda"
+        sasl_conf = f"-X security.protocol=sasl_plaintext -X sasl.mechanisms=GSSAPI '-Xsasl.kerberos.kinit.cmd={kinit_cmd}' -X sasl.kerberos.service.name=funes"
         try:
             res = self.nodes[0].account.ssh_output(
                 cmd=
-                f'KRB5_TRACE=/dev/stderr KRB5CCNAME={client_cache} kcat -L -J -b {self.redpanda.brokers(listener="kerberoslistener")} {sasl_conf}',
+                f'KRB5_TRACE=/dev/stderr KRB5CCNAME={client_cache} kcat -L -J -b {self.funes.brokers(listener="kerberoslistener")} {sasl_conf}',
                 allow_fail=False,
                 combine_stderr=False)
             self.logger.debug(f"Metadata request: {res}")
@@ -447,9 +447,9 @@ class KrbClient(Service):
                 interval_s: float = 0.1):
         self.logger.debug(f"Produce for {num * interval_s}s")
         producer = PRODUCER_SCRIPT.format(
-            bootstrap_servers=self.redpanda.brokers(
+            bootstrap_servers=self.funes.brokers(
                 listener='kerberoslistener'),
-            broker_principal='redpanda',
+            broker_principal='funes',
             user_principal=principal,
             user_secret=self.keytab_file,
             n=num,
@@ -477,19 +477,19 @@ class KrbClient(Service):
         self.nodes[0].account.create_file(properties_filepath, tmpl)
 
         try:
-            cmd_args = f'--command-config {properties_filepath} --bootstrap-server {self.redpanda.brokers(listener="kerberoslistener")}'
+            cmd_args = f'--command-config {properties_filepath} --bootstrap-server {self.funes.brokers(listener="kerberoslistener")}'
             topics = self.nodes[0].account.ssh_output(
-                cmd=f"/opt/kafka-3.0.0/bin/kafka-topics.sh {cmd_args} --list",
+                cmd=f"/opt/sql-3.0.0/bin/sql-topics.sh {cmd_args} --list",
                 allow_fail=False,
                 combine_stderr=False)
-            self.logger.debug(f"kafka-topics: {topics}")
+            self.logger.debug(f"sql-topics: {topics}")
 
             brokers = self.nodes[0].account.ssh_output(
                 cmd=
-                f"/opt/kafka-3.0.0/bin/kafka-broker-api-versions.sh {cmd_args} | awk '/^[a-z]/ {{print $1}}'",
+                f"/opt/sql-3.0.0/bin/sql-broker-api-versions.sh {cmd_args} | awk '/^[a-z]/ {{print $1}}'",
                 allow_fail=False,
                 combine_stderr=False)
-            self.logger.debug(f"kafka-broker-api-versions: {brokers}")
+            self.logger.debug(f"sql-broker-api-versions: {brokers}")
 
             def sanitize(raw: bytes):
                 return filter(None, raw.decode('utf-8').split('\n'))
@@ -511,17 +511,17 @@ class KrbClient(Service):
             raise
 
 
-class RedpandaKerberosNode(RedpandaService):
+class FunesKerberosNode(FunesService):
     def __init__(
             self,
             context,
             kdc: KrbKdc,
             realm: str,
-            keytab_file=f"{RedpandaService.PERSISTENT_ROOT}/redpanda.keytab",
+            keytab_file=f"{FunesService.PERSISTENT_ROOT}/funes.keytab",
             krb5_conf_path=KRB5_CONF_PATH,
             *args,
             **kwargs):
-        super(RedpandaKerberosNode, self).__init__(context, *args, **kwargs)
+        super(FunesKerberosNode, self).__init__(context, *args, **kwargs)
         self.kdc = kdc
         self.realm = realm
         self.keytab_file = keytab_file
@@ -549,8 +549,8 @@ class RedpandaKerberosNode(RedpandaService):
                                              self.keytab_file, node)
         super().start_node(node, **kwargs)
 
-    def _service_principal(self, node, primary: str = "redpanda"):
-        fqdn = RedpandaService.get_node_fqdn(node)
+    def _service_principal(self, node, primary: str = "funes"):
+        fqdn = FunesService.get_node_fqdn(node)
         return f"{primary}/{fqdn}@{self.realm}"
 
 

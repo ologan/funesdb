@@ -16,8 +16,8 @@ class RollingRestarter:
     """
     Encapsulates the logic needed to perform a rolling restart.
     """
-    def __init__(self, redpanda):
-        self.redpanda = redpanda
+    def __init__(self, funes):
+        self.funes = funes
 
     def restart_nodes(self,
                       nodes,
@@ -31,15 +31,15 @@ class RollingRestarter:
         Performs a rolling restart on the given nodes, optionally overriding
         the given configs.
         """
-        admin = self.redpanda._admin
+        admin = self.funes._admin
         if start_timeout is None:
-            start_timeout = self.redpanda.node_ready_timeout_s
+            start_timeout = self.funes.node_ready_timeout_s
         if stop_timeout is None:
-            stop_timeout = self.redpanda.node_ready_timeout_s
+            stop_timeout = self.funes.node_ready_timeout_s
 
         def has_drained_leaders(node):
             try:
-                node_id = self.redpanda.node_id(node)
+                node_id = self.funes.node_id(node)
                 broker_resp = admin.get_broker(node_id, node=node)
                 maintenance_status = broker_resp["maintenance_status"]
                 return maintenance_status["draining"] and maintenance_status[
@@ -48,25 +48,25 @@ class RollingRestarter:
                 return False
 
         def wait_until_cluster_healthy(timeout_sec):
-            wait_until(lambda: self.redpanda.healthy(),
+            wait_until(lambda: self.funes.healthy(),
                        timeout_sec=stop_timeout,
                        backoff_sec=1)
             # Wait for the cluster to agree on a controller leader.
-            return self.redpanda.get_node_by_id(
+            return self.funes.get_node_by_id(
                 admin.await_stable_leader(
                     topic="controller",
                     partition=0,
-                    namespace="redpanda",
-                    hosts=[n.account.hostname for n in self.redpanda._started],
+                    namespace="funes",
+                    hosts=[n.account.hostname for n in self.funes._started],
                     timeout_s=timeout_sec,
                     backoff_s=1))
 
         # TODO: incorporate rack awareness into this to support updating
         # multiple nodes at a time.
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Rolling restart of nodes {[n.name for n in nodes]}")
         for node in nodes:
-            self.redpanda.logger.info(f"Waiting for cluster healthy")
+            self.funes.logger.info(f"Waiting for cluster healthy")
             controller_leader = wait_until_cluster_healthy(stop_timeout)
 
             # NOTE: callers may not want to use maintenance mode if the
@@ -81,23 +81,23 @@ class RollingRestarter:
                     err_msg=
                     "Timeout waiting for cluster to support 'maintenance_mode' feature"
                 )
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     f"Put node {node.name} into maintenance mode")
                 admin.maintenance_start(node, dst_node=controller_leader)
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     f"Waiting for node {node.name} leadership drain")
                 wait_until(lambda: has_drained_leaders(node),
                            timeout_sec=stop_timeout,
                            backoff_sec=1,
                            err_msg=f"Node {node.name} draining leaderships")
 
-            wait_until(lambda: self.redpanda.healthy(),
+            wait_until(lambda: self.funes.healthy(),
                        timeout_sec=stop_timeout,
                        backoff_sec=1)
 
-            self.redpanda.stop_node(node, timeout=stop_timeout)
+            self.funes.stop_node(node, timeout=stop_timeout)
 
-            self.redpanda.start_node(
+            self.funes.start_node(
                 node,
                 override_cfg_params,
                 timeout=start_timeout,

@@ -14,7 +14,7 @@ from ducktape.utils.util import wait_until
 from ducktape.errors import TimeoutError
 from rptest.clients.kubectl import KubectlTool
 from rptest.services import tc_netem
-from rptest.services.redpanda import RedpandaServiceCloud
+from rptest.services.funes import FunesServiceCloud
 
 
 class FailureSpec:
@@ -61,8 +61,8 @@ class FailureSpec:
 
 
 class FailureInjectorBase:
-    def __init__(self, redpanda):
-        self.redpanda = redpanda
+    def __init__(self, funes):
+        self.funes = funes
         self._in_flight = set()
 
     def __enter__(self):
@@ -73,21 +73,21 @@ class FailureInjectorBase:
 
     def inject_failure(self, spec):
         if spec in self._in_flight:
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f"Ignoring failure injection, already in flight {spec}")
             return
 
-        self.redpanda.logger.info(f"injecting failure: {spec}")
+        self.funes.logger.info(f"injecting failure: {spec}")
         try:
             self._start_func(spec.type)(spec.node)
         except Exception as e:
-            self.redpanda.logger.info(f"injecting failure error: {e}")
+            self.funes.logger.info(f"injecting failure error: {e}")
             if spec.type == FailureSpec.FAILURE_TERMINATE and isinstance(
                     e, TimeoutError):
-                # A timeout during termination indicates a shutdown hang in redpanda: this
+                # A timeout during termination indicates a shutdown hang in funes: this
                 # is a bug and we should fail the test on it.  Otherwise we'd leave the node
                 # in a weird state & get some non-obvious failure later in the test, such
-                # as https://github.com/redpanda-data/redpanda/issues/5178
+                # as https://github.com/redpanda-data/funes/issues/5178
                 raise
         finally:
             if spec.length is not None:
@@ -102,7 +102,7 @@ class FailureInjectorBase:
                         else:
                             # The stop timers may outlive the test, handle case
                             # where they run after we already had a heal_all call.
-                            self.redpanda.logger.warn(
+                            self.funes.logger.warn(
                                 f"Skipping failure stop action, already cleaned up?"
                             )
 
@@ -184,23 +184,23 @@ class FailureInjectorBase:
 
 
 class FailureInjector(FailureInjectorBase):
-    def __init__(self, redpanda):
-        super(FailureInjector, self).__init__(redpanda)
+    def __init__(self, funes):
+        super(FailureInjector, self).__init__(funes)
 
     def _kill(self, node):
-        self.redpanda.logger.info(
-            f"killing redpanda on {node.account.hostname}")
-        self.redpanda.signal_redpanda(node,
+        self.funes.logger.info(
+            f"killing funes on {node.account.hostname}")
+        self.funes.signal_funes(node,
                                       signal=signal.SIGKILL,
                                       idempotent=True)
         timeout_sec = 10
-        wait_until(lambda: self.redpanda.redpanda_pid(node) == None,
+        wait_until(lambda: self.funes.funes_pid(node) == None,
                    timeout_sec=timeout_sec,
-                   err_msg="Redpanda failed to kill in %d seconds" %
+                   err_msg="Funes failed to kill in %d seconds" %
                    timeout_sec)
 
     def _isolate(self, node):
-        self.redpanda.logger.info(f"isolating node {node.account.hostname}")
+        self.funes.logger.info(f"isolating node {node.account.hostname}")
 
         cmd = "iptables -A OUTPUT -p tcp --destination-port 33145 -j DROP"
         node.account.ssh(cmd)
@@ -208,26 +208,26 @@ class FailureInjector(FailureInjectorBase):
         node.account.ssh(cmd)
 
     def _heal(self, node):
-        self.redpanda.logger.info(f"healing node {node.account.hostname}")
+        self.funes.logger.info(f"healing node {node.account.hostname}")
         try:
             cmd = "iptables -D OUTPUT -p tcp --destination-port 33145 -j DROP"
             node.account.ssh(cmd)
         except Exception as e:
-            self.redpanda.logger.error(
+            self.funes.logger.error(
                 f"Failed to clean up OUTPUT rule on {node.name}: {e}")
 
         try:
             cmd = "iptables -D INPUT -p tcp --destination-port 33145 -j DROP"
             node.account.ssh(cmd)
         except Exception as e:
-            self.redpanda.logger.error(
+            self.funes.logger.error(
                 f"Failed to clean up INPUT rule on {node.name}: {e}")
 
     def _delete_netem(self, node):
         tc_netem.tc_netem_delete(node)
 
     def _heal_all(self):
-        self.redpanda.logger.info(f"healing all network failures")
+        self.funes.logger.info(f"healing all network failures")
 
         actions = [
             lambda n: n.account.ssh("iptables -P INPUT ACCEPT"),
@@ -238,50 +238,50 @@ class FailureInjector(FailureInjectorBase):
             lambda n: self._delete_netem(n)
         ]
 
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             for action in actions:
                 try:
                     action(n)
                 except Exception as e:
                     # Cleanups can fail, e.g. rule does not exist
-                    self.redpanda.logger.warn(f"_heal_all: {e}")
+                    self.funes.logger.warn(f"_heal_all: {e}")
 
         self._in_flight.clear()
 
     def _suspend(self, node):
-        self.redpanda.logger.info(
-            f"suspending redpanda on {node.account.hostname}")
-        self.redpanda.signal_redpanda(node, signal=signal.SIGSTOP)
+        self.funes.logger.info(
+            f"suspending funes on {node.account.hostname}")
+        self.funes.signal_funes(node, signal=signal.SIGSTOP)
 
     def _terminate(self, node):
-        self.redpanda.logger.info(
-            f"terminating redpanda on {node.account.hostname}")
-        self.redpanda.signal_redpanda(node, signal=signal.SIGTERM)
+        self.funes.logger.info(
+            f"terminating funes on {node.account.hostname}")
+        self.funes.signal_funes(node, signal=signal.SIGTERM)
         timeout_sec = 30
-        wait_until(lambda: self.redpanda.redpanda_pid(node) == None,
+        wait_until(lambda: self.funes.funes_pid(node) == None,
                    timeout_sec=timeout_sec,
-                   err_msg="Redpanda failed to terminate in %d seconds" %
+                   err_msg="Funes failed to terminate in %d seconds" %
                    timeout_sec)
 
     def _continue(self, node):
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"continuing execution on {node.account.hostname}")
-        self.redpanda.signal_redpanda(node, signal=signal.SIGCONT)
+        self.funes.signal_funes(node, signal=signal.SIGCONT)
 
     def _start(self, node):
         # make this idempotent
-        pid = self.redpanda.redpanda_pid(node)
+        pid = self.funes.funes_pid(node)
         if pid == None:
-            self.redpanda.logger.info(
-                f"starting redpanda on {node.account.hostname}")
-            self.redpanda.start_redpanda(node)
+            self.funes.logger.info(
+                f"starting funes on {node.account.hostname}")
+            self.funes.start_funes(node)
         else:
-            self.redpanda.logger.info(
-                f"skipping starting redpanda on {node.account.hostname}, already running with pid: {[pid]}"
+            self.funes.logger.info(
+                f"skipping starting funes on {node.account.hostname}, already running with pid: {[pid]}"
             )
 
     def _netem(self, node, op):
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"executing: '{op.get_command()}' on '{node.account.hostname}'")
         tc_netem.tc_netem_add(node=node, option=op)
 
@@ -308,25 +308,25 @@ class FailureInjector(FailureInjectorBase):
 
 
 class FailureInjectorCloud(FailureInjectorBase):
-    def __init__(self, redpanda):
-        super(FailureInjectorCloud, self).__init__(redpanda)
-        remote_uri = f'redpanda@{redpanda._cloud_cluster.cluster_id}-agent'
+    def __init__(self, funes):
+        super(FailureInjectorCloud, self).__init__(funes)
+        remote_uri = f'funes@{funes._cloud_cluster.cluster_id}-agent'
         self._kubectl = KubectlTool(
-            redpanda,
+            funes,
             remote_uri=remote_uri,
-            cluster_id=redpanda._cloud_cluster.cluster_id)
+            cluster_id=funes._cloud_cluster.cluster_id)
 
     def _isolate(self, node):
-        self.redpanda.logger.info(f'isolating node with privilaged pod')
+        self.funes.logger.info(f'isolating node with privilaged pod')
         cmd = 'apt update;apt install -y iptables;iptables -A OUTPUT -p tcp --destination-port 33145 -j DROP'
         self._kubectl.exec_privileged(cmd)
         cmd = 'apt update;apt install -y iptables;iptables -A INPUT -p tcp --destination-port 33145 -j DROP'
         self._kubectl.exec_privileged(cmd)
 
 
-def make_failure_injector(redpanda):
+def make_failure_injector(funes):
     """Factory function for instatiating the appropriate FailureInjector subclass."""
-    if RedpandaServiceCloud.GLOBAL_CLOUD_CLUSTER_CONFIG in redpanda.context.globals:
-        return FailureInjectorCloud(redpanda)
+    if FunesServiceCloud.GLOBAL_CLOUD_CLUSTER_CONFIG in funes.context.globals:
+        return FailureInjectorCloud(funes)
     else:
-        return FailureInjector(redpanda)
+        return FailureInjector(funes)

@@ -8,10 +8,10 @@
 # by the Apache License, Version 2.0
 
 import concurrent.futures
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierSeqConsumer
-from rptest.services.redpanda import SISettings, MetricsEndpoint, ResourceSettings
+from rptest.services.funes import SISettings, MetricsEndpoint, ResourceSettings
 from rptest.services.admin import Admin
 from rptest.clients.rpk import RpkTool
 from rptest.utils.si_utils import quiesce_uploads
@@ -21,7 +21,7 @@ from ducktape.mark import matrix
 import time
 
 
-class LogStorageTargetSizeTest(RedpandaTest):
+class LogStorageTargetSizeTest(FunesTest):
     segment_upload_interval = 30
     manifest_upload_interval = 10
     retention_local_trim_interval = 5
@@ -30,22 +30,22 @@ class LogStorageTargetSizeTest(RedpandaTest):
         super().__init__(test_context, *args, **kwargs)
 
     def setUp(self):
-        # defer redpanda startup to the test
+        # defer funes startup to the test
         pass
 
-    def _kafka_usage(self):
+    def _sql_usage(self):
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=len(self.redpanda.nodes)) as executor:
+                max_workers=len(self.funes.nodes)) as executor:
             return list(
                 executor.map(
-                    lambda n: self.redpanda.data_dir_usage("kafka", n),
-                    self.redpanda.nodes))
+                    lambda n: self.funes.data_dir_usage("sql", n),
+                    self.funes.nodes))
 
     @cluster(num_nodes=4)
     @matrix(log_segment_size=[1024 * 1024, 100 * 1024 * 1024],
             strict=[True, False])
     def size_within_target_threshold_test(self, log_segment_size, strict):
-        if self.redpanda.dedicated_nodes:
+        if self.funes.dedicated_nodes:
             partition_count = 64
             rate_limit_bps = int(120E6)
             target_size = 5 * 1024 * 1024 * 1024
@@ -84,7 +84,7 @@ class LogStorageTargetSizeTest(RedpandaTest):
         msg_count = data_size // msg_size
         topic_name = "log-storage-target-size-topic"
 
-        # configure and start redpanda
+        # configure and start funes
         extra_rp_conf = {
             'cloud_storage_segment_max_upload_interval_sec':
             self.segment_upload_interval,
@@ -110,22 +110,22 @@ class LogStorageTargetSizeTest(RedpandaTest):
         si_settings = SISettings(test_context=self.test_context,
                                  retention_local_strict=strict,
                                  log_segment_size=log_segment_size)
-        self.redpanda.set_extra_rp_conf(extra_rp_conf)
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start()
+        self.funes.set_extra_rp_conf(extra_rp_conf)
+        self.funes.set_si_settings(si_settings)
+        self.funes.start()
 
         # Sanity check test parameters against the nodes we are running on
         disk_space_required = data_size
-        assert self.redpanda.get_node_disk_free(
+        assert self.funes.get_node_disk_free(
         ) >= disk_space_required, f"Need at least {disk_space_required} bytes space"
 
         # create the target topic
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic_name, partitions=partition_count, replicas=3)
 
         # setup and start the background producer
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        topic_name,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -142,7 +142,7 @@ class LogStorageTargetSizeTest(RedpandaTest):
             return [convert(b) for b in bs]
 
         # while the producer is running, periodically wake up and go see if the
-        # kafka storage on every node is meeting the target, subject to the max
+        # sql storage on every node is meeting the target, subject to the max
         # overage fuzz factor.
         check_interval = 5
         last_report_time = 0
@@ -150,7 +150,7 @@ class LogStorageTargetSizeTest(RedpandaTest):
         while producer.produce_status.acked < msg_count:
             # calculate and report disk usage across nodes
             if time.time() - last_report_time >= check_interval:
-                totals = self._kafka_usage()
+                totals = self._sql_usage()
                 if not max_totals:
                     max_totals = totals
                 max_totals = [max(t, m) for t, m in zip(totals, max_totals)]

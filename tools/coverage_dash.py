@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 import logging
 
-KCLIENTS = ["FranzGo", "KafkaStreams", "Sarama"]
+KCLIENTS = ["FranzGo", "SQLStreams", "Sarama"]
 
 logger = logging.getLogger(__name__)
 logger_handler = logging.StreamHandler()
@@ -209,10 +209,10 @@ tr:nth-child(even) {
     html_template += f"""
 </table>
 <hr>
-<h3>Compatibility Results per Kafka Client</h3>
+<h3>Compatibility Results per SQL Client</h3>
 <table>
   <tr>
-    <th>Kafka Client</th>
+    <th>SQL Client</th>
     <th>Passes/Total</th>
   </tr>
     """
@@ -243,7 +243,7 @@ def main(args):
 
     logger.info("Getting profraw files ...")
     profraw_files = get_profraw_files(test_dir=duck_sess)
-    rp_binary = os.path.join(args.build_root, "debug/clang/bin/redpanda")
+    rp_binary = os.path.join(args.build_root, "debug/clang/bin/funes")
 
     # generate code coverage report for each ducktape test
     # and capture the totals
@@ -253,7 +253,7 @@ def main(args):
                               rp_binary=rp_binary,
                               ignore_regex=args.coverage_ignore_regex)
 
-    # check test status for the Kafka Clients we do compat testing on
+    # check test status for the SQL Clients we do compat testing on
     logger.info("Checking status of compat tests ...")
     compat_results = check_compat_tests(test_dir=duck_sess)
 
@@ -274,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument("--build-root",
                         type=str,
                         required=True,
-                        help="the path to redpanda/vbuild")
+                        help="the path to funes/vbuild")
     parser.add_argument("--ducktape-session",
                         type=str,
                         required=True,

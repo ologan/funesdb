@@ -45,7 +45,7 @@ class MirrorMaker2(Service):
 
     def start_cmd(self, node):
         cmd = f"export LOG_DIR={MirrorMaker2.LOG_DIR};"
-        cmd += f" export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:{MirrorMaker2.LOG4J_CONFIG}\";"
+        cmd += f" export SQL_LOG4J_OPTS=\"-Dlog4j.configuration=file:{MirrorMaker2.LOG4J_CONFIG}\";"
         cmd += self.path("connect-mirror-maker.sh")
         cmd += f" {MirrorMaker2.MM2_CONFIG}"
         cmd += f" 1>> {MirrorMaker2.LOG_FILE} 2>> {MirrorMaker2.LOG_FILE} &"
@@ -61,7 +61,7 @@ class MirrorMaker2(Service):
     def path(self, script):
 
         version = '3.0.0'
-        return "/opt/kafka-{}/bin/{}".format(version, script)
+        return "/opt/sql-{}/bin/{}".format(version, script)
 
     def start_node(self, node):
         node.account.ssh("mkdir -p %s" % MirrorMaker2.PERSISTENT_ROOT,
@@ -113,4 +113,4 @@ class MirrorMaker2(Service):
                          allow_fail=False)
 
     def java_class_name(self):
-        return "org.apache.kafka.connect.mirror.MirrorMaker"
+        return "org.apache.sql.connect.mirror.MirrorMaker"

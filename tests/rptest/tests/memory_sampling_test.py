@@ -9,7 +9,7 @@
 
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.mode_checks import skip_debug_mode
 
 BOOTSTRAP_CONFIG = {
@@ -17,7 +17,7 @@ BOOTSTRAP_CONFIG = {
 }
 
 
-class MemorySamplingTestTest(RedpandaTest):
+class MemorySamplingTestTest(FunesTest):
     def __init__(self, *args, **kwargs):
         rp_conf = BOOTSTRAP_CONFIG.copy()
 
@@ -25,7 +25,7 @@ class MemorySamplingTestTest(RedpandaTest):
                                                      extra_rp_conf=rp_conf,
                                                      **kwargs)
 
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     @cluster(num_nodes=1)
     @skip_debug_mode  # not using seastar allocator in debug
@@ -35,10 +35,10 @@ class MemorySamplingTestTest(RedpandaTest):
         with some profile data.
 
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         profile = admin.get_sampled_memory_profile()
 
-        num_shards = self.redpanda.shards()[1] + 1
+        num_shards = self.funes.shards()[1] + 1
         assert len(profile) == num_shards
         assert 'shard' in profile[0]
         assert 'allocation_sites' in profile[0]
@@ -55,7 +55,7 @@ class MemorySamplingTestTest(RedpandaTest):
         with some profile data with a shard parameter
 
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         profile = admin.get_sampled_memory_profile(shard=1)
 
         assert len(profile) == 1

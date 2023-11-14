@@ -14,16 +14,16 @@ from threading import Event
 
 
 class KafProducer(BackgroundThreadService):
-    def __init__(self, context, redpanda, topic, num_records=sys.maxsize):
+    def __init__(self, context, funes, topic, num_records=sys.maxsize):
         super(KafProducer, self).__init__(context, num_nodes=1)
-        self._redpanda = redpanda
+        self._funes = funes
         self._topic = topic
         self._num_records = num_records
         self._stopping = Event()
         self._output_line_count = 0
 
     def _worker(self, _idx, node):
-        cmd = f"echo $$ ; for (( i=0; i < {self._num_records}; i++ )) ; do export KEY=key-$(printf %08d $i) ; export VALUE={self.value_gen()} ; echo $VALUE | kaf produce -b {self._redpanda.brokers()} --key $KEY {self._topic} ; done"
+        cmd = f"echo $$ ; for (( i=0; i < {self._num_records}; i++ )) ; do export KEY=key-$(printf %08d $i) ; export VALUE={self.value_gen()} ; echo $VALUE | kaf produce -b {self._funes.brokers()} --key $KEY {self._topic} ; done"
 
         self._stopping.clear()
         self._pid = None
@@ -33,7 +33,7 @@ class KafProducer(BackgroundThreadService):
                 if self._pid is None:
                     # Take first line as pid
                     self._pid = line.strip()
-                    self._redpanda.logger.debug(
+                    self._funes.logger.debug(
                         f"Spawned remote shell {self._pid}")
                     continue
                 else:

@@ -37,11 +37,11 @@ type rpkVersion struct {
 	OsArch    string `json:"os_arch,omitempty" yaml:"os_arch,omitempty"`
 }
 
-type redpandaVersion struct {
+type funesVersion struct {
 	NodeID  int
 	Version string
 }
-type redpandaVersions []redpandaVersion
+type funesVersions []funesVersion
 
 func Pretty() string {
 	return fmt.Sprintf("%s (rev %s)", version, rev)
@@ -50,13 +50,13 @@ func Pretty() string {
 func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Prints the current rpk and Redpanda version",
-		Long: `Prints the current rpk and Redpanda version.
+		Short: "Prints the current rpk and Funes version",
+		Long: `Prints the current rpk and Funes version.
 
-This command prints the current rpk version and allows you to list the Redpanda 
+This command prints the current rpk version and allows you to list the Funes 
 version running on each node in your cluster.
 
-To list the Redpanda version of each node in your cluster you may pass the
+To list the Funes version of each node in your cluster you may pass the
 Admin API hosts via flags, profile, or environment variables.`,
 		Run: func(cmd *cobra.Command, _ []string) {
 			rv := rpkVersion{
@@ -67,7 +67,7 @@ Admin API hosts via flags, profile, or environment variables.`,
 				OsArch:    fmt.Sprintf("%s/%s", hostOs, hostArch),
 			}
 			printRpkVersion(rv)
-			var rows redpandaVersions
+			var rows funesVersions
 			defer printClusterVersions(&rows)
 
 			p, err := p.LoadVirtualProfile(fs)
@@ -87,7 +87,7 @@ Admin API hosts via flags, profile, or environment variables.`,
 			}
 			for _, b := range bs {
 				if b.IsAlive != nil {
-					rows = append(rows, redpandaVersion{b.NodeID, b.Version})
+					rows = append(rows, funesVersion{b.NodeID, b.Version})
 				}
 			}
 		},
@@ -104,9 +104,9 @@ Go version:  %s
 `, rv.Version, rv.GitRef, rv.BuildTime, rv.OsArch, rv.GoVersion)
 }
 
-func printClusterVersions(rpv *redpandaVersions) {
+func printClusterVersions(rpv *funesVersions) {
 	fmt.Println()
-	fmt.Println("Redpanda Cluster")
+	fmt.Println("Funes Cluster")
 	if len(*rpv) == 0 {
 		fmt.Println(`  Unreachable, to debug, use the '-v' flag. To get the broker versions, pass the
   hosts via flags, profile, or environment variables:

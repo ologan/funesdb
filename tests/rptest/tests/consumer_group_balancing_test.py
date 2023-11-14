@@ -11,9 +11,9 @@ from rptest.services.cluster import cluster
 
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
+from rptest.services.sql_cli_consumer import SQLCliConsumer
 from rptest.services.rpk_producer import RpkProducer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from ducktape.utils.util import wait_until
 from xxhash import xxh64
 import jump  # package jump-consistent-hash
@@ -23,7 +23,7 @@ cgroup_balancing_test_num_brokers = 3
 cgroup_balancing_test_num_groups = 3
 
 
-class ConsumerGroupBalancingTest(RedpandaTest):
+class ConsumerGroupBalancingTest(FunesTest):
     def __init__(self, test_ctx, *args, **kwargs):
         self._ctx = test_ctx
         self.producer = None
@@ -57,8 +57,8 @@ class ConsumerGroupBalancingTest(RedpandaTest):
                         group,
                         instance_id=None,
                         consumer_properties={}):
-        return KafkaCliConsumer(self.test_context,
-                                self.redpanda,
+        return SQLCliConsumer(self.test_context,
+                                self.funes,
                                 topic=topic,
                                 group=group,
                                 from_beginning=True,
@@ -80,7 +80,7 @@ class ConsumerGroupBalancingTest(RedpandaTest):
                              expected_state,
                              static_members,
                              group_members: int = 2):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         # validate group state
         rpk_group = rpk.group_describe(group)
 
@@ -99,7 +99,7 @@ class ConsumerGroupBalancingTest(RedpandaTest):
                                     replication_factor=3)
         self.client().create_topic(specs=self.topic_spec)
         # produce some messages to the topic
-        self.producer = RpkProducer(self._ctx, self.redpanda,
+        self.producer = RpkProducer(self._ctx, self.funes,
                                     self.topic_spec.name, 128, 5000, -1)
         self.producer.start()
 
@@ -111,7 +111,7 @@ class ConsumerGroupBalancingTest(RedpandaTest):
         """
         static_members = True
         self.logger.info(
-            f"brokers: {len(self.redpanda.cluster_spec)} / {len(self.cluster)}"
+            f"brokers: {len(self.funes.cluster_spec)} / {len(self.cluster)}"
         )
 
         # verify that the names of the groups used will map to different
@@ -169,7 +169,7 @@ class ConsumerGroupBalancingTest(RedpandaTest):
         self.producer.wait()
         self.producer.free()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         coord_groups = {}
         # find coordinator of each group
         for group in groups:
@@ -181,12 +181,12 @@ class ConsumerGroupBalancingTest(RedpandaTest):
         # model the ideal cgroup coordinators distribution
         coord_density = sorted(coord_groups.values(), reverse=True)
         expected_coord_density = [
-            ceil(len(groups) / len(self.redpanda.nodes))
-            for _ in range(len(groups) % len(self.redpanda.nodes))
+            ceil(len(groups) / len(self.funes.nodes))
+            for _ in range(len(groups) % len(self.funes.nodes))
         ] + [
-            floor(len(groups) / len(self.redpanda.nodes)) for _ in range(
+            floor(len(groups) / len(self.funes.nodes)) for _ in range(
                 len(groups) %
-                len(self.redpanda.nodes), len(self.redpanda.nodes))
+                len(self.funes.nodes), len(self.funes.nodes))
         ]
 
         # actual distribution must match the model
@@ -194,7 +194,7 @@ class ConsumerGroupBalancingTest(RedpandaTest):
             self.logger.error(
                 "Uneven distribution of group coordinators across nodes. "
                 f"coordinators of groups: {coord_groups}, "
-                f"groups: {len(groups)}, brokers: {len(self.redpanda.nodes)}, "
+                f"groups: {len(groups)}, brokers: {len(self.funes.nodes)}, "
                 f"coord_density: {coord_density}, expected_coord_density: {expected_coord_density}"
             )
             raise RuntimeError(

@@ -18,35 +18,35 @@ import time
 import random
 import socket
 
-from confluent_kafka.schema_registry import topic_subject_name_strategy, record_subject_name_strategy, topic_record_subject_name_strategy
-from confluent_kafka.serialization import (MessageField, SerializationContext)
+from confluent_sql.schema_registry import topic_subject_name_strategy, record_subject_name_strategy, topic_record_subject_name_strategy
+from confluent_sql.serialization import (MessageField, SerializationContext)
 from ducktape.mark import parametrize, matrix
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkException, RpkTool
 from rptest.clients.serde_client_utils import SchemaType, SerdeClientType
 from rptest.clients.types import TopicSpec
 from rptest.services import tls
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import DEFAULT_LOG_ALLOW_LIST, MetricsEndpoint, ResourceSettings, SecurityConfig, LoggingConfig, PandaproxyConfig, SchemaRegistryConfig
+from rptest.services.funes import DEFAULT_LOG_ALLOW_LIST, MetricsEndpoint, ResourceSettings, SecurityConfig, LoggingConfig, FunesproxyConfig, SchemaRegistryConfig
 from rptest.services.serde_client import SerdeClient
 from rptest.tests.cluster_config_test import wait_for_version_status_sync
-from rptest.tests.pandaproxy_test import User, PandaProxyTLSProvider
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funesproxy_test import User, FunesProxyTLSProvider
+from rptest.tests.funes_test import FunesTest
 from rptest.util import inject_remote_script, search_logs_with_timeout
 
 
 class SchemaIdValidationMode(str, Enum):
     NONE = "none"
-    REDPANDA = "redpanda"
+    FUNES = "funes"
     COMPAT = "compat"
 
 
 def create_topic_names(count):
-    return list(f"pandaproxy-topic-{uuid.uuid4()}" for _ in range(count))
+    return list(f"funesproxy-topic-{uuid.uuid4()}" for _ in range(count))
 
 
 def get_subject_name(sns: str, topic: str, field: MessageField,
@@ -100,14 +100,14 @@ message Test2 {
 log_config = LoggingConfig('info',
                            logger_levels={
                                'security': 'trace',
-                               'pandaproxy': 'trace',
-                               'kafka/client': 'trace'
+                               'funesproxy': 'trace',
+                               'sql/client': 'trace'
                            })
 
 
-class SchemaRegistryEndpoints(RedpandaTest):
+class SchemaRegistryEndpoints(FunesTest):
     """
-    Test schema registry against a redpanda cluster.
+    Test schema registry against a funes cluster.
     """
     def __init__(self,
                  context,
@@ -119,7 +119,7 @@ class SchemaRegistryEndpoints(RedpandaTest):
             extra_rp_conf={"auto_create_topics_enabled": False},
             resource_settings=ResourceSettings(num_cpus=1),
             log_config=log_config,
-            pandaproxy_config=PandaproxyConfig(),
+            funesproxy_config=FunesproxyConfig(),
             schema_registry_config=schema_registry_config,
             **kwargs)
 
@@ -143,7 +143,7 @@ class SchemaRegistryEndpoints(RedpandaTest):
         if hostname is None:
             # Pick hostname once: we will retry the same place we got an error,
             # to avoid silently skipping hosts that are persistently broken
-            nodes = [n for n in self.redpanda.nodes]
+            nodes = [n for n in self.funes.nodes]
             random.shuffle(nodes)
             node = nodes[0]
             hostname = node.account.hostname
@@ -187,12 +187,12 @@ class SchemaRegistryEndpoints(RedpandaTest):
         return r
 
     def _base_uri(self):
-        return f"http://{self.redpanda.nodes[0].account.hostname}:8081"
+        return f"http://{self.funes.nodes[0].account.hostname}:8081"
 
     def _get_rpk_tools(self):
-        sasl_enabled = self.redpanda.sasl_enabled()
-        cfg = self.redpanda.security_config() if sasl_enabled else {}
-        return RpkTool(self.redpanda,
+        sasl_enabled = self.funes.sasl_enabled()
+        cfg = self.funes.security_config() if sasl_enabled else {}
+        return RpkTool(self.funes,
                        username=cfg.get('sasl_plain_username'),
                        password=cfg.get('sasl_plain_password'),
                        sasl_mechanism=cfg.get('sasl_mechanism'))
@@ -207,12 +207,12 @@ class SchemaRegistryEndpoints(RedpandaTest):
             subject_name_strategy: Optional[str] = None,
             payload_class: Optional[str] = None,
             compression_type: Optional[TopicSpec.CompressionTypes] = None):
-        schema_reg = self.redpanda.schema_reg().split(',', 1)[0]
-        sasl_enabled = self.redpanda.sasl_enabled()
-        sec_cfg = self.redpanda.security_config() if sasl_enabled else None
+        schema_reg = self.funes.schema_reg().split(',', 1)[0]
+        sasl_enabled = self.funes.sasl_enabled()
+        sec_cfg = self.funes.security_config() if sasl_enabled else None
 
         return SerdeClient(self.test_context,
-                           self.redpanda.brokers(),
+                           self.funes.brokers(),
                            schema_reg,
                            schema_type,
                            client_type,
@@ -226,7 +226,7 @@ class SchemaRegistryEndpoints(RedpandaTest):
 
     def _get_topics(self):
         return requests.get(
-            f"http://{self.redpanda.nodes[0].account.hostname}:8082/topics")
+            f"http://{self.funes.nodes[0].account.hostname}:8082/topics")
 
     def _create_topic(self,
                       topic=create_topic_names(1),
@@ -455,7 +455,7 @@ class SchemaRegistryEndpoints(RedpandaTest):
 
 class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
     """
-    Base class for testing schema registry against a redpanda cluster.
+    Base class for testing schema registry against a funes cluster.
 
     Inherit from this to run the tests.
     """
@@ -1281,13 +1281,13 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
     @cluster(num_nodes=4)
     def test_concurrent_writes(self):
         # Warm up the servers (schema_registry doesn't create topic etc before first access)
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             r = self._request("GET",
                               "subjects",
                               hostname=node.account.hostname)
             assert r.status_code == requests.codes.ok
 
-        node_names = [n.account.hostname for n in self.redpanda.nodes]
+        node_names = [n.account.hostname for n in self.funes.nodes]
 
         # Expose into StressTest
         logger = self.logger
@@ -1430,9 +1430,9 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
 
         topic = f"serde-topic-{protocol.name}-{client_type.name}"
         self._create_topic(topic=topic)
-        schema_reg = self.redpanda.schema_reg().split(',', 1)[0]
+        schema_reg = self.funes.schema_reg().split(',', 1)[0]
         self.logger.info(
-            f"Connecting to redpanda: {self.redpanda.brokers()} schema_Reg: {schema_reg}"
+            f"Connecting to funes: {self.funes.brokers()} schema_Reg: {schema_reg}"
         )
         client = self._get_serde_client(protocol, client_type, topic, 2,
                                         skip_known_types)
@@ -1456,8 +1456,8 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             validate_schema_id=[True],
             subject_name_strategy=list(TopicSpec.SubjectNameStrategyCompat),
             payload_class=[
-                "com.redpanda.Payload", "com.redpanda.A.B.C.D.NestedPayload",
-                "com.redpanda.CompressiblePayload"
+                "com.funes.Payload", "com.funes.A.B.C.D.NestedPayload",
+                "com.funes.CompressiblePayload"
             ],
             compression_type=[
                 TopicSpec.CompressionTypes.NONE,
@@ -1470,9 +1470,9 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             skip_known_types: Optional[bool] = None,
             validate_schema_id: Optional[bool] = None,
             subject_name_strategy: Optional[str] = None,
-            payload_class: str = "com.redpanda.Payload",
+            payload_class: str = "com.funes.Payload",
             compression_type: Optional[TopicSpec.CompressionTypes] = None):
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {'enable_schema_id_validation': SchemaIdValidationMode.COMPAT})
 
         def get_next_strategy(subject_name_strategy):
@@ -1507,9 +1507,9 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                 TopicSpec.PROPERTY_COMPRESSSION:
                 TopicSpec.COMPRESSION_PRODUCER,
             })
-        schema_reg = self.redpanda.schema_reg().split(',', 1)[0]
+        schema_reg = self.funes.schema_reg().split(',', 1)[0]
         self.logger.info(
-            f"Connecting to redpanda: {self.redpanda.brokers()} schema_Reg: {schema_reg}"
+            f"Connecting to funes: {self.funes.brokers()} schema_Reg: {schema_reg}"
         )
 
         # Test against misconfigered strategy
@@ -1549,12 +1549,12 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
         self.logger.debug("Running client, expecting success")
         client.run()
 
-        batches_decompressed = self.redpanda.metric_sum(
+        batches_decompressed = self.funes.metric_sum(
             metric_name=
-            "vectorized_kafka_schema_id_cache_batches_decompressed_total",
+            "vectorized_sql_schema_id_cache_batches_decompressed_total",
             metrics_endpoint=MetricsEndpoint.METRICS)
 
-        if compression_type != TopicSpec.CompressionTypes.NONE and payload_class == "com.redpanda.CompressiblePayload":
+        if compression_type != TopicSpec.CompressionTypes.NONE and payload_class == "com.funes.CompressiblePayload":
             assert batches_decompressed > 0
         if compression_type == TopicSpec.CompressionTypes.NONE:
             assert batches_decompressed == 0
@@ -1565,7 +1565,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
     @parametrize(move_controller_leader=False)
     @parametrize(move_controller_leader=True)
     def test_restarts(self, move_controller_leader: bool):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def check_connection(hostname: str):
             result_raw = self._get_subjects(hostname=hostname)
@@ -1575,28 +1575,28 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             assert result_raw.json() == []
 
         def restart_leader():
-            leader = admin.get_partition_leader(namespace="kafka",
+            leader = admin.get_partition_leader(namespace="sql",
                                                 topic="_schemas",
                                                 partition=0)
 
             if move_controller_leader:
-                admin.partition_transfer_leadership(namespace="redpanda",
+                admin.partition_transfer_leadership(namespace="funes",
                                                     topic="controller",
                                                     partition=0)
             self.logger.info(f"Restarting node: {leader}")
-            self.redpanda.restart_nodes(self.redpanda.get_node(leader))
+            self.funes.restart_nodes(self.funes.get_node(leader))
             admin.await_stable_leader(topic="_schemas",
                                       partition=0,
-                                      namespace="kafka")
+                                      namespace="sql")
 
         for _ in range(20):
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 check_connection(n.account.hostname)
             restart_leader()
 
     @cluster(num_nodes=3)
     def test_move_leader(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def check_connection(hostname: str):
             result_raw = self._get_subjects(hostname=hostname)
@@ -1606,14 +1606,14 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             assert result_raw.json() == []
 
         def get_leader():
-            return admin.get_partition_leader(namespace="kafka",
+            return admin.get_partition_leader(namespace="sql",
                                               topic="_schemas",
                                               partition=0)
 
         def move_leader():
             leader = get_leader()
             self.logger.info(f"Transferring leadership from node: {leader}")
-            admin.partition_transfer_leadership(namespace="kafka",
+            admin.partition_transfer_leadership(namespace="sql",
                                                 topic="_schemas",
                                                 partition=0)
             wait_until(lambda: get_leader() != leader,
@@ -1622,7 +1622,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                        err_msg="Leadership did not stabilize")
 
         for _ in range(20):
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 check_connection(n.account.hostname)
             move_leader()
 
@@ -1697,7 +1697,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                 schema = json.loads(schemas[version - 1])
                 assert res["schema"] == schema["schema"]
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         num_subjects = 3
         subjects = {}
@@ -1726,7 +1726,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
 
         self.logger.debug("Restart the schema registry")
         result_raw = admin.restart_service(rp_service='schema-registry')
-        search_logs_with_timeout(self.redpanda,
+        search_logs_with_timeout(self.funes,
                                  "Restarting the schema registry")
         self.logger.debug(result_raw)
         assert result_raw.status_code == requests.codes.ok
@@ -1742,7 +1742,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
 
 class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
     """
-    Test schema registry against a redpanda cluster with HTTP Basic Auth enabled.
+    Test schema registry against a funes cluster with HTTP Basic Auth enabled.
     """
     username = 'red'
     password = 'panda'
@@ -1769,7 +1769,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
                                                    self.password))
         assert result_raw.json()['error_code'] == 40101
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug(f"Request schema types with default accept header")
         result_raw = self._get_schemas_types(auth=(super_username,
@@ -1783,7 +1783,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         """
         Verify schema versions
         """
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         topic = create_topic_names(1)[0]
         subject = f"{topic}-key"
@@ -1827,7 +1827,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
             auth=(self.username, self.password))
         assert result_raw.json()['error_code'] == 40101
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug("Posting schema 1 as a subject key")
         result_raw = self._post_subjects_subject_versions(
@@ -1891,7 +1891,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         topic = create_topic_names(1)[0]
         subject = f"{topic}-key"
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.info("Posting schema 1 as a subject key")
         result_raw = self._post_subjects_subject_versions(
@@ -1928,7 +1928,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         """
         Smoketest config endpoints
         """
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug("Get initial global config")
         result_raw = self._get_config(auth=(self.username, self.password))
@@ -2011,7 +2011,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         result_raw = self._get_mode(auth=(self.username, self.password))
         assert result_raw.json()['error_code'] == 40101
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug("Get initial global mode")
         result_raw = self._get_mode(auth=(super_username, super_password))
@@ -2028,7 +2028,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         self.logger.debug(f"Register a schema against a subject")
         schema_1_data = json.dumps({"schema": schema1_def})
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug("Posting schema 1 as a subject key")
         result_raw = self._post_subjects_subject_versions(
@@ -2072,7 +2072,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         self.logger.debug(f"Register a schema against a subject")
         schema_1_data = json.dumps({"schema": schema1_def})
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug("Posting schema 1 as a subject key")
         result_raw = self._post_subjects_subject_versions(
@@ -2117,7 +2117,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         self.logger.debug(f"Register a schema against a subject")
         schema_1_data = json.dumps({"schema": schema1_def})
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.debug("Posting schema 1 as a subject key")
         result_raw = self._post_subjects_subject_versions(
@@ -2170,7 +2170,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
         Verify basic protobuf functionality
         """
 
-        super_username, super_password, _ = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, _ = self.funes.SUPERUSER_CREDENTIALS
 
         self.logger.info("Posting failed schema should be 422")
         result_raw = self._post_subjects_subject_versions(
@@ -2249,7 +2249,7 @@ class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
 
 class SchemaRegistryTest(SchemaRegistryTestMethods):
     """
-    Test schema registry against a redpanda cluster without auth.
+    Test schema registry against a funes cluster without auth.
 
     This derived class inherits all the tests from SchemaRegistryTestMethods.
     """
@@ -2259,13 +2259,13 @@ class SchemaRegistryTest(SchemaRegistryTestMethods):
 
 class SchemaRegistryAutoAuthTest(SchemaRegistryTestMethods):
     """
-    Test schema registry against a redpanda cluster with Auto Auth enabled.
+    Test schema registry against a funes cluster with Auto Auth enabled.
 
     This derived class inherits all the tests from SchemaRegistryTestMethods.
     """
     def __init__(self, context):
         security = SecurityConfig()
-        security.kafka_enable_authorization = True
+        security.sql_enable_authorization = True
         security.endpoint_authn_method = 'sasl'
         security.auto_auth = True
 
@@ -2283,7 +2283,7 @@ class SchemaRegistryMTLSBase(SchemaRegistryEndpoints):
 
         self.security = SecurityConfig()
 
-        super_username, super_password, super_algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, super_algorithm = self.funes.SUPERUSER_CREDENTIALS
         self.admin_user = User(0)
         self.admin_user.username = super_username
         self.admin_user.password = super_password
@@ -2298,7 +2298,7 @@ class SchemaRegistryMTLSBase(SchemaRegistryEndpoints):
         self.security.principal_mapping_rules = 'RULE:.*CN=(.*).*/$1/'
 
         if basic_auth_enabled:
-            self.security.kafka_enable_authorization = True
+            self.security.sql_enable_authorization = True
             self.security.endpoint_authn_method = 'sasl'
             self.schema_registry_config.authn_method = 'http_basic'
         else:
@@ -2310,16 +2310,16 @@ class SchemaRegistryMTLSBase(SchemaRegistryEndpoints):
             common_name=self.admin_user.username,
             name='test_admin_client')
 
-        self.security.tls_provider = PandaProxyTLSProvider(tls_manager)
+        self.security.tls_provider = FunesProxyTLSProvider(tls_manager)
 
         self.schema_registry_config.client_key = self.admin_user.certificate.key
         self.schema_registry_config.client_crt = self.admin_user.certificate.crt
 
-        self.redpanda.set_security_settings(self.security)
-        self.redpanda.set_schema_registry_settings(self.schema_registry_config)
-        self.redpanda.start()
+        self.funes.set_security_settings(self.security)
+        self.funes.set_schema_registry_settings(self.schema_registry_config)
+        self.funes.start()
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         # Create the users
         admin.create_user(self.admin_user.username, self.admin_user.password,
@@ -2335,30 +2335,30 @@ class SchemaRegistryMTLSBase(SchemaRegistryEndpoints):
 
         # wait for users to propagate to nodes
         def auth_metadata_propagated():
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 users = admin.list_users(node=node)
                 if checkpoint_user not in users:
                     return False
                 elif self.security.sasl_enabled(
-                ) or self.security.kafka_enable_authorization:
+                ) or self.security.sql_enable_authorization:
                     assert self.admin_user.username in users
                     assert self.admin_user.username in users
             return True
 
         wait_until(auth_metadata_propagated, timeout_sec=10, backoff_sec=1)
 
-        # Create topic with rpk instead of KafkaCLITool because rpk is configured to use TLS certs
+        # Create topic with rpk instead of SQLCLITool because rpk is configured to use TLS certs
         self.super_client(basic_auth_enabled).create_topic(self.topic)
 
     def super_client(self, basic_auth_enabled: bool = False):
         if basic_auth_enabled:
-            return RpkTool(self.redpanda,
+            return RpkTool(self.funes,
                            username=self.admin_user.username,
                            password=self.admin_user.password,
                            sasl_mechanism=self.admin_user.algorithm,
                            tls_cert=self.admin_user.certificate)
         else:
-            return RpkTool(self.redpanda, tls_cert=self.admin_user.certificate)
+            return RpkTool(self.funes, tls_cert=self.admin_user.certificate)
 
 
 class SchemaRegistryMTLSTest(SchemaRegistryMTLSBase):
@@ -2401,19 +2401,19 @@ class SchemaRegistryMTLSAndBasicAuthTest(SchemaRegistryMTLSBase):
         assert set(result) == {"PROTOBUF", "AVRO"}
 
 
-class SchemaValidationEnableWithoutSchemaRegistry(RedpandaTest):
+class SchemaValidationEnableWithoutSchemaRegistry(FunesTest):
     def __init__(self, *args, **kwargs):
         super(SchemaValidationEnableWithoutSchemaRegistry,
               self).__init__(*args, schema_registry_config=None, **kwargs)
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
 
     @cluster(num_nodes=1)
-    @parametrize(mode=SchemaIdValidationMode.REDPANDA)
+    @parametrize(mode=SchemaIdValidationMode.FUNES)
     @parametrize(mode=SchemaIdValidationMode.COMPAT)
     def test_enable_schema_id_validation(self, mode):
         try:
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 {'enable_schema_id_validation': mode})
             assert False, "expected failure"
         except requests.exceptions.HTTPError as ex:
@@ -2421,10 +2421,10 @@ class SchemaValidationEnableWithoutSchemaRegistry(RedpandaTest):
             pass
 
 
-class SchemaValidationWithoutSchemaRegistry(RedpandaTest):
+class SchemaValidationWithoutSchemaRegistry(FunesTest):
     INVALID_CONFIG_LOG_ALLOW_LIST = DEFAULT_LOG_ALLOW_LIST + [
         re.compile(
-            r"enable_schema_id_validation requires schema_registry to be enabled in redpanda.yaml"
+            r"enable_schema_id_validation requires schema_registry to be enabled in funes.yaml"
         ),
     ]
 
@@ -2433,14 +2433,14 @@ class SchemaValidationWithoutSchemaRegistry(RedpandaTest):
               self).__init__(*args,
                              extra_rp_conf={
                                  'enable_schema_id_validation':
-                                 SchemaIdValidationMode.REDPANDA.value
+                                 SchemaIdValidationMode.FUNES.value
                              },
                              schema_registry_config=None,
                              **kwargs)
 
     @cluster(num_nodes=1, log_allow_list=INVALID_CONFIG_LOG_ALLOW_LIST)
     def test_disabled_schema_registry(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic = "no_schema_registry"
         rpk.create_topic(
             topic,
@@ -2454,13 +2454,13 @@ class SchemaValidationWithoutSchemaRegistry(RedpandaTest):
             print(e)
             assert "INVALID_RECORD" in e.stderr
 
-        wait_until(lambda: self.redpanda.search_log_all(
-            "enable_schema_id_validation requires schema_registry to be enabled in redpanda.yaml"
+        wait_until(lambda: self.funes.search_log_all(
+            "enable_schema_id_validation requires schema_registry to be enabled in funes.yaml"
         ),
                    timeout_sec=5)
 
 
-class SchemaValidationTopicPropertiesTest(RedpandaTest):
+class SchemaValidationTopicPropertiesTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super(SchemaValidationTopicPropertiesTest,
               self).__init__(*args,
@@ -2470,15 +2470,15 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
                              },
                              schema_registry_config=SchemaRegistryConfig(),
                              **kwargs)
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
 
     def _get_topic_properties(self, mode: Optional[SchemaIdValidationMode],
                               enable: Optional[bool],
                               strategy: TopicSpec.SubjectNameStrategy):
         enable_str = f"{enable}".lower()
         config = {}
-        if mode == SchemaIdValidationMode.REDPANDA:
+        if mode == SchemaIdValidationMode.FUNES:
             if enable is not None:
                 config.update({
                     TopicSpec.PROPERTY_RECORD_KEY_SCHEMA_ID_VALIDATION:
@@ -2519,14 +2519,14 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
         return config
 
     @cluster(num_nodes=1)
-    @parametrize(mode=SchemaIdValidationMode.REDPANDA)
+    @parametrize(mode=SchemaIdValidationMode.FUNES)
     @parametrize(mode=SchemaIdValidationMode.COMPAT)
     def test_schema_id_validation_disabled_config(self, mode):
         '''
         When the feature is disabled, the configs should not appear
         '''
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {'enable_schema_id_validation': SchemaIdValidationMode.NONE})
 
         topic = "default-topic"
@@ -2540,14 +2540,14 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
             assert k not in desc
 
     @cluster(num_nodes=1)
-    @parametrize(mode=SchemaIdValidationMode.REDPANDA)
+    @parametrize(mode=SchemaIdValidationMode.FUNES)
     @parametrize(mode=SchemaIdValidationMode.COMPAT)
     def test_schema_id_validation_active_config(self, mode):
         '''
         When the feature is active, the configs should be default
         '''
 
-        self.redpanda.set_cluster_config({'enable_schema_id_validation': mode})
+        self.funes.set_cluster_config({'enable_schema_id_validation': mode})
 
         topic = "default-topic"
         self.rpk.create_topic(topic)
@@ -2560,7 +2560,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
             assert desc[k] == (v, 'DEFAULT_CONFIG')
 
     @cluster(num_nodes=1)
-    @parametrize(mode=SchemaIdValidationMode.REDPANDA)
+    @parametrize(mode=SchemaIdValidationMode.FUNES)
     @parametrize(mode=SchemaIdValidationMode.COMPAT)
     def test_schema_id_validation_active_explicit_default_config(self, mode):
         '''
@@ -2568,7 +2568,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
         dynamic, so that tools with a reconcialiation loop aren't confused
         '''
 
-        self.redpanda.set_cluster_config({'enable_schema_id_validation': mode})
+        self.funes.set_cluster_config({'enable_schema_id_validation': mode})
 
         topic = "default-topic"
 
@@ -2582,7 +2582,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
             assert desc[k] == (v, 'DEFAULT_CONFIG')
 
     @cluster(num_nodes=1)
-    @parametrize(mode=SchemaIdValidationMode.REDPANDA)
+    @parametrize(mode=SchemaIdValidationMode.FUNES)
     @parametrize(mode=SchemaIdValidationMode.COMPAT)
     def test_schema_id_validation_active_nondefault_config(self, mode):
         '''
@@ -2590,7 +2590,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
         as dyamic
         '''
 
-        self.redpanda.set_cluster_config({'enable_schema_id_validation': mode})
+        self.funes.set_cluster_config({'enable_schema_id_validation': mode})
 
         topic = "default-topic"
 
@@ -2607,7 +2607,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
     @cluster(num_nodes=1)
     def test_schema_id_validation_create_collision(self):
         '''
-        Test creating a topic where Redpanda and compat modes are incompatible
+        Test creating a topic where Funes and compat modes are incompatible
         '''
 
         topic = "default-topic"
@@ -2627,7 +2627,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
     @cluster(num_nodes=1)
     def test_schema_id_validation_alter_collision(self):
         '''
-        Test altering a topic where Redpanda and compat modes are incompatible
+        Test altering a topic where Funes and compat modes are incompatible
         '''
 
         topic = "default-topic"
@@ -2647,7 +2647,7 @@ class SchemaValidationTopicPropertiesTest(RedpandaTest):
             pass
 
 
-class SchemaRegistryLicenseTest(RedpandaTest):
+class SchemaRegistryLicenseTest(FunesTest):
     LICENSE_CHECK_INTERVAL_SEC = 1
 
     def __init__(self, *args, **kwargs):
@@ -2659,21 +2659,21 @@ class SchemaRegistryLicenseTest(RedpandaTest):
                              },
                              schema_registry_config=SchemaRegistryConfig(),
                              **kwargs)
-        self.redpanda.set_environment({
-            '__REDPANDA_LICENSE_CHECK_INTERVAL_SEC':
+        self.funes.set_environment({
+            '__FUNES_LICENSE_CHECK_INTERVAL_SEC':
             f'{self.LICENSE_CHECK_INTERVAL_SEC}'
         })
 
     def _has_license_nag(self):
-        return self.redpanda.search_log_any("Enterprise feature(s).*")
+        return self.funes.search_log_any("Enterprise feature(s).*")
 
     def _license_nag_is_set(self):
-        return self.redpanda.search_log_all(
+        return self.funes.search_log_all(
             f"Overriding default license log annoy interval to: {self.LICENSE_CHECK_INTERVAL_SEC}s"
         )
 
     @cluster(num_nodes=3)
-    @parametrize(mode=SchemaIdValidationMode.REDPANDA)
+    @parametrize(mode=SchemaIdValidationMode.FUNES)
     @parametrize(mode=SchemaIdValidationMode.COMPAT)
     def test_license_nag(self, mode):
         wait_until(self._license_nag_is_set,
@@ -2685,7 +2685,7 @@ class SchemaRegistryLicenseTest(RedpandaTest):
         assert not self._has_license_nag()
 
         self.logger.debug("Setting cluster config")
-        self.redpanda.set_cluster_config({"enable_schema_id_validation": mode})
+        self.funes.set_cluster_config({"enable_schema_id_validation": mode})
 
         self.logger.debug("Waiting for license nag")
         wait_until(self._has_license_nag,

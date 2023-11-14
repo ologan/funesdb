@@ -17,7 +17,7 @@
 #include "model/tests/random_batch.h"
 #include "model/tests/randoms.h"
 #include "model/timeout_clock.h"
-#include "pandaproxy/schema_registry/types.h"
+#include "funesproxy/schema_registry/types.h"
 #include "random/generators.h"
 #include "storage/parser_utils.h"
 #include "storage/record_batch_builder.h"
@@ -35,7 +35,7 @@ namespace {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables,cert-err58-cpp)
 static ss::logger dummy_logger("wasm_test_logger");
 
-namespace ppsr = pandaproxy::schema_registry;
+namespace ppsr = funesproxy::schema_registry;
 
 } // namespace
 
@@ -201,7 +201,7 @@ model::record_batch WasmTestFixture::make_tiny_batch(iobuf record_value) {
     b.add_raw_kv(model::test::make_iobuf(), std::move(record_value));
     return std::move(b).build();
 }
-std::vector<pandaproxy::schema_registry::subject_schema>
+std::vector<funesproxy::schema_registry::subject_schema>
 WasmTestFixture::registered_schemas() const {
     return _sr->get_all();
 }

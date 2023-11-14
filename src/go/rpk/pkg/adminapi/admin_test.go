@@ -48,7 +48,7 @@ func TestAdminAPI(t *testing.T) {
 			leaderID: 0,
 			action:   func(t *testing.T, a *AdminAPI) error { return a.DeleteUser(context.Background(), "Milo") },
 			leader:   []string{"/v1/security/users/Milo"},
-			none:     []string{"/v1/partitions/redpanda/controller/0", "/v1/node_config"},
+			none:     []string{"/v1/partitions/funes/controller/0", "/v1/node_config"},
 		},
 		{
 			name:     "delete user in 3 node cluster",
@@ -56,7 +56,7 @@ func TestAdminAPI(t *testing.T) {
 			leaderID: 1,
 			action:   func(t *testing.T, a *AdminAPI) error { return a.DeleteUser(context.Background(), "Lola") },
 			all:      []string{"/v1/node_config"},
-			any:      []string{"/v1/partitions/redpanda/controller/0"},
+			any:      []string{"/v1/partitions/funes/controller/0"},
 			leader:   []string{"/v1/security/users/Lola"},
 		},
 		{
@@ -67,7 +67,7 @@ func TestAdminAPI(t *testing.T) {
 				return a.CreateUser(context.Background(), "Joss", "momorocks", ScramSha256)
 			},
 			all:    []string{"/v1/node_config"},
-			any:    []string{"/v1/partitions/redpanda/controller/0"},
+			any:    []string{"/v1/partitions/funes/controller/0"},
 			leader: []string{"/v1/security/users"},
 		},
 		{
@@ -86,7 +86,7 @@ func TestAdminAPI(t *testing.T) {
 				return nil
 			},
 			any:  []string{"/v1/security/users"},
-			none: []string{"/v1/partitions/redpanda/controller/0"},
+			none: []string{"/v1/partitions/funes/controller/0"},
 		},
 	}
 
@@ -146,7 +146,7 @@ func handlerForNode(
 		case strings.HasPrefix(r.URL.Path, "/v1/node_config"):
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(fmt.Sprintf(`{"node_id": %d}`, nodeID)))
-		case strings.HasPrefix(r.URL.Path, "/v1/partitions/redpanda/controller/0"):
+		case strings.HasPrefix(r.URL.Path, "/v1/partitions/funes/controller/0"):
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(fmt.Sprintf(`{"leader_id": %d}`, tt.leaderID)))
 		case strings.HasPrefix(r.URL.Path, "/v1/security/users"):

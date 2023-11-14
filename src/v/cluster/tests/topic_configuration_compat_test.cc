@@ -13,7 +13,7 @@
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "model/timestamp.h"
-#include "pandaproxy/schema_registry/subject_name_strategy.h"
+#include "funesproxy/schema_registry/subject_name_strategy.h"
 #include "reflection/adl.h"
 #include "test_utils/randoms.h"
 #include "test_utils/rpc.h"
@@ -47,9 +47,9 @@ struct topic_configuration {
       , replication_factor(rf) {}
 
     model::topic_namespace tp_ns;
-    // using signed integer because Kafka protocol defines it as signed int
+    // using signed integer because SQL protocol defines it as signed int
     int32_t partition_count;
-    // using signed integer because Kafka protocol defines it as signed int
+    // using signed integer because SQL protocol defines it as signed int
     int16_t replication_factor;
 
     topic_properties properties;
@@ -761,11 +761,11 @@ T make_incremental_topic_properties() {
         upd.record_key_schema_id_validation_compat.value = true;
         upd.record_key_subject_name_strategy.op
           = cluster::incremental_update_operation::set;
-        upd.record_key_subject_name_strategy.value = pandaproxy::
+        upd.record_key_subject_name_strategy.value = funesproxy::
           schema_registry::subject_name_strategy::topic_record_name;
         upd.record_key_subject_name_strategy_compat.op
           = cluster::incremental_update_operation::set;
-        upd.record_key_subject_name_strategy_compat.value = pandaproxy::
+        upd.record_key_subject_name_strategy_compat.value = funesproxy::
           schema_registry::subject_name_strategy::topic_record_name;
         upd.record_value_schema_id_validation.op
           = cluster::incremental_update_operation::set;
@@ -776,11 +776,11 @@ T make_incremental_topic_properties() {
         upd.record_value_subject_name_strategy.op
           = cluster::incremental_update_operation::set;
         upd.record_value_subject_name_strategy.value
-          = pandaproxy::schema_registry::subject_name_strategy::record_name;
+          = funesproxy::schema_registry::subject_name_strategy::record_name;
         upd.record_value_subject_name_strategy_compat.op
           = cluster::incremental_update_operation::set;
         upd.record_value_subject_name_strategy_compat.value
-          = pandaproxy::schema_registry::subject_name_strategy::record_name;
+          = funesproxy::schema_registry::subject_name_strategy::record_name;
     }
     if constexpr (std::is_same<T, old::incremental_topic_updates_1>::value) {
         upd.data_policy.op = cluster::incremental_update_operation::set;

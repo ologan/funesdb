@@ -8,7 +8,7 @@
 # by the Apache License, Version 2.0
 
 import random
-from rptest.services import redpanda
+from rptest.services import funes
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
@@ -41,14 +41,14 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
                 "group_topic_partitions": self.GROUP_TOPIC_PARTITIONS
             },
             # If set to trace, these tests produce 10s of GBs of logs
-            log_config=redpanda.LoggingConfig('info'),
+            log_config=funes.LoggingConfig('info'),
             *args,
             **kwargs)
 
     def _start_producer(self, topic_name, msg_cnt, msg_size):
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             msg_size,
             msg_cnt,
@@ -63,7 +63,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
 
         self.consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             msg_size,
             readers=consumers,
@@ -102,14 +102,14 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
         # Multiply default partition per shard limit by cores in system, subtract
         # a few to leave room for the consumer offsets etc partitions.
         return (
-            (1000 * self.redpanda.get_node_cpu_count() * node_count) // 3) - 32
+            (1000 * self.funes.get_node_cpu_count() * node_count) // 3) - 32
 
     @cluster(num_nodes=6)
     @parametrize(type=MANY_PARTITIONS)
     @parametrize(type=BIG_PARTITIONS)
     def test_partition_balancer_with_many_partitions(self, type):
         replication_factor = 3
-        if not self.redpanda.dedicated_nodes:
+        if not self.funes.dedicated_nodes:
             # Mini mode, for developers working on the test on their workstation.
             # (not for use in CI)
             message_size = 16384
@@ -123,7 +123,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
             message_cnt = 819200
             consumers = 8
             partitions_count = self._max_partition_count(
-                len(self.redpanda.nodes) - 1)
+                len(self.funes.nodes) - 1)
             timeout = 500
         else:
             message_size = 128 * (2**10)
@@ -148,10 +148,10 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
                                     backoff_sec=5)
 
         # stop one of the nodes to trigger partition balancer
-        stopped = random.choice(self.redpanda.nodes)
-        self.redpanda.stop_node(stopped)
+        stopped = random.choice(self.funes.nodes)
+        self.funes.stop_node(stopped)
 
-        stopped_id = self.redpanda.idx(stopped)
+        stopped_id = self.funes.idx(stopped)
 
         def stopped_node_is_empty():
             replicas = self.node_replicas([topic.name], stopped_id)
@@ -160,7 +160,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
             return len(replicas) == 0
 
         wait_until(stopped_node_is_empty, timeout, 5)
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def all_reconfigurations_done():
             ongoing = admin.list_reconfigurations()
@@ -179,7 +179,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
     @parametrize(type=BIG_PARTITIONS)
     def test_node_operations_at_scale(self, type):
         replication_factor = 3
-        if not self.redpanda.dedicated_nodes:
+        if not self.funes.dedicated_nodes:
             # Mini mode, for developers working on the test on their workstation.
             # (not for use in CI)
             message_size = 16384
@@ -195,7 +195,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
             # Subtract 1 from node count because will decommission one node & the partitions
             # must fit in the shrunk cluster
             partitions_count = self._max_partition_count(
-                len(self.redpanda.nodes) - 1)
+                len(self.funes.nodes) - 1)
             max_concurrent_moves = 400
             timeout = 500
         else:
@@ -209,7 +209,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
         self.logger.info(f"Running with {partitions_count} partitions")
 
         # set max number of concurrent moves
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"partition_autobalancing_concurrent_moves": max_concurrent_moves})
 
         topic = TopicSpec(partition_count=partitions_count,
@@ -228,7 +228,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
                                     timeout_sec=timeout,
                                     backoff_sec=5)
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         brokers = admin.get_brokers()
         # decommission one of the nodes
         decommissioned_id = random.choice(brokers)['node_id']
@@ -237,7 +237,7 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
         )
         admin.decommission_broker(decommissioned_id)
 
-        waiter = NodeDecommissionWaiter(self.redpanda,
+        waiter = NodeDecommissionWaiter(self.funes,
                                         decommissioned_id,
                                         self.logger,
                                         progress_timeout=timeout)
@@ -245,8 +245,8 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
 
         # restart node
         to_restart = None
-        for n in self.redpanda.nodes:
-            current_id = self.redpanda.node_id(n)
+        for n in self.funes.nodes:
+            current_id = self.funes.node_id(n)
             if current_id == decommissioned_id:
                 to_restart = n
                 break
@@ -256,22 +256,22 @@ class PartitionBalancerScaleTest(PreallocNodesTest, PartitionMovementMixin):
                 lambda n: {
                     "address": n.account.hostname,
                     "port": 33145
-                }, self.redpanda.nodes)
+                }, self.funes.nodes)
 
             return list(
                 filter(lambda n: n['address'] != node.account.hostname, seeds))
 
-        self.redpanda.stop_node(to_restart)
-        self.redpanda.clean_node(to_restart)
-        self.redpanda.start_node(to_restart,
+        self.funes.stop_node(to_restart)
+        self.funes.clean_node(to_restart)
+        self.funes.start_node(to_restart,
                                  override_cfg_params={
                                      "node_id": 10,
                                      "seed_servers":
                                      seed_servers_for(to_restart)
                                  })
-        new_node_id = self.redpanda.node_id(to_restart, force_refresh=True)
+        new_node_id = self.funes.node_id(to_restart, force_refresh=True)
         expected_per_node = (partitions_count + self.GROUP_TOPIC_PARTITIONS
-                             ) * replication_factor / len(self.redpanda.nodes)
+                             ) * replication_factor / len(self.funes.nodes)
 
         def partitions_moved_to_new_node():
             replicas = self.node_replicas([topic.name, "__consumer_offsets"],

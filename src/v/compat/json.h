@@ -345,8 +345,8 @@ rjson_serialize(json::Writer<json::StringBuffer>& w, const model::broker& b) {
     w.StartObject();
     w.Key("id");
     rjson_serialize(w, b.id());
-    w.Key("kafka_advertised_listeners");
-    rjson_serialize(w, b.kafka_advertised_listeners());
+    w.Key("sql_advertised_listeners");
+    rjson_serialize(w, b.sql_advertised_listeners());
     w.Key("rpc_address");
     rjson_serialize(w, b.rpc_address());
     w.Key("rack");
@@ -358,20 +358,20 @@ rjson_serialize(json::Writer<json::StringBuffer>& w, const model::broker& b) {
 
 inline void read_value(json::Value const& rd, model::broker& obj) {
     model::node_id id;
-    std::vector<model::broker_endpoint> kafka_advertised_listeners;
+    std::vector<model::broker_endpoint> sql_advertised_listeners;
     net::unresolved_address rpc_address;
     std::optional<model::rack_id> rack;
     model::broker_properties properties;
 
     read_member(rd, "id", id);
-    read_member(rd, "kafka_advertised_listeners", kafka_advertised_listeners);
+    read_member(rd, "sql_advertised_listeners", sql_advertised_listeners);
     read_member(rd, "rpc_address", rpc_address);
     read_member(rd, "rack", rack);
     read_member(rd, "properties", properties);
 
     obj = model::broker(
       id,
-      std::move(kafka_advertised_listeners),
+      std::move(sql_advertised_listeners),
       std::move(rpc_address),
       std::move(rack),
       std::move(properties));

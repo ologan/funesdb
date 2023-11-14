@@ -32,12 +32,12 @@ import (
 
 var (
 	tag               = "latest"
-	redpandaImageBase = "redpandadata/redpanda:" + tag
+	funesImageBase = "funesdata/funes:" + tag
 )
 
 const (
-	redpandaNetwork   = "redpanda"
-	externalKafkaPort = 9093
+	funesNetwork   = "funes"
+	externalSQLPort = 9093
 
 	defaultDockerClientTimeout = 60 * time.Second
 )
@@ -47,7 +47,7 @@ type NodeState struct {
 	Running        bool
 	ConfigFile     string
 	HostRPCPort    uint
-	HostKafkaPort  uint
+	HostSQLPort  uint
 	HostAdminPort  uint
 	HostProxyPort  uint
 	HostSchemaPort uint
@@ -78,7 +78,7 @@ func Name(nodeID uint) string {
 }
 
 func DefaultImage() string {
-	return redpandaImageBase
+	return funesImageBase
 }
 
 func DefaultCtx() (context.Context, context.CancelFunc) {
@@ -132,7 +132,7 @@ func GetState(c Client, nodeID uint) (*NodeState, error) {
 		return nil, fmt.Errorf("unable to inspect the container %v, please make sure you have Docker installed and running", Name(nodeID))
 	}
 	var ipAddress string
-	network, exists := containerJSON.NetworkSettings.Networks[redpandaNetwork]
+	network, exists := containerJSON.NetworkSettings.Networks[funesNetwork]
 	if exists {
 		if network.IPAMConfig != nil {
 			ipAddress = network.IPAMConfig.IPv4Address
@@ -142,14 +142,14 @@ func GetState(c Client, nodeID uint) (*NodeState, error) {
 	}
 
 	hostRPCPort, err := getHostPort(
-		config.DevDefault().Redpanda.RPCServer.Port,
+		config.DevDefault().Funes.RPCServer.Port,
 		containerJSON,
 	)
 	if err != nil {
 		return nil, err
 	}
-	hostKafkaPort, err := getHostPort(
-		externalKafkaPort,
+	hostSQLPort, err := getHostPort(
+		externalSQLPort,
 		containerJSON,
 	)
 	if err != nil {
@@ -181,7 +181,7 @@ func GetState(c Client, nodeID uint) (*NodeState, error) {
 		Status:         containerJSON.State.Status,
 		ContainerID:    containerJSON.ID,
 		ContainerIP:    ipAddress,
-		HostKafkaPort:  hostKafkaPort,
+		HostSQLPort:  hostSQLPort,
 		HostRPCPort:    hostRPCPort,
 		HostAdminPort:  hostAdminPort,
 		HostProxyPort:  hostProxyPort,
@@ -196,7 +196,7 @@ func CreateNetwork(c Client) (string, error) {
 	ctx, _ := DefaultCtx()
 
 	args := filters.NewArgs()
-	args.Add("name", redpandaNetwork)
+	args.Add("name", funesNetwork)
 	networks, err := c.NetworkList(
 		ctx,
 		types.NetworkListOptions{Filters: args},
@@ -206,14 +206,14 @@ func CreateNetwork(c Client) (string, error) {
 	}
 
 	for _, net := range networks {
-		if net.Name == redpandaNetwork {
+		if net.Name == funesNetwork {
 			return net.ID, nil
 		}
 	}
 
-	fmt.Printf("Creating network %s\n", redpandaNetwork)
+	fmt.Printf("Creating network %s\n", funesNetwork)
 	resp, err := c.NetworkCreate(
-		ctx, redpandaNetwork, types.NetworkCreate{
+		ctx, funesNetwork, types.NetworkCreate{
 			Driver: "bridge",
 			IPAM: &network.IPAM{
 				Driver: "default",
@@ -235,10 +235,10 @@ func CreateNetwork(c Client) (string, error) {
 	return resp.ID, nil
 }
 
-// Delete the Redpanda network if it exists.
+// Delete the Funes network if it exists.
 func RemoveNetwork(c Client) error {
 	ctx, _ := DefaultCtx()
-	err := c.NetworkRemove(ctx, redpandaNetwork)
+	err := c.NetworkRemove(ctx, funesNetwork)
 	if c.IsErrNotFound(err) {
 		return nil
 	}
@@ -247,20 +247,20 @@ func RemoveNetwork(c Client) error {
 
 func CreateNode(
 	c Client,
-	nodeID, kafkaPort, proxyPort, schemaRegPort, rpcPort, metricsPort uint,
+	nodeID, sqlPort, proxyPort, schemaRegPort, rpcPort, metricsPort uint,
 	netID, image string,
 	args ...string,
 ) (*NodeState, error) {
 	rPort, err := nat.NewPort(
 		"tcp",
-		strconv.Itoa(config.DevDefault().Redpanda.RPCServer.Port),
+		strconv.Itoa(config.DevDefault().Funes.RPCServer.Port),
 	)
 	if err != nil {
 		return nil, err
 	}
 	kPort, err := nat.NewPort(
 		"tcp",
-		strconv.Itoa(int(externalKafkaPort)),
+		strconv.Itoa(int(externalSQLPort)),
 	)
 	if err != nil {
 		return nil, err
@@ -292,24 +292,24 @@ func CreateNode(
 	}
 	hostname := Name(nodeID)
 	cmd := []string{
-		"redpanda",
+		"funes",
 		"start",
 		"--node-id",
 		fmt.Sprintf("%d", nodeID),
-		"--kafka-addr",
-		ListenAddresses(ip, config.DefaultKafkaPort, externalKafkaPort),
-		"--pandaproxy-addr",
+		"--sql-addr",
+		ListenAddresses(ip, config.DefaultSQLPort, externalSQLPort),
+		"--funesproxy-addr",
 		ListenAddresses(ip, config.DefaultProxyPort, proxyPort),
 		"--schema-registry-addr",
 		net.JoinHostPort(ip, strconv.Itoa(config.DefaultSchemaRegPort)),
 		"--rpc-addr",
-		net.JoinHostPort(ip, strconv.Itoa(config.DevDefault().Redpanda.RPCServer.Port)),
-		"--advertise-kafka-addr",
-		AdvertiseAddresses(ip, config.DefaultKafkaPort, kafkaPort),
-		"--advertise-pandaproxy-addr",
+		net.JoinHostPort(ip, strconv.Itoa(config.DevDefault().Funes.RPCServer.Port)),
+		"--advertise-sql-addr",
+		AdvertiseAddresses(ip, config.DefaultSQLPort, sqlPort),
+		"--advertise-funesproxy-addr",
 		AdvertiseAddresses(ip, config.DefaultProxyPort, proxyPort),
 		"--advertise-rpc-addr",
-		net.JoinHostPort(ip, strconv.Itoa(config.DevDefault().Redpanda.RPCServer.Port)),
+		net.JoinHostPort(ip, strconv.Itoa(config.DevDefault().Funes.RPCServer.Port)),
 		"--mode dev-container",
 	}
 	containerConfig := container.Config{
@@ -323,7 +323,7 @@ func CreateNode(
 			kPort: {},
 		},
 		Labels: map[string]string{
-			"cluster-id": "redpanda",
+			"cluster-id": "funes",
 			"node-id":    fmt.Sprint(nodeID),
 		},
 	}
@@ -333,7 +333,7 @@ func CreateNode(
 				HostPort: fmt.Sprint(rpcPort),
 			}},
 			kPort: []nat.PortBinding{{
-				HostPort: fmt.Sprint(kafkaPort),
+				HostPort: fmt.Sprint(sqlPort),
 			}},
 			pPort: []nat.PortBinding{{
 				HostPort: fmt.Sprint(proxyPort),
@@ -348,7 +348,7 @@ func CreateNode(
 	}
 	networkConfig := network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			redpandaNetwork: {
+			funesNetwork: {
 				IPAMConfig: &network.EndpointIPAMConfig{
 					IPv4Address: ip,
 				},
@@ -370,7 +370,7 @@ func CreateNode(
 		return nil, err
 	}
 	return &NodeState{
-		HostKafkaPort: kafkaPort,
+		HostSQLPort: sqlPort,
 		ID:            nodeID,
 		ContainerID:   container.ID,
 		ContainerIP:   ip,
@@ -480,7 +480,7 @@ func CreateProfile(fs afero.Fs, c Client, y *config.RpkYaml) error {
 		return fmt.Errorf("unable to get the existing nodes: %v", err)
 	}
 	for _, n := range existingNodes {
-		kaAddresses = append(kaAddresses, fmt.Sprintf("127.0.0.1:%d", n.HostKafkaPort))
+		kaAddresses = append(kaAddresses, fmt.Sprintf("127.0.0.1:%d", n.HostSQLPort))
 		aAddresses = append(aAddresses, fmt.Sprintf("127.0.0.1:%d", n.HostAdminPort))
 		srAddresses = append(srAddresses, fmt.Sprintf("127.0.0.1:%d", n.HostSchemaPort))
 	}
@@ -488,7 +488,7 @@ func CreateProfile(fs afero.Fs, c Client, y *config.RpkYaml) error {
 	profile := config.RpkProfile{
 		Name:        ContainerProfileName,
 		Description: "Automatically generated profile from 'rpk container start'",
-		KafkaAPI: config.RpkKafkaAPI{
+		SQLAPI: config.RpkSQLAPI{
 			Brokers: kaAddresses,
 		},
 		AdminAPI: config.RpkAdminAPI{

@@ -19,7 +19,7 @@ from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.clients.offline_log_viewer import OfflineLogViewer
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.util import (
     segments_count,
@@ -29,18 +29,18 @@ from rptest.util import (
 )
 from rptest.utils.si_utils import BucketView
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import SISettings, CloudStorageType, get_cloud_storage_type
+from rptest.services.funes import SISettings, CloudStorageType, get_cloud_storage_type
 from rptest.services.kgo_verifier_services import (
     KgoVerifierProducer,
     KgoVerifierSeqConsumer,
     KgoVerifierRandomConsumer,
     KgoVerifierConsumerGroupConsumer,
 )
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import InstallOptions, RedpandaInstaller, wait_for_num_versions
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_installer import InstallOptions, FunesInstaller, wait_for_num_versions
 
 
-class UpgradeFromSpecificVersion(RedpandaTest):
+class UpgradeFromSpecificVersion(FunesTest):
     """
     Basic test that upgrading software works as expected, upgrading from the last
     feature version to the HEAD version.
@@ -48,44 +48,44 @@ class UpgradeFromSpecificVersion(RedpandaTest):
     def __init__(self, test_context):
         super(UpgradeFromSpecificVersion,
               self).__init__(test_context=test_context, num_brokers=3)
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
 
     def setUp(self):
-        self.old_version = self.redpanda._installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
+        self.old_version = self.funes._installer.highest_from_prior_feature_version(
+            FunesInstaller.HEAD)
         self.old_version_str = f"v{self.old_version[0]}.{self.old_version[1]}.{self.old_version[2]}"
-        self.installer.install(self.redpanda.nodes, self.old_version)
+        self.installer.install(self.funes.nodes, self.old_version)
         super(UpgradeFromSpecificVersion, self).setUp()
 
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_basic_upgrade(self):
-        first_node = self.redpanda.nodes[0]
+        first_node = self.funes.nodes[0]
 
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert self.old_version_str in unique_versions, unique_versions
 
         # Upgrade one node to the head version.
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes([first_node])
-        unique_versions = wait_for_num_versions(self.redpanda, 2)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        self.funes.restart_nodes([first_node])
+        unique_versions = wait_for_num_versions(self.funes, 2)
         assert self.old_version_str in unique_versions, unique_versions
 
         # Rollback the partial upgrade and ensure we go back to the original
         # state.
         self.installer.install([first_node], self.old_version)
-        self.redpanda.restart_nodes([first_node])
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        self.funes.restart_nodes([first_node])
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert self.old_version_str in unique_versions, unique_versions
 
         # Only once we upgrade the rest of the nodes do we converge on the new
         # version.
-        self.installer.install([first_node], RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        self.installer.install([first_node], FunesInstaller.HEAD)
+        self.funes.restart_nodes(self.funes.nodes)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert self.old_version_str not in unique_versions, unique_versions
 
 
-class UpgradeFromPriorFeatureVersionTest(RedpandaTest):
+class UpgradeFromPriorFeatureVersionTest(FunesTest):
     """
     Basic test that installs the previous feature version and performs an
     upgrade.
@@ -93,28 +93,28 @@ class UpgradeFromPriorFeatureVersionTest(RedpandaTest):
     def __init__(self, test_context):
         super(UpgradeFromPriorFeatureVersionTest,
               self).__init__(test_context=test_context, num_brokers=1)
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
 
     def setUp(self):
         self.prev_version = \
-            self.installer.highest_from_prior_feature_version(RedpandaInstaller.HEAD)
-        self.installer.install(self.redpanda.nodes, self.prev_version)
+            self.installer.highest_from_prior_feature_version(FunesInstaller.HEAD)
+        self.installer.install(self.funes.nodes, self.prev_version)
         super(UpgradeFromPriorFeatureVersionTest, self).setUp()
 
     @cluster(num_nodes=1,
              log_allow_list=RESTART_LOG_ALLOW_LIST +
              [re.compile("cluster - .*Error while reconciling topic.*")])
     def test_basic_upgrade(self):
-        node = self.redpanda.nodes[0]
-        initial_version = Version(self.redpanda.get_version(node))
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
+        node = self.funes.nodes[0]
+        initial_version = Version(self.funes.get_version(node))
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
 
-        self.redpanda.restart_nodes([node])
-        head_version_str = self.redpanda.get_version(node)
+        self.funes.restart_nodes([node])
+        head_version_str = self.funes.get_version(node)
         head_version = Version(head_version_str)
         assert initial_version < head_version, f"{initial_version} vs {head_version}"
 
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert head_version_str in unique_versions, unique_versions
 
 
@@ -122,13 +122,13 @@ PREV_VERSION_LOG_ALLOW_LIST = [
     # e.g. cluster - controller_backend.cc:400 - Error while reconciling topics - seastar::abort_requested_exception (abort requested)
     "cluster - .*Error while reconciling topic.*",
     # Typo fixed in recent versions.
-    # e.g.  raft - [follower: {id: {1}, revision: {10}}] [group_id:3, {kafka/topic/2}] - recovery_stm.cc:422 - recovery append entries error: raft group does not exists on target broker
+    # e.g.  raft - [follower: {id: {1}, revision: {10}}] [group_id:3, {sql/topic/2}] - recovery_stm.cc:422 - recovery append entries error: raft group does not exists on target broker
     "raft - .*raft group does not exists on target broker",
     # e.g. rpc - Service handler thrown an exception - seastar::gate_closed_exception (gate closed)
-    "(kafka|rpc) - .*gate_closed_exception.*",
+    "(sql|rpc) - .*gate_closed_exception.*",
     # Tests on mixed versions will start out with an unclean restart before
     # starting a workload.
-    "(raft|kafka|rpc) - .*(disconnected_endpoint|Broken pipe|Connection reset by peer)",
+    "(raft|sql|rpc) - .*(disconnected_endpoint|Broken pipe|Connection reset by peer)",
 ]
 
 
@@ -156,27 +156,27 @@ class UpgradeBackToBackTest(PreallocNodesTest):
         super(UpgradeBackToBackTest, self).__init__(test_context,
                                                     num_brokers=3,
                                                     node_prealloc_count=1)
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
         self.versions = []
         self.current_version = None
 
-        self._producer = KgoVerifierProducer(test_context, self.redpanda,
+        self._producer = KgoVerifierProducer(test_context, self.funes,
                                              self.topic, self.MSG_SIZE,
                                              self.PRODUCE_COUNT,
                                              self.preallocated_nodes)
         self._seq_consumer = KgoVerifierSeqConsumer(
             test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             self.MSG_SIZE,
             nodes=self.preallocated_nodes)
         self._rand_consumer = KgoVerifierRandomConsumer(
-            test_context, self.redpanda, self.topic, self.MSG_SIZE,
+            test_context, self.funes, self.topic, self.MSG_SIZE,
             self.RANDOM_READ_COUNT, self.RANDOM_READ_PARALLEL,
             self.preallocated_nodes)
         self._cg_consumer = KgoVerifierConsumerGroupConsumer(
             test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             self.MSG_SIZE,
             self.CONSUMER_GROUP_READERS,
@@ -191,7 +191,7 @@ class UpgradeBackToBackTest(PreallocNodesTest):
         if single_upgrade:
             self.versions = [
                 self.installer.highest_from_prior_feature_version(
-                    RedpandaInstaller.HEAD), RedpandaInstaller.HEAD
+                    FunesInstaller.HEAD), FunesInstaller.HEAD
             ]
             return
 
@@ -201,7 +201,7 @@ class UpgradeBackToBackTest(PreallocNodesTest):
     def install_next(self):
         v = self.versions.pop(0)
         self.logger.info(f"Installing version {v}...")
-        self.installer.install(self.redpanda.nodes, v)
+        self.installer.install(self.funes.nodes, v)
         self.current_version = v
 
     def setUp(self):
@@ -249,8 +249,8 @@ class UpgradeBackToBackTest(PreallocNodesTest):
 
         # Validate that the data structures written by a mixture of historical
         # versions remain readable by our current debug tools
-        log_viewer = OfflineLogViewer(self.redpanda)
-        for node in self.redpanda.nodes:
+        log_viewer = OfflineLogViewer(self.funes)
+        for node in self.funes.nodes:
             controller_records = log_viewer.read_controller(node=node)
             self.logger.info(
                 f"Read {len(controller_records)} controller records from node {node.name} successfully"
@@ -271,12 +271,12 @@ class UpgradeWithWorkloadTest(EndToEndTest):
         self.producer_msgs_per_sec = 10
 
         # Start the prior feature version, we will upgrade to latest.
-        self.start_redpanda(
+        self.start_funes(
             num_nodes=3,
             install_opts=InstallOptions(install_previous_version=True))
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
         self.initial_version = self.installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
+            FunesInstaller.HEAD)
 
         # Start running a workload.
         spec = TopicSpec(name="topic", partition_count=2, replication_factor=3)
@@ -288,9 +288,9 @@ class UpgradeWithWorkloadTest(EndToEndTest):
 
     @cluster(num_nodes=5, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_rolling_upgrade(self):
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
         # Give ample time to restart, given the running workload.
-        self.redpanda.rolling_restart_nodes(self.redpanda.nodes,
+        self.funes.rolling_restart_nodes(self.funes.nodes,
                                             start_timeout=90,
                                             stop_timeout=90)
 
@@ -302,12 +302,12 @@ class UpgradeWithWorkloadTest(EndToEndTest):
     @parametrize(upgrade_after_rollback=True)
     @parametrize(upgrade_after_rollback=False)
     def test_rolling_upgrade_with_rollback(self, upgrade_after_rollback):
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
 
         # Upgrade one node.
-        first_node = self.redpanda.nodes[0]
+        first_node = self.funes.nodes[0]
         # Give ample time to restart, given the running workload.
-        self.redpanda.rolling_restart_nodes([first_node],
+        self.funes.rolling_restart_nodes([first_node],
                                             start_timeout=90,
                                             stop_timeout=90)
 
@@ -324,14 +324,14 @@ class UpgradeWithWorkloadTest(EndToEndTest):
 
         # Then roll it back; we should still be able to make progress.
         self.installer.install([first_node], self.initial_version)
-        self.redpanda.rolling_restart_nodes([first_node],
+        self.funes.rolling_restart_nodes([first_node],
                                             start_timeout=90,
                                             stop_timeout=90)
         await_progress()
 
         if upgrade_after_rollback:
-            self.installer.install([first_node], RedpandaInstaller.HEAD)
-            self.redpanda.rolling_restart_nodes(self.redpanda.nodes,
+            self.installer.install([first_node], FunesInstaller.HEAD)
+            self.funes.rolling_restart_nodes(self.funes.nodes,
                                                 start_timeout=90,
                                                 stop_timeout=90)
 
@@ -341,7 +341,7 @@ class UpgradeWithWorkloadTest(EndToEndTest):
                             enable_idempotence=True)
 
 
-class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
+class UpgradeFromPriorFeatureVersionCloudStorageTest(FunesTest):
     """
     Check that a mixed-version cluster does not run into issues with
     an older node trying to read cloud storage data from a newer node.
@@ -361,10 +361,10 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
                 # with the leader balancer
                 "enable_leader_balancer": False,
             })
-        self.installer = self.redpanda._installer
-        self.rpk = RpkTool(self.redpanda)
+        self.installer = self.funes._installer
+        self.rpk = RpkTool(self.funes)
 
-    # This test starts the Redpanda service inline (see 'install_and_start') at the beginning
+    # This test starts the Funes service inline (see 'install_and_start') at the beginning
     # of the test body. By default, in the Azure CDT env, the service startup
     # logic attempts to set the azure specific cluster configs.
     # However, these did not exist prior to v23.1 and the test would fail
@@ -374,8 +374,8 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
 
     def install_and_start(self):
         self.prev_version = \
-            self.installer.highest_from_prior_feature_version(RedpandaInstaller.HEAD)
-        self.installer.install(self.redpanda.nodes, self.prev_version)
+            self.installer.highest_from_prior_feature_version(FunesInstaller.HEAD)
+        self.installer.install(self.funes.nodes, self.prev_version)
         super().setUp()
 
     @cluster(num_nodes=4, log_allow_list=RESTART_LOG_ALLOW_LIST)
@@ -392,9 +392,9 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
         self.install_and_start()
 
         initial_version = Version(
-            self.redpanda.get_version(self.redpanda.nodes[0]))
+            self.funes.get_version(self.funes.nodes[0]))
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         segment_bytes = 512 * 1024
         local_retention_bytes = 2 * 512 * 1024
@@ -405,7 +405,7 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
         }
 
         if initial_version < Version("22.3.0"):
-            # We are starting with Redpanda <=22.2, so much use old style declaration of local retention
+            # We are starting with Funes <=22.2, so much use old style declaration of local retention
             topic_config['retention.bytes'] = topic_config[
                 'retention.local.target.bytes']
             del topic_config['retention.local.target.bytes']
@@ -426,7 +426,7 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
 
         def produce(partition, n_records):
             producer = KgoVerifierProducer(self.test_context,
-                                           self.redpanda,
+                                           self.funes,
                                            topic,
                                            record_size,
                                            n_records,
@@ -450,21 +450,21 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
             produce(p, n_records)
 
         # Wait for archiver to upload to S3
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         topic,
                                         target_bytes=local_retention_bytes +
                                         segment_bytes,
                                         timeout_sec=60)
 
         # Restart 2/3 nodes, leave last node on old version
-        new_version_nodes = self.redpanda.nodes[:-1]
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        self.redpanda.rolling_restart_nodes(new_version_nodes,
+        new_version_nodes = self.funes.nodes[:-1]
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        self.funes.rolling_restart_nodes(new_version_nodes,
                                             start_timeout=90,
                                             stop_timeout=90)
 
-        new_version_node = self.redpanda.nodes[0]
-        old_node = self.redpanda.nodes[-1]
+        new_version_node = self.funes.nodes[0]
+        old_node = self.funes.nodes[-1]
 
         # Verify all data readable
         verify()
@@ -476,10 +476,10 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
         # node yet, so just transfer one there.
 
         admin.transfer_leadership_to(
-            namespace="kafka",
+            namespace="sql",
             topic=topic,
             partition=newdata_p,
-            target_id=self.redpanda.idx(new_version_node))
+            target_id=self.funes.idx(new_version_node))
 
         # Create some new segments in S3 from a new-version node: later we will
         # cause the old node to try and read them to check that compatibility.
@@ -512,8 +512,8 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
             # nodes not to be able to trim their local logs.
             time.sleep(10)
 
-            storage = self.redpanda.storage()
-            topic_partitions = storage.partitions("kafka", topic)
+            storage = self.funes.storage()
+            topic_partitions = storage.partitions("sql", topic)
             for p in topic_partitions:
                 if p.num != newdata_p:
                     # We are only checking our test NTP
@@ -527,23 +527,23 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
             # In the general case, S3 PUTs are permitted during upgrade, so we should
             # see local storage getting truncated
             wait_for_local_storage_truncate(
-                self.redpanda,
+                self.funes,
                 topic,
                 partition_idx=newdata_p,
                 target_bytes=local_retention_bytes + segment_bytes,
                 timeout_sec=60)
 
         # capture the cloud storage state to run a progress check later
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
         manifest_mid_upgrade = bucket_view.manifest_for_ntp(
             topic=topic, partition=newdata_p)
 
         # Move leadership to the old version node and check the partition is readable
         # from there.
-        admin.transfer_leadership_to(namespace="kafka",
+        admin.transfer_leadership_to(namespace="sql",
                                      topic=topic,
                                      partition=newdata_p,
-                                     target_id=self.redpanda.idx(old_node))
+                                     target_id=self.funes.idx(old_node))
 
         produce(newdata_p, 10)
 
@@ -551,11 +551,11 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
         verify()
 
         # Finish the upgrade
-        self.redpanda.rolling_restart_nodes([self.redpanda.nodes[-1]],
+        self.funes.rolling_restart_nodes([self.funes.nodes[-1]],
                                             start_timeout=90,
                                             stop_timeout=90)
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
-        head_version_str = self.redpanda.get_version(self.redpanda.nodes[0])
+        unique_versions = wait_for_num_versions(self.funes, 1)
+        head_version_str = self.funes.get_version(self.funes.nodes[0])
         head_version = Version(head_version_str)
         assert initial_version < head_version, f"{initial_version} vs {head_version}"
         assert head_version_str in unique_versions, unique_versions
@@ -563,7 +563,7 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
         # Verify all data readable
         verify()
 
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         topic,
                                         partition_idx=newdata_p,
                                         target_bytes=local_retention_bytes +
@@ -588,53 +588,53 @@ class UpgradeFromPriorFeatureVersionCloudStorageTest(RedpandaTest):
         # Check that spillover commands applied cleanly. If they did not, it's an
         # indication that the upgrade has led to inconsistent state accross
         # archival STMs on different nodes.
-        assert self.redpanda.search_log_any(
+        assert self.funes.search_log_any(
             "Can't apply spillover_cmd") is False
 
 
-class RedpandaInstallerTest(RedpandaTest):
+class FunesInstallerTest(FunesTest):
     def setUp(self):
         super().setUp()
         # ensure that _installer._head_version is set
-        self.redpanda._installer.start()
+        self.funes._installer.start()
 
     @cluster(num_nodes=1)
     def test_install_by_line(self):
         """
-        Smoke test that checks RedpandaInstaller.install
+        Smoke test that checks FunesInstaller.install
         this isn't actually doing upgrades in the traditional sense,
         instead is intentionally wiping and restarting the cluster with new binaries
         """
 
         # base step, exercise edge case of asking to install a release that is actually HEAD
-        head_version, head_version_str = self.redpanda._installer.install(
-            self.redpanda.nodes,
-            version=self.redpanda._installer._head_version[0:2])
+        head_version, head_version_str = self.funes._installer.install(
+            self.funes.nodes,
+            version=self.funes._installer._head_version[0:2])
         self.logger.info(f"base step: install(HEAD) -> {head_version_str}")
-        self.redpanda.start(clean_nodes=True)
-        reported_version = self.redpanda.get_version(self.redpanda.nodes[0])
+        self.funes.start(clean_nodes=True)
+        reported_version = self.funes.get_version(self.funes.nodes[0])
         assert reported_version == head_version_str, \
             f"installed a different version {reported_version} than advertised {head_version_str}"
 
         # loop: run down the versions and check them
-        version = self.redpanda._installer.highest_from_prior_feature_version(
+        version = self.funes._installer.highest_from_prior_feature_version(
             head_version)
         limit = 3
         while limit > 0 and version:
             # ask to install a line and check that latest is installed
             line = version[0:2]
-            installed_version, installed_version_str = self.redpanda._installer.install(
-                self.redpanda.nodes, line)
+            installed_version, installed_version_str = self.funes._installer.install(
+                self.funes.nodes, line)
             self.logger.info(f"install {installed_version_str} from {line=}")
             assert version == installed_version, \
                 f"highest feature version {version} and latest in line version {installed_version} do not match"
 
-            self.redpanda.start(clean_nodes=True)
-            reported_version = self.redpanda.get_version(
-                self.redpanda.nodes[0])
+            self.funes.start(clean_nodes=True)
+            reported_version = self.funes.get_version(
+                self.funes.nodes[0])
             assert reported_version == installed_version_str, \
                 f"installed a different version {reported_version} than advertised {installed_version_str}"
 
-            version = self.redpanda._installer.highest_from_prior_feature_version(
+            version = self.funes._installer.highest_from_prior_feature_version(
                 version)
             limit = limit - 1

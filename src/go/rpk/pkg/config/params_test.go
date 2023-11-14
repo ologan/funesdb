@@ -11,23 +11,23 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func TestParams_RedpandaYamlWrite(t *testing.T) {
+func TestParams_FunesYamlWrite(t *testing.T) {
 	tests := []struct {
 		name   string
 		inCfg  string
-		mutate func(*RedpandaYaml)
+		mutate func(*FunesYaml)
 		exp    string
 		expErr bool
 	}{
 		{
 			name: "create default config file if there is no config file yet",
-			exp: `redpanda:
-    data_directory: /var/lib/redpanda/data
+			exp: `funes:
+    data_directory: /var/lib/funes/data
     seed_servers: []
     rpc_server:
         address: 0.0.0.0
         port: 33145
-    kafka_api:
+    sql_api:
         - address: 0.0.0.0
           port: 9092
     admin:
@@ -35,7 +35,7 @@ func TestParams_RedpandaYamlWrite(t *testing.T) {
           port: 9644
     developer_mode: true
 rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 127.0.0.1:9092
     admin_api:
@@ -45,16 +45,16 @@ rpk:
 		},
 		{
 			name: "write loaded config",
-			inCfg: `redpanda:
+			inCfg: `funes:
     data_directory: ""
     node_id: 1
     rack: my_rack
 `,
-			mutate: func(c *RedpandaYaml) {
-				c.Redpanda.ID = new(int)
-				*c.Redpanda.ID = 6
+			mutate: func(c *FunesYaml) {
+				c.Funes.ID = new(int)
+				*c.Funes.ID = 6
 			},
-			exp: `redpanda:
+			exp: `funes:
     node_id: 6
     rack: my_rack
 `,
@@ -67,11 +67,11 @@ rpk:
         cert_file: ""
         key_file: ""
 `,
-			mutate: func(c *RedpandaYaml) {
-				c.Rpk.KafkaAPI.Brokers = []string{"127.0.1.1:9647"}
+			mutate: func(c *FunesYaml) {
+				c.Rpk.SQLAPI.Brokers = []string{"127.0.1.1:9647"}
 			},
 			exp: `rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 127.0.1.1:9647
         tls: {}
@@ -87,11 +87,11 @@ rpk:
             - 10.0.0.1:4444
             - 122.65.33.12:4444
 `,
-			mutate: func(c *RedpandaYaml) {
-				c.Rpk.KafkaAPI.Brokers = []string{"127.0.1.1:9647"}
+			mutate: func(c *FunesYaml) {
+				c.Rpk.SQLAPI.Brokers = []string{"127.0.1.1:9647"}
 			},
 			exp: `rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 127.0.1.1:9647
     admin_api:
@@ -104,9 +104,9 @@ rpk:
 		},
 		{
 			name: "don't rewrite if the content didn't changed",
-			inCfg: `redpanda:
+			inCfg: `funes:
     seed_servers: []
-    data_directory: /var/lib/redpanda/data
+    data_directory: /var/lib/funes/data
     rpc_server:
         port: 33145
         address: 0.0.0.0
@@ -114,13 +114,13 @@ rpk:
     admin_api:
          addresses:
              - 127.0.0.1:9644
-    kafka_api:
+    sql_api:
          brokers:
              - 127.0.0.1:9092
 `,
-			exp: `redpanda:
+			exp: `funes:
     seed_servers: []
-    data_directory: /var/lib/redpanda/data
+    data_directory: /var/lib/funes/data
     rpc_server:
         port: 33145
         address: 0.0.0.0
@@ -128,19 +128,19 @@ rpk:
     admin_api:
          addresses:
              - 127.0.0.1:9644
-    kafka_api:
+    sql_api:
          brokers:
              - 127.0.0.1:9092
 `,
 		},
 		{
 			name: "rewrite if the content didn't changed but seed_server was using the old version",
-			inCfg: `redpanda:
+			inCfg: `funes:
     seed_servers:
       - host:
         address: 0.0.0.0
         port: 33145
-    data_directory: /var/lib/redpanda/data
+    data_directory: /var/lib/funes/data
     rpc_server:
         port: 33145
         address: 0.0.0.0
@@ -148,12 +148,12 @@ rpk:
     admin_api:
          addresses:
              - 127.0.0.1:9644
-    kafka_api:
+    sql_api:
          brokers:
              - 127.0.0.1:9092
 `,
-			exp: `redpanda:
-    data_directory: /var/lib/redpanda/data
+			exp: `funes:
+    data_directory: /var/lib/funes/data
     seed_servers:
         - host:
             address: 0.0.0.0
@@ -162,7 +162,7 @@ rpk:
         address: 0.0.0.0
         port: 33145
 rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 127.0.0.1:9092
     admin_api:
@@ -176,7 +176,7 @@ rpk:
 			fs := afero.NewMemMapFs()
 			if test.inCfg != "" {
 				// We assume for this test that all files will be in the default location.
-				err := afero.WriteFile(fs, "/etc/redpanda/redpanda.yaml", []byte(test.inCfg), 0o644)
+				err := afero.WriteFile(fs, "/etc/funes/funes.yaml", []byte(test.inCfg), 0o644)
 				if err != nil {
 					t.Errorf("unexpected error while writing initial config file: %s", err)
 					return
@@ -187,7 +187,7 @@ rpk:
 				t.Errorf("unexpected error while loading config file: %s", err)
 				return
 			}
-			y := cfg.VirtualRedpandaYaml()
+			y := cfg.VirtualFunesYaml()
 
 			if test.mutate != nil {
 				test.mutate(y)
@@ -215,23 +215,23 @@ rpk:
 	}
 }
 
-func TestRedpandaSampleFile(t *testing.T) {
-	// Config from 'redpanda/conf/redpanda.yaml'.
-	sample, err := os.ReadFile("../../../../../conf/redpanda.yaml")
+func TestFunesSampleFile(t *testing.T) {
+	// Config from 'funes/conf/funes.yaml'.
+	sample, err := os.ReadFile("../../../../../conf/funes.yaml")
 	if err != nil {
 		t.Errorf("unexpected error while reading sample config file: %s", err)
 		return
 	}
 	fs := afero.NewMemMapFs()
-	err = afero.WriteFile(fs, "/etc/redpanda/redpanda.yaml", sample, 0o644)
+	err = afero.WriteFile(fs, "/etc/funes/funes.yaml", sample, 0o644)
 	if err != nil {
 		t.Errorf("unexpected error while writing sample config file: %s", err)
 		return
 	}
-	expCfg := &RedpandaYaml{
-		fileLocation: "/etc/redpanda/redpanda.yaml",
-		Redpanda: RedpandaNodeConfig{
-			Directory: "/var/lib/redpanda/data",
+	expCfg := &FunesYaml{
+		fileLocation: "/etc/funes/funes.yaml",
+		Funes: FunesNodeConfig{
+			Directory: "/var/lib/funes/data",
 			RPCServer: SocketAddress{
 				Address: "0.0.0.0",
 				Port:    33145,
@@ -240,11 +240,11 @@ func TestRedpandaSampleFile(t *testing.T) {
 				Address: "127.0.0.1",
 				Port:    33145,
 			},
-			KafkaAPI: []NamedAuthNSocketAddress{{
+			SQLAPI: []NamedAuthNSocketAddress{{
 				Address: "0.0.0.0",
 				Port:    9092,
 			}},
-			AdvertisedKafkaAPI: []NamedSocketAddress{{
+			AdvertisedSQLAPI: []NamedSocketAddress{{
 				Address: "127.0.0.1",
 				Port:    9092,
 			}},
@@ -258,10 +258,10 @@ func TestRedpandaSampleFile(t *testing.T) {
 		},
 		Rpk: RpkNodeConfig{
 			Tuners: RpkNodeTuners{
-				CoredumpDir: "/var/lib/redpanda/coredump",
+				CoredumpDir: "/var/lib/funes/coredump",
 			},
 		},
-		Pandaproxy:     &Pandaproxy{},
+		Funesproxy:     &Funesproxy{},
 		SchemaRegistry: &SchemaRegistry{},
 	}
 	// Load and check we load it correctly
@@ -270,7 +270,7 @@ func TestRedpandaSampleFile(t *testing.T) {
 		t.Errorf("unexpected error while loading sample config file: %s", err)
 		return
 	}
-	y := cfg.ActualRedpandaYamlOrDefaults() // we want to check that we correctly load the raw file
+	y := cfg.ActualFunesYamlOrDefaults() // we want to check that we correctly load the raw file
 	y.fileRaw = nil                         // we don't want to compare the in-memory raw file
 	require.Equal(t, expCfg, y)
 
@@ -280,18 +280,18 @@ func TestRedpandaSampleFile(t *testing.T) {
 		t.Errorf("unexpected error while writing config file: %s", err)
 		return
 	}
-	file, err := afero.ReadFile(fs, "/etc/redpanda/redpanda.yaml")
+	file, err := afero.ReadFile(fs, "/etc/funes/funes.yaml")
 	if err != nil {
 		t.Errorf("unexpected error while reading config file from fs: %s", err)
 		return
 	}
-	require.Equal(t, `redpanda:
-    data_directory: /var/lib/redpanda/data
+	require.Equal(t, `funes:
+    data_directory: /var/lib/funes/data
     seed_servers: []
     rpc_server:
         address: 0.0.0.0
         port: 33145
-    kafka_api:
+    sql_api:
         - address: 0.0.0.0
           port: 9092
     admin:
@@ -300,28 +300,28 @@ func TestRedpandaSampleFile(t *testing.T) {
     advertised_rpc_api:
         address: 127.0.0.1
         port: 33145
-    advertised_kafka_api:
+    advertised_sql_api:
         - address: 127.0.0.1
           port: 9092
     developer_mode: true
 rpk:
-    coredump_dir: /var/lib/redpanda/coredump
-pandaproxy: {}
+    coredump_dir: /var/lib/funes/coredump
+funesproxy: {}
 schema_registry: {}
 `, string(file))
 }
 
-func TestAddUnsetRedpandaDefaults(t *testing.T) {
+func TestAddUnsetFunesDefaults(t *testing.T) {
 	for _, test := range []struct {
 		name   string
-		inCfg  *RedpandaYaml
-		expCfg *RedpandaYaml
+		inCfg  *FunesYaml
+		expCfg *FunesYaml
 	}{
 		{
 			name: "rpk configuration left alone if present",
-			inCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			inCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "250.12.12.12", Port: 9095},
 					},
 					AdminAPI: []NamedSocketAddress{
@@ -329,7 +329,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{"foo:9092"},
 					},
 					AdminAPI: RpkAdminAPI{
@@ -337,9 +337,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 			},
-			expCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			expCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "250.12.12.12", Port: 9095},
 					},
 					AdminAPI: []NamedSocketAddress{
@@ -347,7 +347,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{"foo:9092"},
 					},
 					AdminAPI: RpkAdminAPI{
@@ -358,10 +358,10 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 		},
 
 		{
-			name: "kafka broker and admin api from redpanda",
-			inCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			name: "sql broker and admin api from funes",
+			inCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "250.12.12.12", Port: 9095},
 					},
 					AdminAPI: []NamedSocketAddress{
@@ -369,9 +369,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 			},
-			expCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			expCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "250.12.12.12", Port: 9095},
 					},
 					AdminAPI: []NamedSocketAddress{
@@ -379,7 +379,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{"250.12.12.12:9095"},
 					},
 					AdminAPI: RpkAdminAPI{
@@ -391,9 +391,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 
 		{
 			name: "admin api sorted, no TLS used because we have non-TLS servers",
-			inCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			inCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "10.1.0.1", Port: 5555, Name: "tls"},     // private, TLS
 						{Address: "127.1.0.1", Port: 5555, Name: "tls"},    // loopback, TLS
 						{Address: "localhost", Port: 5555, Name: "tls"},    // localhost, TLS
@@ -404,7 +404,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 						{Address: "122.61.32.12", Port: 9999},              // public
 						{Address: "0.0.0.0", Port: 9999},                   // rewritten to 127.0.0.1
 					},
-					KafkaAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
+					SQLAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 					AdminAPI: []NamedSocketAddress{
 						{Address: "10.0.0.1", Port: 4444, Name: "tls"}, // same as above, numbers in addr/port slightly changed
 						{Address: "127.0.0.1", Port: 4444, Name: "tls"},
@@ -418,9 +418,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					AdminAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 				},
 			},
-			expCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			expCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "10.1.0.1", Port: 5555, Name: "tls"},
 						{Address: "127.1.0.1", Port: 5555, Name: "tls"},
 						{Address: "localhost", Port: 5555, Name: "tls"},
@@ -431,7 +431,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 						{Address: "122.61.32.12", Port: 9999},
 						{Address: "0.0.0.0", Port: 9999},
 					},
-					KafkaAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
+					SQLAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 					AdminAPI: []NamedSocketAddress{
 						{Address: "10.0.0.1", Port: 4444, Name: "tls"},
 						{Address: "127.0.0.1", Port: 4444, Name: "tls"},
@@ -445,7 +445,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					AdminAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{
 							"localhost:9999",
 							"127.1.2.1:9999",
@@ -468,9 +468,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 
 		{
 			name: "broker and admin api sorted with TLS and MTLS",
-			inCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			inCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "10.1.0.1", Port: 1111, Name: "mtls"}, // similar to above test
 						{Address: "127.1.0.1", Port: 1111, Name: "mtls"},
 						{Address: "localhost", Port: 1111, Name: "mtls"},
@@ -480,7 +480,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 						{Address: "localhost", Port: 5555, Name: "tls"},
 						{Address: "122.61.33.12", Port: 5555, Name: "tls"},
 					},
-					KafkaAPITLS: []ServerTLS{
+					SQLAPITLS: []ServerTLS{
 						{Name: "tls", Enabled: true},
 						{Name: "mtls", Enabled: true, RequireClientAuth: true},
 					},
@@ -500,9 +500,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 			},
-			expCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			expCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "10.1.0.1", Port: 1111, Name: "mtls"},
 						{Address: "127.1.0.1", Port: 1111, Name: "mtls"},
 						{Address: "localhost", Port: 1111, Name: "mtls"},
@@ -512,7 +512,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 						{Address: "localhost", Port: 5555, Name: "tls"},
 						{Address: "122.61.33.12", Port: 5555, Name: "tls"},
 					},
-					KafkaAPITLS: []ServerTLS{
+					SQLAPITLS: []ServerTLS{
 						{Name: "tls", Enabled: true},
 						{Name: "mtls", Enabled: true, RequireClientAuth: true},
 					},
@@ -532,7 +532,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{
 							"localhost:5555",
 							"127.1.0.1:5555",
@@ -554,15 +554,15 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 
 		{
 			name: "broker and admin api sorted with TLS",
-			inCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			inCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "10.1.0.1", Port: 5555, Name: "tls"},
 						{Address: "127.1.0.1", Port: 5555, Name: "tls"},
 						{Address: "localhost", Port: 5555, Name: "tls"},
 						{Address: "122.61.33.12", Port: 5555, Name: "tls"},
 					},
-					KafkaAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
+					SQLAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 					AdminAPI: []NamedSocketAddress{
 						{Address: "10.0.0.1", Port: 4444, Name: "tls"},
 						{Address: "127.0.0.1", Port: 4444, Name: "tls"},
@@ -572,15 +572,15 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					AdminAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 				},
 			},
-			expCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			expCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "10.1.0.1", Port: 5555, Name: "tls"},
 						{Address: "127.1.0.1", Port: 5555, Name: "tls"},
 						{Address: "localhost", Port: 5555, Name: "tls"},
 						{Address: "122.61.33.12", Port: 5555, Name: "tls"},
 					},
-					KafkaAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
+					SQLAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 					AdminAPI: []NamedSocketAddress{
 						{Address: "10.0.0.1", Port: 4444, Name: "tls"},
 						{Address: "127.0.0.1", Port: 4444, Name: "tls"},
@@ -590,7 +590,7 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					AdminAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{
 							"localhost:5555",
 							"127.1.0.1:5555",
@@ -611,24 +611,24 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 		},
 
 		{
-			name: "assume the admin API when only Kafka API is available",
-			inCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			name: "assume the admin API when only SQL API is available",
+			inCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "127.1.0.1", Port: 5555, Name: "tls"},
 					},
-					KafkaAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
+					SQLAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 				},
 			},
-			expCfg: &RedpandaYaml{
-				Redpanda: RedpandaNodeConfig{
-					KafkaAPI: []NamedAuthNSocketAddress{
+			expCfg: &FunesYaml{
+				Funes: FunesNodeConfig{
+					SQLAPI: []NamedAuthNSocketAddress{
 						{Address: "127.1.0.1", Port: 5555, Name: "tls"},
 					},
-					KafkaAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
+					SQLAPITLS: []ServerTLS{{Name: "tls", Enabled: true}},
 				},
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{
 							"127.1.0.1:5555",
 						},
@@ -643,8 +643,8 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 		},
 
 		{
-			name: "assume the Kafka API API when only admin API is available from rpk with TLS",
-			inCfg: &RedpandaYaml{
+			name: "assume the SQL API API when only admin API is available from rpk with TLS",
+			inCfg: &FunesYaml{
 				Rpk: RpkNodeConfig{
 					AdminAPI: RpkAdminAPI{
 						Addresses: []string{"127.1.0.1:5555"},
@@ -652,9 +652,9 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 					},
 				},
 			},
-			expCfg: &RedpandaYaml{
+			expCfg: &FunesYaml{
 				Rpk: RpkNodeConfig{
-					KafkaAPI: RpkKafkaAPI{
+					SQLAPI: RpkSQLAPI{
 						Brokers: []string{"127.1.0.1:9092"},
 						TLS:     new(TLS),
 					},
@@ -668,18 +668,18 @@ func TestAddUnsetRedpandaDefaults(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := Config{
-				redpandaYaml: *test.inCfg,
+				funesYaml: *test.inCfg,
 			}
 			// We just want to check our field migrations work, so
 			// we do not try to differentiate Virtual vs
 			// actual here.
-			c.addUnsetRedpandaDefaults(false)
-			require.Equal(t, test.expCfg, &c.redpandaYaml)
+			c.addUnsetFunesDefaults(false)
+			require.Equal(t, test.expCfg, &c.funesYaml)
 		})
 	}
 }
 
-func TestLoadRpkAndRedpanda(t *testing.T) {
+func TestLoadRpkAndFunes(t *testing.T) {
 	defaultRpkPath, err := DefaultRpkYamlPath()
 	if err != nil {
 		t.Fatalf("unable to load default rpk yaml path: %v", err)
@@ -687,24 +687,24 @@ func TestLoadRpkAndRedpanda(t *testing.T) {
 	for _, test := range []struct {
 		name string
 
-		redpandaYaml string
+		funesYaml string
 		rpkYaml      string
 
-		expVirtualRedpanda string
+		expVirtualFunes string
 		expVirtualRpk      string
 	}{
-		// If both are empty, we use the default rpk and redpanda
-		// configurations. Some aspects of the redpanda config are
+		// If both are empty, we use the default rpk and funes
+		// configurations. Some aspects of the funes config are
 		// ported to the Virtual rpk config.
 		{
 			name: "both empty no config flag",
-			expVirtualRedpanda: `redpanda:
-    data_directory: /var/lib/redpanda/data
+			expVirtualFunes: `funes:
+    data_directory: /var/lib/funes/data
     seed_servers: []
     rpc_server:
         address: 0.0.0.0
         port: 33145
-    kafka_api:
+    sql_api:
         - address: 0.0.0.0
           port: 9092
     admin:
@@ -712,15 +712,15 @@ func TestLoadRpkAndRedpanda(t *testing.T) {
           port: 9644
     developer_mode: true
 rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 127.0.0.1:9092
     admin_api:
         addresses:
             - 127.0.0.1:9644
     overprovisioned: true
-    coredump_dir: /var/lib/redpanda/coredump
-pandaproxy: {}
+    coredump_dir: /var/lib/funes/coredump
+funesproxy: {}
 schema_registry: {}
 `,
 			expVirtualRpk: `version: 2
@@ -729,7 +729,7 @@ current_cloud_auth: default
 profiles:
     - name: default
       description: Default rpk profile
-      kafka_api:
+      sql_api:
         brokers:
             - 127.0.0.1:9092
       admin_api:
@@ -744,17 +744,17 @@ cloud_auth:
 `,
 		},
 
-		// If only redpanda.yaml exists, it is mostly similar to both
+		// If only funes.yaml exists, it is mostly similar to both
 		// being empty. Tuners and some other fields are ported to the
 		// Virtual rpk.yaml.
 		//
 		// * developer_mode is not turned on since we do not use DevDefaults
-		// * rpk uses redpanda's kafka_api
-		// * rpk uses kafka_api + admin_port for admin_api
-		// * rpk.yaml uses redpanda.yaml tuners
+		// * rpk uses funes's sql_api
+		// * rpk uses sql_api + admin_port for admin_api
+		// * rpk.yaml uses funes.yaml tuners
 		{
-			name: "redpanda.yaml exists",
-			redpandaYaml: `redpanda:
+			name: "funes.yaml exists",
+			funesYaml: `funes:
     data_directory: /data
     seed_servers:
         - host:
@@ -763,7 +763,7 @@ cloud_auth:
         - host:
             address: 127.0.0.1
             port: 33146
-    kafka_api:
+    sql_api:
         - address: 0.0.0.3
           port: 9092
 rpk:
@@ -775,7 +775,7 @@ rpk:
     tune_disk_irq: true
 `,
 
-			expVirtualRedpanda: `redpanda:
+			expVirtualFunes: `funes:
     data_directory: /data
     seed_servers:
         - host:
@@ -784,11 +784,11 @@ rpk:
         - host:
             address: 127.0.0.1
             port: 33146
-    kafka_api:
+    sql_api:
         - address: 0.0.0.3
           port: 9092
 rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 0.0.0.3:9092
     admin_api:
@@ -807,7 +807,7 @@ current_cloud_auth: default
 profiles:
     - name: default
       description: Default rpk profile
-      kafka_api:
+      sql_api:
         brokers:
             - 0.0.0.3:9092
       admin_api:
@@ -823,10 +823,10 @@ cloud_auth:
 		},
 
 		// If only rpk.yaml exists, we port sections from it into
-		// redpanda.yaml.
+		// funes.yaml.
 		//
-		// * missing kafka port is defaulted to 9092
-		// * admin api is defaulted, using kafka broker ip
+		// * missing sql port is defaulted to 9092
+		// * admin api is defaulted, using sql broker ip
 		{
 			name: "rpk.yaml exists",
 			rpkYaml: `version: 2
@@ -835,7 +835,7 @@ current_cloud_auth: fizz
 profiles:
     - name: foo
       description: descriptosphere
-      kafka_api:
+      sql_api:
         brokers:
             - 0.0.0.3
       schema_registry:
@@ -846,13 +846,13 @@ cloud_auth:
       description: fizzy
 `,
 
-			expVirtualRedpanda: `redpanda:
-    data_directory: /var/lib/redpanda/data
+			expVirtualFunes: `funes:
+    data_directory: /var/lib/funes/data
     seed_servers: []
     rpc_server:
         address: 0.0.0.0
         port: 33145
-    kafka_api:
+    sql_api:
         - address: 0.0.0.0
           port: 9092
     admin:
@@ -860,15 +860,15 @@ cloud_auth:
           port: 9644
     developer_mode: true
 rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 0.0.0.3:9092
     admin_api:
         addresses:
             - 0.0.0.3:9644
     overprovisioned: true
-    coredump_dir: /var/lib/redpanda/coredump
-pandaproxy: {}
+    coredump_dir: /var/lib/funes/coredump
+funesproxy: {}
 schema_registry: {}
 `,
 			expVirtualRpk: `version: 2
@@ -877,7 +877,7 @@ current_cloud_auth: fizz
 profiles:
     - name: foo
       description: descriptosphere
-      kafka_api:
+      sql_api:
         brokers:
             - 0.0.0.3:9092
       admin_api:
@@ -892,19 +892,19 @@ cloud_auth:
 `,
 		},
 
-		// Note that we ignore the redpanda.yaml's redpanda.{kafka,admin}_api
+		// Note that we ignore the funes.yaml's funes.{sql,admin}_api
 		// because we pull data from rpk.yaml and then rely on defaults.
 		//
-		// * copy rpk.yaml kafka_api to redpanda.rpk.kafka_api
-		// * port redpanda.yaml's rpk.kafka_api to rpk.admin_api hosts
-		// * port redpanda.yaml's rpk.admin_api to rpk.yaml's
-		// * copy redpanda.yaml tuners to rpk.yaml
+		// * copy rpk.yaml sql_api to funes.rpk.sql_api
+		// * port funes.yaml's rpk.sql_api to rpk.admin_api hosts
+		// * port funes.yaml's rpk.admin_api to rpk.yaml's
+		// * copy funes.yaml tuners to rpk.yaml
 		{
 			name: "both yaml files exist",
-			redpandaYaml: `redpanda:
+			funesYaml: `funes:
     data_directory: /data
     seed_servers: []
-    kafka_api:
+    sql_api:
         - address: 0.0.0.3
           port: 9097
     admin_api:
@@ -924,22 +924,22 @@ current_cloud_auth: default
 profiles:
     - name: foo
       description: descriptosphere
-      kafka_api:
+      sql_api:
         brokers:
             - 128.0.0.4
 `,
 
-			expVirtualRedpanda: `redpanda:
+			expVirtualFunes: `funes:
     data_directory: /data
     seed_servers: []
-    kafka_api:
+    sql_api:
         - address: 0.0.0.3
           port: 9097
     admin_api:
         - address: admin.com
           port: 4444
 rpk:
-    kafka_api:
+    sql_api:
         brokers:
             - 128.0.0.4:9092
     admin_api:
@@ -959,7 +959,7 @@ current_cloud_auth: default
 profiles:
     - name: foo
       description: descriptosphere
-      kafka_api:
+      sql_api:
         brokers:
             - 128.0.0.4:9092
       admin_api:
@@ -978,8 +978,8 @@ cloud_auth:
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			m := make(map[string]testfs.Fmode)
-			if test.redpandaYaml != "" {
-				m[DefaultRedpandaYamlPath] = testfs.RFile(test.redpandaYaml)
+			if test.funesYaml != "" {
+				m[DefaultFunesYamlPath] = testfs.RFile(test.funesYaml)
 			}
 			if test.rpkYaml != "" {
 				m[defaultRpkPath] = testfs.RFile(test.rpkYaml)
@@ -992,20 +992,20 @@ cloud_auth:
 			}
 
 			{
-				mat := cfg.VirtualRedpandaYaml()
+				mat := cfg.VirtualFunesYaml()
 				mat.Write(fs)
-				m[DefaultRedpandaYamlPath] = testfs.RFile(test.expVirtualRedpanda)
+				m[DefaultFunesYamlPath] = testfs.RFile(test.expVirtualFunes)
 			}
 			{
-				act, ok := cfg.ActualRedpandaYaml()
+				act, ok := cfg.ActualFunesYaml()
 				if !ok {
-					if test.redpandaYaml != "" {
-						t.Error("missing actual redpanda yaml")
+					if test.funesYaml != "" {
+						t.Error("missing actual funes yaml")
 					}
 				} else {
-					actPath := "/actual/redpanda.yaml"
+					actPath := "/actual/funes.yaml"
 					act.WriteAt(fs, actPath)
-					m[actPath] = testfs.RFile(test.redpandaYaml)
+					m[actPath] = testfs.RFile(test.funesYaml)
 				}
 			}
 			{

@@ -21,16 +21,16 @@ import yaml
 from ducktape.mark import parametrize, matrix
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.clients.rpk_remote import RpkRemoteTool
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, SISettings, RESTART_LOG_ALLOW_LIST, IAM_ROLES_API_CALL_ALLOW_LIST, get_cloud_storage_type, RedpandaService
-from rptest.services.redpanda_installer import RedpandaInstaller, RedpandaVersionLine
+from rptest.services.funes import CloudStorageType, SISettings, RESTART_LOG_ALLOW_LIST, IAM_ROLES_API_CALL_ALLOW_LIST, get_cloud_storage_type, FunesService
+from rptest.services.funes_installer import FunesInstaller, FunesVersionLine
 from rptest.services.metrics_check import MetricCheck
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.util import expect_http_error, expect_exception, produce_until_segments
 from rptest.utils.si_utils import BucketView
 
@@ -43,13 +43,13 @@ SECRET_CONFIG_NAMES = frozenset(
     ["cloud_storage_secret_key", "cloud_storage_azure_shared_key"])
 
 
-def check_restart_clears(admin, redpanda, nodes=None):
+def check_restart_clears(admin, funes, nodes=None):
     """
     After changing a setting with needs_restart=true, check that
     nodes clear the flag after being restarted.
     """
     if nodes is None:
-        nodes = redpanda.nodes
+        nodes = funes.nodes
 
     status = admin.get_cluster_config_status()
     for n in status:
@@ -57,14 +57,14 @@ def check_restart_clears(admin, redpanda, nodes=None):
 
     first_node = nodes[0]
     other_nodes = nodes[1:]
-    redpanda.restart_nodes(first_node)
+    funes.restart_nodes(first_node)
     wait_until(
         lambda: admin.get_cluster_config_status()[0]['restart'] == False,
         timeout_sec=10,
         backoff_sec=0.5,
         err_msg=f"Restart flag did not clear after restart")
 
-    redpanda.restart_nodes(other_nodes)
+    funes.restart_nodes(other_nodes)
     wait_until(
         lambda: set([n['restart']
                      for n in admin.get_cluster_config_status()]) == {False},
@@ -73,7 +73,7 @@ def check_restart_clears(admin, redpanda, nodes=None):
         err_msg=f"Not all nodes cleared restart flag")
 
 
-def wait_for_version_sync(admin, redpanda, version):
+def wait_for_version_sync(admin, funes, version):
     """
     Waits for the controller to see up to date status at `version` from
     all nodes.  Does _not_ guarantee that this status result has also
@@ -83,14 +83,14 @@ def wait_for_version_sync(admin, redpanda, version):
     """
     wait_until(lambda: set([
         n['config_version']
-        for n in admin.get_cluster_config_status(node=redpanda.controller())
+        for n in admin.get_cluster_config_status(node=funes.controller())
     ]) == {version},
                timeout_sec=10,
                backoff_sec=0.5,
                err_msg=f"Config status versions did not converge on {version}")
 
 
-def wait_for_version_status_sync(admin, redpanda, version, nodes=None):
+def wait_for_version_status_sync(admin, funes, version, nodes=None):
     """
     Stricter than _wait_for_version_sync: this requires not only that
     the config version has propagated to all nodes, but also that the
@@ -98,7 +98,7 @@ def wait_for_version_status_sync(admin, redpanda, version, nodes=None):
     """
 
     if nodes is None:
-        nodes = redpanda.nodes
+        nodes = funes.nodes
 
     def is_complete(node):
         node_status = admin.get_cluster_config_status(node=node)
@@ -113,78 +113,78 @@ def wait_for_version_status_sync(admin, redpanda, version, nodes=None):
                    err_msg=f"Config status did not converge on {version}")
 
 
-class ClusterConfigUpgradeTest(RedpandaTest):
+class ClusterConfigUpgradeTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, extra_rp_conf={}, **kwargs)
 
     def setUp(self):
-        # Skip starting redpanda, so that test can explicitly start
+        # Skip starting funes, so that test can explicitly start
         # it with some override_cfg_params
         pass
 
     @cluster(num_nodes=1)
-    def test_upgrade_redpanda_yaml(self):
+    def test_upgrade_funes_yaml(self):
         """
-        Verify that on first start, values are imported from redpanda.yaml
+        Verify that on first start, values are imported from funes.yaml
         to facilitate upgrades, but on subsequent startups we just emit
         a log message to say we're ignoring them.
         """
 
-        node = self.redpanda.nodes[0]
-        admin = Admin(self.redpanda)
+        node = self.funes.nodes[0]
+        admin = Admin(self.funes)
 
-        # Since we skip RedpandaService.start, must clean node explicitly
-        self.redpanda.clean_node(node)
+        # Since we skip FunesService.start, must clean node explicitly
+        self.funes.clean_node(node)
 
-        # Start node outside of the usual RedpandaService.start, so that we
+        # Start node outside of the usual FunesService.start, so that we
         # skip writing out bootstrap.yaml files (the presence of which disables
-        # the upgrade import of values from redpanda.yaml)
-        # NOTE: due to https://github.com/redpanda-data/redpanda/issues/13362
+        # the upgrade import of values from funes.yaml)
+        # NOTE: due to https://github.com/redpanda-data/funes/issues/13362
         # only the proper name works here
-        self.redpanda.start_node(
+        self.funes.start_node(
             node, override_cfg_params={"log_retention_ms": '9876'})
 
-        # On first startup, redpanda should notice the value in
-        # redpanda.yaml and import it into central config store
+        # On first startup, funes should notice the value in
+        # funes.yaml and import it into central config store
         assert admin.get_cluster_config(
         )["log_retention_ms"] == 9876, f"trouble with the value for log_retention_ms at first start"
 
         # On second startup, central config is already initialized,
-        # so the modified value in redpanda.yaml should be ignored.
+        # so the modified value in funes.yaml should be ignored.
         # NOTE: same issue as above
-        self.redpanda.restart_nodes(
+        self.funes.restart_nodes(
             [node], override_cfg_params={"log_retention_ms": '1234'})
 
         assert admin.get_cluster_config(
         )["log_retention_ms"] == 9876, f"trouble with the value for log_retention_ms after restart"
-        assert self.redpanda.search_log_any(
+        assert self.funes.search_log_any(
             f"Ignoring value for 'log_retention_ms'")
 
 
-class HasRedpandaAndAdmin(Protocol):
-    redpanda: RedpandaService
+class HasFunesAndAdmin(Protocol):
+    funes: FunesService
     admin: Admin
     logger: logging.Logger
 
 
 class ClusterConfigHelpersMixin:
-    def _check_value_everywhere(self: HasRedpandaAndAdmin, key, expect_value):
-        for node in self.redpanda.nodes:
+    def _check_value_everywhere(self: HasFunesAndAdmin, key, expect_value):
+        for node in self.funes.nodes:
             actual_value = self.admin.get_cluster_config(node)[key]
             assert actual_value == expect_value, f"Wrong value on node {node.account.hostname}: {key}={actual_value} (!={expect_value})"
 
-    def _check_propagated_and_persistent(self: HasRedpandaAndAdmin, key,
+    def _check_propagated_and_persistent(self: HasFunesAndAdmin, key,
                                          expect_value):
         """
         Verify that a configuration value has successfully propagated to all
         nodes, and that it persists after a restart.
         """
         self._check_value_everywhere(key, expect_value)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         self._check_value_everywhere(key, expect_value)
 
 
-class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
+class ClusterConfigTest(FunesTest, ClusterConfigHelpersMixin):
     def __init__(self, *args, **kwargs):
         rp_conf = BOOTSTRAP_CONFIG.copy()
 
@@ -200,8 +200,8 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
                                                 extra_rp_conf=rp_conf,
                                                 **kwargs)
 
-        self.admin = Admin(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
+        self.admin = Admin(self.funes)
+        self.rpk = RpkTool(self.funes)
 
     @cluster(num_nodes=3)
     @parametrize(legacy=False)
@@ -212,7 +212,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         :param legacy: whether to use the legacy /config endpoint
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         if legacy:
             config = admin._request("GET", "config").json()
         else:
@@ -225,7 +225,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         node_config = admin.get_node_config()
 
         # Some arbitrary property to check syntax of result
-        assert 'kafka_api' in node_config
+        assert 'sql_api' in node_config
         self._quiesce_status()
 
         # Validate expected status for a cluster that we have made no changes to
@@ -239,40 +239,40 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
     @cluster(num_nodes=1)
     def test_get_config_nodefaults(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         initial_short_config = admin.get_cluster_config(include_defaults=False)
         long_config = admin.get_cluster_config(include_defaults=True)
 
         assert len(long_config) > len(initial_short_config)
 
-        assert 'kafka_qdc_enable' not in initial_short_config
+        assert 'sql_qdc_enable' not in initial_short_config
 
         # After setting something to non-default is should appear
         patch_result = self.admin.patch_cluster_config(
-            upsert={'kafka_qdc_enable': True})
-        wait_for_version_sync(self.admin, self.redpanda,
+            upsert={'sql_qdc_enable': True})
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
         short_config = admin.get_cluster_config(include_defaults=False)
-        assert 'kafka_qdc_enable' in short_config
+        assert 'sql_qdc_enable' in short_config
         assert len(short_config) == len(initial_short_config) + 1
 
         # After resetting to default it should disappear
         patch_result = self.admin.patch_cluster_config(
-            remove=['kafka_qdc_enable'])
-        wait_for_version_sync(self.admin, self.redpanda,
+            remove=['sql_qdc_enable'])
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
         short_config = admin.get_cluster_config(include_defaults=False)
-        assert 'kafka_qdc_enable' not in short_config
+        assert 'sql_qdc_enable' not in short_config
         assert len(short_config) == len(initial_short_config)
 
     @cluster(num_nodes=3)
     def test_bootstrap(self):
         """
-        Verify that config settings present in redpanda.cfg are imported on
+        Verify that config settings present in funes.cfg are imported on
         first startup.
         :return:
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         config = admin.get_cluster_config()
         for k, v in BOOTSTRAP_CONFIG.items():
             assert config[k] == v
@@ -280,10 +280,10 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         set_again = {'enable_idempotence': True}
         assert BOOTSTRAP_CONFIG['enable_idempotence'] != set_again[
             'enable_idempotence']
-        self.redpanda.set_extra_rp_conf(set_again)
-        self.redpanda.write_bootstrap_cluster_config()
+        self.funes.set_extra_rp_conf(set_again)
+        self.funes.write_bootstrap_cluster_config()
 
-        self.redpanda.restart_nodes(self.redpanda.nodes, set_again)
+        self.funes.restart_nodes(self.funes.nodes, set_again)
 
         # Our attempt to set the value differently in the config file after first startup
         # should have failed: the original config value should still be set.
@@ -297,7 +297,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         nodes' report that all other nodes have seen that version (i.e. config
         is up to date globally _and_ config status is up to date globally).
         """
-        leader = self.redpanda.controller()
+        leader = self.funes.controller()
 
         # Read authoritative version from controller
         version = max(
@@ -305,7 +305,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             for n in self.admin.get_cluster_config_status(node=leader))
 
         # Wait for all nodes to report all other nodes status' up to date
-        wait_for_version_status_sync(self.admin, self.redpanda, version)
+        wait_for_version_status_sync(self.admin, self.funes, version)
 
     @cluster(num_nodes=3)
     def test_restart(self):
@@ -314,26 +314,26 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         and that status is cleared after we restart the node.
         """
         # An arbitrary restart-requiring setting with a non-default value
-        new_setting = ('kafka_qdc_idle_depth', 77)
+        new_setting = ('sql_qdc_idle_depth', 77)
 
         patch_result = self.admin.patch_cluster_config(
             upsert=dict([new_setting]))
         new_version = patch_result['config_version']
-        wait_for_version_status_sync(self.admin, self.redpanda, new_version)
+        wait_for_version_status_sync(self.admin, self.funes, new_version)
 
         assert self.admin.get_cluster_config()[
             new_setting[0]] == new_setting[1]
         # Update of cluster status is not synchronous
-        check_restart_clears(self.admin, self.redpanda)
+        check_restart_clears(self.admin, self.funes)
 
         # Test that a reset to default triggers the restart flag the same way as
         # an upsert does
         patch_result = self.admin.patch_cluster_config(remove=[new_setting[0]])
         new_version = patch_result['config_version']
-        wait_for_version_status_sync(self.admin, self.redpanda, new_version)
+        wait_for_version_status_sync(self.admin, self.funes, new_version)
         assert self.admin.get_cluster_config()[
             new_setting[0]] != new_setting[1]
-        check_restart_clears(self.admin, self.redpanda)
+        check_restart_clears(self.admin, self.funes)
 
     @cluster(num_nodes=3)
     def test_multistring_restart(self):
@@ -348,27 +348,27 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
                 "cloud_storage_access_key": "user",
                 "cloud_storage_secret_key": "pass"
             })
-        wait_for_version_sync(self.admin, self.redpanda,
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
         self._check_value_everywhere("cloud_storage_access_key", "user")
         self._check_value_everywhere("cloud_storage_secret_key", "[secret]")
 
         # Check initially set values survive a restart
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         self._check_value_everywhere("cloud_storage_access_key", "user")
         self._check_value_everywhere("cloud_storage_secret_key", "[secret]")
 
         # Set just one of the values
         patch_result = self.admin.patch_cluster_config(
             upsert={"cloud_storage_access_key": "user2"})
-        wait_for_version_sync(self.admin, self.redpanda,
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
         self._check_value_everywhere("cloud_storage_access_key", "user2")
         self._check_value_everywhere("cloud_storage_secret_key", "[secret]")
 
         # Check that the recently set value persists, AND the originally
         # set value of another property is not corrupted.
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         self._check_value_everywhere("cloud_storage_access_key", "user2")
         self._check_value_everywhere("cloud_storage_secret_key", "[secret]")
 
@@ -381,13 +381,13 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         patch_result = self.admin.patch_cluster_config(
             upsert=dict([norestart_new_setting]))
         new_version = patch_result['config_version']
-        wait_for_version_status_sync(self.admin, self.redpanda, new_version)
+        wait_for_version_status_sync(self.admin, self.funes, new_version)
 
         assert self.admin.get_cluster_config()[
             norestart_new_setting[0]] == norestart_new_setting[1]
 
         # Status should not indicate restart needed
-        wait_for_version_status_sync(self.admin, self.redpanda, new_version)
+        wait_for_version_status_sync(self.admin, self.funes, new_version)
         status = self.admin.get_cluster_config_status()
         for n in status:
             assert n['restart'] is False
@@ -400,8 +400,8 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
     @parametrize(key='log_message_timestamp_type', value="rhubarb")
     @parametrize(key='log_message_timestamp_type', value="31415")
     @parametrize(key='log_message_timestamp_type', value="false")
-    @parametrize(key='kafka_qdc_enable', value="rhubarb")
-    @parametrize(key='kafka_qdc_enable', value="31415")
+    @parametrize(key='sql_qdc_enable', value="rhubarb")
+    @parametrize(key='sql_qdc_enable', value="31415")
     @parametrize(key='metadata_dissemination_retries', value="rhubarb")
     @parametrize(key='metadata_dissemination_retries', value="false")
     @parametrize(key='it_does_not_exist', value="123")
@@ -464,7 +464,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             [invalid_setting]),
                                                        force=True)
         new_version = patch_result['config_version']
-        wait_for_version_status_sync(self.admin, self.redpanda, new_version)
+        wait_for_version_status_sync(self.admin, self.funes, new_version)
 
         assert self.admin.get_cluster_config()[
             invalid_setting[0]] == default_value
@@ -476,7 +476,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             assert n['invalid'] == [invalid_setting[0]]
 
         # List of invalid properties in node status should not clear on restart.
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # We have to sleep here because in the success case there is no status update
         # being sent: it's a no-op after node startup when they realize their config
@@ -491,12 +491,12 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         # Reset the properties, check that it disappears from the list of invalid settings
         patch_result = self.admin.patch_cluster_config(
             remove=[invalid_setting[0]], force=True)
-        wait_for_version_sync(self.admin, self.redpanda,
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
         assert self.admin.get_cluster_config()[
             invalid_setting[0]] == default_value
 
-        wait_for_version_status_sync(self.admin, self.redpanda,
+        wait_for_version_status_sync(self.admin, self.funes,
                                      patch_result['config_version'])
         status = self.admin.get_cluster_config_status()
         for n in status:
@@ -522,7 +522,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
                 self.logger.info(f"Checking {content_type}, {body}")
                 self.admin._request("PUT",
                                     "cluster_config",
-                                    node=self.redpanda.nodes[0],
+                                    node=self.funes.nodes[0],
                                     headers={'content-type': content_type},
                                     data=body)
             except requests.exceptions.HTTPError as e:
@@ -552,8 +552,8 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         # Don't change these settings, they prevent the test from subsequently
         # using the cluster
         exclude_settings = {
-            'enable_sasl', 'kafka_enable_authorization',
-            'kafka_mtls_principal_mapping_rules', 'audit_enabled'
+            'enable_sasl', 'sql_enable_authorization',
+            'sql_mtls_principal_mapping_rules', 'audit_enabled'
         }
 
         # Don't enable schema id validation: the interdepedencies are too complex and are tested elsewhere.
@@ -639,7 +639,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         patch_result = self.admin.patch_cluster_config(upsert=updates,
                                                        remove=[])
-        wait_for_version_status_sync(self.admin, self.redpanda,
+        wait_for_version_status_sync(self.admin, self.funes,
                                      patch_result['config_version'])
 
         def check_status(expect_restart):
@@ -659,7 +659,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
                 # whereas by the time we read them back they're properly typed.
                 actual = read_back.get(k, None)
                 if k in SECRET_CONFIG_NAMES:
-                    # Expect a redacted value for secrets. Redpanda redacts the
+                    # Expect a redacted value for secrets. Funes redacts the
                     # values and we have no way of cross checking the actual
                     # values match.
                     expect = "[secret]"
@@ -681,7 +681,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         check_status(properties_require_restart)
         check_values()
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # We have to sleep here because in the success case there is no status update
         # being sent: it's a no-op after node startup when they realize their config
@@ -764,28 +764,28 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         assert "No changes were made." in self._noop_export_import()
 
         # An arbitrary tunable for checking --all
-        tunable_property = 'kafka_qdc_depth_alpha'
+        tunable_property = 'sql_qdc_depth_alpha'
 
         # RPK should give us a valid yaml document
         version_a, text = self._export_import_modify_one(
-            "kafka_qdc_enable: false", "kafka_qdc_enable: true")
+            "sql_qdc_enable: false", "sql_qdc_enable: true")
         assert version_a is not None
-        wait_for_version_sync(self.admin, self.redpanda, version_a)
+        wait_for_version_sync(self.admin, self.funes, version_a)
 
         # Default should not have included tunables
         assert tunable_property not in text
 
         # The setting we edited should be updated
-        self._check_value_everywhere("kafka_qdc_enable", True)
+        self._check_value_everywhere("sql_qdc_enable", True)
 
         # Clear a setting, it should revert to its default
         version_b, text = self._export_import_modify_one(
-            "kafka_qdc_enable: true", "")
+            "sql_qdc_enable: true", "")
         assert version_b is not None
 
         assert version_b > version_a
-        wait_for_version_sync(self.admin, self.redpanda, version_b)
-        self._check_value_everywhere("kafka_qdc_enable", False)
+        wait_for_version_sync(self.admin, self.funes, version_b)
+        self._check_value_everywhere("sql_qdc_enable", False)
 
         # Check that an --all export includes tunables
         text_all = self._export(all=True)
@@ -793,23 +793,23 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         # Check that editing a tunable with --all works
         version_c, text = self._export_import_modify_one(
-            "kafka_qdc_depth_alpha: 0.8",
-            "kafka_qdc_depth_alpha: 1.5",
+            "sql_qdc_depth_alpha: 0.8",
+            "sql_qdc_depth_alpha: 1.5",
             all=True)
         assert version_c is not None
 
         assert version_c > version_b
-        wait_for_version_sync(self.admin, self.redpanda, version_c)
-        self._check_value_everywhere("kafka_qdc_depth_alpha", 1.5)
+        wait_for_version_sync(self.admin, self.funes, version_c)
+        self._check_value_everywhere("sql_qdc_depth_alpha", 1.5)
 
         # Check that clearing a tunable with --all works
         version_d, text = self._export_import_modify_one(
-            "kafka_qdc_depth_alpha: 1.5", "", all=True)
+            "sql_qdc_depth_alpha: 1.5", "", all=True)
         assert version_d is not None
 
         assert version_d > version_c
-        wait_for_version_sync(self.admin, self.redpanda, version_d)
-        self._check_value_everywhere("kafka_qdc_depth_alpha", 0.8)
+        wait_for_version_sync(self.admin, self.funes, version_d)
+        self._check_value_everywhere("sql_qdc_depth_alpha", 0.8)
 
         # Check that an import/export with no edits does nothing.
         text = self._export(all=True)
@@ -868,7 +868,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         """
 
         new_version, _ = self._import(text, all, allow_noop=True)
-        wait_for_version_sync(self.admin, self.redpanda, new_version)
+        wait_for_version_sync(self.admin, self.funes, new_version)
 
         schema_properties = self.admin.get_cluster_config_schema(
         )['properties']
@@ -901,13 +901,13 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         # RPK should return an error with explanatory text
         try:
             _, out = self._export_import_modify(
-                [("kafka_qdc_enable: false", "kafka_qdc_enable: rhubarb"),
+                [("sql_qdc_enable: false", "sql_qdc_enable: rhubarb"),
                  ("topic_fds_per_partition: 5",
                   "topic_fds_per_partition: 9999"),
                  ("default_num_windows: 10", "default_num_windows: 32768")],
                 all=True)
         except RpkException as e:
-            assert 'kafka_qdc_enable: expected type boolean' in e.stderr
+            assert 'sql_qdc_enable: expected type boolean' in e.stderr
             assert 'topic_fds_per_partition: too large' in e.stderr
             assert 'default_num_windows: out of range' in e.stderr
         else:
@@ -923,13 +923,13 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         version_a, _ = self._export_import_modify_one(
             "cloud_storage_access_key:\n",
             "cloud_storage_access_key: foobar\n")
-        wait_for_version_sync(self.admin, self.redpanda, version_a)
+        wait_for_version_sync(self.admin, self.funes, version_a)
         self._check_value_everywhere("cloud_storage_access_key", "foobar")
 
         version_b, _ = self._export_import_modify_one(
             "cloud_storage_access_key: foobar\n",
             "cloud_storage_access_key: \"foobaz\"")
-        wait_for_version_sync(self.admin, self.redpanda, version_b)
+        wait_for_version_sync(self.admin, self.funes, version_b)
         self._check_value_everywhere("cloud_storage_access_key", "foobaz")
 
     @cluster(num_nodes=3)
@@ -952,7 +952,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         # NODE  CONFIG_VERSION  NEEDS_RESTART  INVALID  UNKNOWN
         # 0     17              false          []       []
 
-        assert len(lines) == len(self.redpanda.nodes)
+        assert len(lines) == len(self.funes.nodes)
 
         for i, l in enumerate(lines):
             m = re.match(
@@ -960,33 +960,33 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             assert m is not None
             node_id, *_ = m.groups()
 
-            node = self.redpanda.nodes[i]
-            assert int(node_id) == self.redpanda.idx(node)
+            node = self.funes.nodes[i]
+            assert int(node_id) == self.funes.idx(node)
 
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_rpk_force_reset(self):
         """
         Verify that RPK's `reset` command for disaster recovery works as
-        expected: redpanda should start up and behave as if the property
+        expected: funes should start up and behave as if the property
         is its default value.
         """
         # Set some non-default config value
         pr = self.admin.patch_cluster_config(upsert={
-            'kafka_qdc_enable': True,
+            'sql_qdc_enable': True,
             'append_chunk_size': 65536
         })
-        wait_for_version_sync(self.admin, self.redpanda, pr['config_version'])
-        self._check_value_everywhere("kafka_qdc_enable", True)
+        wait_for_version_sync(self.admin, self.funes, pr['config_version'])
+        self._check_value_everywhere("sql_qdc_enable", True)
 
         # Reset the property on all nodes
-        for node in self.redpanda.nodes:
-            rpk_remote = RpkRemoteTool(self.redpanda, node)
-            self.redpanda.stop_node(node)
-            rpk_remote.cluster_config_force_reset("kafka_qdc_enable")
-            self.redpanda.start_node(node)
+        for node in self.funes.nodes:
+            rpk_remote = RpkRemoteTool(self.funes, node)
+            self.funes.stop_node(node)
+            rpk_remote.cluster_config_force_reset("sql_qdc_enable")
+            self.funes.start_node(node)
 
         # Check that the reset property has reverted to its default
-        self._check_value_everywhere("kafka_qdc_enable", False)
+        self._check_value_everywhere("sql_qdc_enable", False)
 
         # Check that the bystander config property was not reset
         self._check_value_everywhere("append_chunk_size", 65536)
@@ -994,36 +994,36 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
     @cluster(num_nodes=1, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_rpk_lint(self):
         """
-        Verify that if a redpanda config contains a cluster config
+        Verify that if a funes config contains a cluster config
         property, then running `lint` cleans out that value, as it
         is no longer used.
         """
-        node = self.redpanda.nodes[0]
+        node = self.funes.nodes[0]
 
         # Put an old-style property in the config
         self.logger.info("Restarting with legacy property")
-        self.redpanda.restart_nodes([node],
+        self.funes.restart_nodes([node],
                                     override_cfg_params={
-                                        "kafka_qdc_enable": True,
+                                        "sql_qdc_enable": True,
                                     })
         old_conf = node.account.ssh_output(
-            "cat /etc/redpanda/redpanda.yaml").decode('utf-8')
-        assert 'kafka_qdc_enable' in old_conf
+            "cat /etc/funes/funes.yaml").decode('utf-8')
+        assert 'sql_qdc_enable' in old_conf
 
         # Run lint
         self.logger.info("Linting config")
-        rpk_remote = RpkRemoteTool(self.redpanda, node)
+        rpk_remote = RpkRemoteTool(self.funes, node)
         rpk_remote.cluster_config_lint()
 
         # Check that the old style config property was removed
         new_conf = node.account.ssh_output(
-            "cat /etc/redpanda/redpanda.yaml").decode('utf-8')
-        assert 'kafka_qdc_enable' not in new_conf
+            "cat /etc/funes/funes.yaml").decode('utf-8')
+        assert 'sql_qdc_enable' not in new_conf
 
-        # Check that the linted config file is not corrupt (redpanda loads with it)
+        # Check that the linted config file is not corrupt (funes loads with it)
         self.logger.info("Restarting with linted config")
-        self.redpanda.stop_node(node)
-        self.redpanda.start_node(node, write_config=False)
+        self.funes.stop_node(node)
+        self.funes.start_node(node, write_config=False)
 
     @cluster(num_nodes=1)
     def test_rpk_get_set(self):
@@ -1036,7 +1036,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             yamlval: Any
 
         valid_examples = [
-            Example("kafka_qdc_enable", "true", True),
+            Example("sql_qdc_enable", "true", True),
             Example("append_chunk_size", "32768", 32768),
             Example("superusers", "['bob','alice']", ["bob", "alice"]),
             Example("storage_min_free_bytes", "1234567890", 1234567890)
@@ -1074,7 +1074,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         # Check that the `set` command hits proper validation paths
         invalid_examples = [
-            ("kafka_qdc_enable", "rhubarb"),
+            ("sql_qdc_enable", "rhubarb"),
             ("append_chunk_size", "-123"),
             ("superusers", "43"),
         ]
@@ -1090,7 +1090,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         # Check that resetting properties to their default via `set` works
         default_examples = [
-            ("kafka_qdc_enable", False),
+            ("sql_qdc_enable", False),
             ("append_chunk_size", 16384),
             ("superusers", []),
         ]
@@ -1106,15 +1106,15 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
     def test_secret_redaction(self):
         def set_and_search(key, value, expect_log):
             patch_result = self.admin.patch_cluster_config(upsert={key: value})
-            wait_for_version_sync(self.admin, self.redpanda,
+            wait_for_version_sync(self.admin, self.funes,
                                   patch_result['config_version'])
 
             # Check value was/was not printed to log while applying
-            assert self.redpanda.search_log_any(value) is expect_log
+            assert self.funes.search_log_any(value) is expect_log
 
             # Check we do/don't print on next startup
-            self.redpanda.restart_nodes(self.redpanda.nodes)
-            assert self.redpanda.search_log_any(value) is expect_log
+            self.funes.restart_nodes(self.funes.nodes)
+            assert self.funes.search_log_any(value) is expect_log
 
         # Default valued secrets are still shown.
         self._check_value_everywhere("cloud_storage_secret_key", None)
@@ -1136,17 +1136,17 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
     @cluster(num_nodes=3)
     def test_incremental_alter_configs(self):
         """
-        Central config can also be accessed via Kafka API -- exercise that
+        Central config can also be accessed via SQL API -- exercise that
         using `kcl`.
 
-        :param incremental: whether to use incremental kafka config API or
+        :param incremental: whether to use incremental sql config API or
                             legacy config API.
         """
-        # Redpanda only support incremental config changes: the legacy
+        # Funes only support incremental config changes: the legacy
         # AlterConfig API is a bad user experience
         incremental = True
 
-        # Set a property by its redpanda name
+        # Set a property by its funes name
         out = self.client().alter_broker_config(
             {"log_message_timestamp_type": "CreateTime"}, incremental)
         # kcl does not set an error exist status when config set fails, so must
@@ -1161,14 +1161,14 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
                                                incremental)
             assert 'OK' in out
 
-        # Set a property by its Kafka-interop names and values
-        kafka_props = {
+        # Set a property by its SQL-interop names and values
+        sql_props = {
             "log.message.timestamp.type": ["CreateTime", "LogAppendTime"],
             "log.cleanup.policy": ["compact", "delete"],
             "log.compression.type": ["gzip", "snappy", "lz4", "zstd"],
             "log.roll.ms": ["90000", "2400000"],
         }
-        for property, value_list in kafka_props.items():
+        for property, value_list in sql_props.items():
             for value in value_list:
                 out = self.client().alter_broker_config({property: value},
                                                         incremental)
@@ -1226,7 +1226,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
 
         # Required for STS to function correctly, the token file is just a placeholder
         # to make the refresh credentials system boot up.
-        self.redpanda.set_environment({
+        self.funes.set_environment({
             'AWS_ROLE_ARN':
             'role',
             'AWS_WEB_IDENTITY_TOKEN_FILE':
@@ -1274,13 +1274,13 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             )
             patch_result = self.admin.patch_cluster_config(upsert=payload,
                                                            remove=removed)
-            wait_for_version_sync(self.admin, self.redpanda,
+            wait_for_version_sync(self.admin, self.funes,
                                   patch_result['config_version'])
 
-            # Check we really set it properly, and Redpanda can restart without
+            # Check we really set it properly, and Funes can restart without
             # hitting a validation issue on startup (this is what would happen
             # if the API validation wasn't working properly)
-            self.redpanda.restart_nodes(self.redpanda.nodes)
+            self.funes.restart_nodes(self.funes.nodes)
 
         # Set the config to static for the next set of checks
         static_config = {
@@ -1292,9 +1292,9 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         }
         patch_result = self.admin.patch_cluster_config(upsert=static_config,
                                                        remove=[])
-        wait_for_version_sync(self.admin, self.redpanda,
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # It is invalid to clear any required cloud storage properties while
         # cloud storage is enabled and the credentials source is static.
@@ -1310,7 +1310,7 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         # properties set
         patch_result = self.admin.patch_cluster_config(
             upsert={'cloud_storage_enabled': False}, remove=[])
-        wait_for_version_sync(self.admin, self.redpanda,
+        wait_for_version_sync(self.admin, self.funes,
                               patch_result['config_version'])
 
         # Clearing related properties is valid now that cloud storage is
@@ -1337,19 +1337,19 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
         projected values.
         """
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         # Don't want controller leadership changing while we run
         r = admin.patch_cluster_config(
             upsert={'enable_leader_balancer': False})
         config_version = r['config_version']
-        wait_for_version_sync(self.admin, self.redpanda, config_version)
+        wait_for_version_sync(self.admin, self.funes, config_version)
 
-        controller_node = self.redpanda.controller()
+        controller_node = self.funes.controller()
         for i in range(0, 50):
             # Some config update, different each iteration
             r = admin.patch_cluster_config(
-                upsert={'kafka_connections_max': 1000 + i},
+                upsert={'sql_connections_max': 1000 + i},
                 node=controller_node)
             new_config_version = r['config_version']
             assert new_config_version != config_version
@@ -1359,41 +1359,41 @@ class ClusterConfigTest(RedpandaTest, ClusterConfigHelpersMixin):
             status = self.admin.get_cluster_config_status(node=controller_node)
             local_status = next(
                 s for s in status
-                if s['node_id'] == self.redpanda.idx(controller_node))
+                if s['node_id'] == self.funes.idx(controller_node))
             assert local_status['config_version'] == config_version
 
 
 """
 PropertyAliasData:
-    primary_name: str  # this is the primary name in the current version of redpanda
+    primary_name: str  # this is the primary name in the current version of funes
     aliased_name: str  # this is the legacy name, retained as an alias for backward compat
-    redpanda_version: RedpandaVersionLine  # this is the first version to use primary_name
+    funes_version: FunesVersionLine  # this is the first version to use primary_name
     test_values: list[Any, Any, Any]  # values for this property to run the tests
 """
 PropertyAliasData = namedtuple(
     "PropertyAliasData",
-    ["primary_name", "aliased_name", "redpanda_version", "test_values"])
+    ["primary_name", "aliased_name", "funes_version", "test_values"])
 
 cloud_storage_graceful_transfer_timeout = PropertyAliasData(
     primary_name="cloud_storage_graceful_transfer_timeout_ms",
     aliased_name="cloud_storage_graceful_transfer_timeout",
-    redpanda_version=(23, 2),
+    funes_version=(23, 2),
     test_values=(1234, 1235, 1236))
 log_retention_ms = PropertyAliasData(primary_name="log_retention_ms",
                                      aliased_name="delete_retention_ms",
-                                     redpanda_version=(23, 3),
+                                     funes_version=(23, 3),
                                      test_values=(1000000, 300000, 500000))
-# NOTE due to https://github.com/redpanda-data/redpanda/issues/13432 ,
+# NOTE due to https://github.com/redpanda-data/funes/issues/13432 ,
 # test_values can't be -1 (a valid value nonetheless to signal infinite value)
 
 
-class ClusterConfigAliasTest(RedpandaTest, ClusterConfigHelpersMixin):
+class ClusterConfigAliasTest(FunesTest, ClusterConfigHelpersMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.admin = Admin(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
-        self.installer: RedpandaInstaller = self.redpanda._installer
+        self.admin = Admin(self.funes)
+        self.rpk = RpkTool(self.funes)
+        self.installer: FunesInstaller = self.funes._installer
 
     def setUp(self):
         pass  # Will start cluster in test
@@ -1407,10 +1407,10 @@ class ClusterConfigAliasTest(RedpandaTest, ClusterConfigHelpersMixin):
         of setting a property to accept the old name (alias) as well as the new one.
         """
         # Aliases should work when used in bootstrap
-        # NOTE due to https://github.com/redpanda-data/redpanda/issues/13362 this is incomplete (see commented line)
-        self.redpanda.set_extra_rp_conf(
+        # NOTE due to https://github.com/redpanda-data/funes/issues/13362 this is incomplete (see commented line)
+        self.funes.set_extra_rp_conf(
             {prop_set.aliased_name: prop_set.test_values[0]})
-        self.redpanda.start()
+        self.funes.start()
         # self._check_value_everywhere(prop_set.primary_name, prop_set.values[0])
 
         # The configuration schema should include aliases
@@ -1426,13 +1426,13 @@ class ClusterConfigAliasTest(RedpandaTest, ClusterConfigHelpersMixin):
         assert prop_set.aliased_name not in cluster_config
 
         # Aliases should work when used in API POST
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {prop_set.aliased_name: prop_set.test_values[1]})
         self._check_value_everywhere(prop_set.primary_name,
                                      prop_set.test_values[1])
 
         # Properties set via an alias should stay set after a restart
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         self._check_value_everywhere(prop_set.primary_name,
                                      prop_set.test_values[1])
 
@@ -1458,10 +1458,10 @@ class ClusterConfigAliasTest(RedpandaTest, ClusterConfigHelpersMixin):
         """
 
         old_version = self.installer.highest_from_prior_feature_version(
-            prop_set.redpanda_version)
-        self.installer.install(self.redpanda.nodes, old_version)
+            prop_set.funes_version)
+        self.installer.install(self.funes.nodes, old_version)
 
-        self.redpanda.start()
+        self.funes.start()
 
         # Check we're running a version where the alias name is actually the primary
         # (i.e. older than when the alias was introduced)
@@ -1469,56 +1469,56 @@ class ClusterConfigAliasTest(RedpandaTest, ClusterConfigHelpersMixin):
         assert prop_set.primary_name not in cluster_config
         assert prop_set.aliased_name in cluster_config
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {prop_set.aliased_name: prop_set.test_values[0]})
         self._check_value_everywhere(prop_set.aliased_name,
                                      prop_set.test_values[0])
 
-        self.installer.install(self.redpanda.nodes, prop_set.redpanda_version)
-        for node in self.redpanda.nodes:
-            self.redpanda.stop_node(node)
+        self.installer.install(self.funes.nodes, prop_set.funes_version)
+        for node in self.funes.nodes:
+            self.funes.stop_node(node)
 
             if wipe_cache:
                 # Erase the cluster config cache, so that the node will replay from
                 # controller log and/or controller snapshots
-                cache_path = f"{self.redpanda.DATA_DIR}/config_cache.yaml"
+                cache_path = f"{self.funes.DATA_DIR}/config_cache.yaml"
                 self.logger.info(
                     "Erasing config cache on {node.name} at {cache_path}")
                 assert node.account.exists(cache_path)
                 node.account.remove(cache_path)
 
-            self.redpanda.start_node(node)
+            self.funes.start_node(node)
 
         # The value we wrote under the old name should now be readable via the new name
         self._check_value_everywhere(prop_set.primary_name,
                                      prop_set.test_values[0])
 
         # Setting via the new name works
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {prop_set.primary_name: prop_set.test_values[1]})
         self._check_value_everywhere(prop_set.primary_name,
                                      prop_set.test_values[1])
 
         # Setting via the old name also still works
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {prop_set.aliased_name: prop_set.test_values[2]})
         self._check_value_everywhere(prop_set.primary_name,
                                      prop_set.test_values[2])
 
 
-class ClusterConfigClusterIdTest(RedpandaTest):
+class ClusterConfigClusterIdTest(FunesTest):
     @cluster(num_nodes=3)
     def test_cluster_id(self):
         """
-        That the cluster_id exposed in Kafka metadata is automatically
-        populated with a uuid, that it starts with redpanda. and that
+        That the cluster_id exposed in SQL metadata is automatically
+        populated with a uuid, that it starts with funes. and that
         it can be overridden by setting the property to something else.
         """
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         # An example, we will compare lengths with this
-        uuid_example = "redpanda.87e8c0c3-7c2a-4f7b-987f-11fc1d2443a4"
+        uuid_example = "funes.87e8c0c3-7c2a-4f7b-987f-11fc1d2443a4"
 
         def has_uuid_cluster_id():
             cluster_id = rpk.cluster_metadata_id()
@@ -1527,42 +1527,42 @@ class ClusterConfigClusterIdTest(RedpandaTest):
                 uuid_example)
 
         # This is a wait_until because the initialization of cluster_id
-        # is async and can happen after the cluster starts answering Kafka requests.
+        # is async and can happen after the cluster starts answering SQL requests.
         wait_until(has_uuid_cluster_id, timeout_sec=20, backoff_sec=1)
 
         # Verify that the cluster_id does not change on a restart
         initial_cluster_id = rpk.cluster_metadata_id()
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         assert rpk.cluster_metadata_id() == initial_cluster_id
 
         # Verify that a manually set cluster_id is respected
         manual_id = "rhubarb"
-        self.redpanda.set_cluster_config(values={"cluster_id": manual_id},
+        self.funes.set_cluster_config(values={"cluster_id": manual_id},
                                          expect_restart=False)
 
-        assert rpk.cluster_metadata_id() == f"redpanda.{manual_id}"
+        assert rpk.cluster_metadata_id() == f"funes.{manual_id}"
 
 
-class ClusterConfigNoKafkaTest(RedpandaTest):
+class ClusterConfigNoSQLTest(FunesTest):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, extra_node_conf={'kafka_api': []}, **kwargs)
+        super().__init__(*args, extra_node_conf={'sql_api': []}, **kwargs)
 
     @cluster(num_nodes=3)
-    def test_no_kafka(self):
+    def test_no_sql(self):
         """
-        That a cluster may be started with no Kafka listeners at all, perhaps
+        That a cluster may be started with no SQL listeners at all, perhaps
         to do some initial configuration before exposing its API to clients.
         """
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         try:
             rpk.create_topic("testtopic")
         except RpkException:
             pass
         else:
-            raise RuntimeError("Kafka API shouldn't be available")
+            raise RuntimeError("SQL API shouldn't be available")
 
         user = "alice"
         password = "sekrit"
@@ -1573,8 +1573,8 @@ class ClusterConfigNoKafkaTest(RedpandaTest):
         # configuration
         time.sleep(5)
 
-        alice_admin = Admin(self.redpanda, auth=(user, password))
-        self.redpanda.set_cluster_config(
+        alice_admin = Admin(self.funes, auth=(user, password))
+        self.funes.set_cluster_config(
             {
                 'superusers': [user],
                 'enable_sasl': True,
@@ -1583,29 +1583,29 @@ class ClusterConfigNoKafkaTest(RedpandaTest):
             expect_restart=False,
             admin_client=alice_admin)
 
-        for n in self.redpanda.nodes:
-            # Removing config override, on restart it will get kafka_api populated
-            self.redpanda.set_extra_node_conf(n, {})
+        for n in self.funes.nodes:
+            # Removing config override, on restart it will get sql_api populated
+            self.funes.set_extra_node_conf(n, {})
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
-        # Auth should be switched on: anonymous Kafka client should not work
+        # Auth should be switched on: anonymous SQL client should not work
         try:
             rpk.create_topic("testtopic")
         except RpkException:
             pass
         else:
-            raise RuntimeError("Kafka auth should fail")
+            raise RuntimeError("SQL auth should fail")
 
         # When I use the username+password I created, it should work.
-        rpk = RpkTool(self.redpanda,
+        rpk = RpkTool(self.funes,
                       username=user,
                       password=password,
                       sasl_mechanism="SCRAM-SHA-256")
         rpk.create_topic("testtopic")
 
 
-class ClusterConfigAzureSharedKey(RedpandaTest):
+class ClusterConfigAzureSharedKey(FunesTest):
     segment_size = 1024 * 1024
     topics = (TopicSpec(
         partition_count=1,
@@ -1621,10 +1621,10 @@ class ClusterConfigAzureSharedKey(RedpandaTest):
                          si_settings=self.si_settings,
                          extra_rp_conf={})
 
-        self.kafka_cli = KafkaCliTools(self.redpanda)
+        self.sql_cli = SQLCliTools(self.funes)
 
     def get_cloud_log_size(self):
-        s3_snapshot = BucketView(self.redpanda, topics=self.topics)
+        s3_snapshot = BucketView(self.funes, topics=self.topics)
         return s3_snapshot.cloud_log_size_for_ntp(self.topic,
                                                   0).total(no_archive=True)
 
@@ -1638,7 +1638,7 @@ class ClusterConfigAzureSharedKey(RedpandaTest):
                    err_msg="Segments were not uploaded")
 
     def produce_records(self, records: int, record_size: int):
-        self.kafka_cli.produce(self.topic, records, record_size)
+        self.sql_cli.produce(self.topic, records, record_size)
 
     @cluster(num_nodes=3,
              log_allow_list=[
@@ -1671,10 +1671,10 @@ class ClusterConfigAzureSharedKey(RedpandaTest):
                    backoff_sec=5,
                    err_msg="Data was not uploaded to cloud")
 
-        topic_leader_node = self.redpanda.partitions(self.topic)[0].leader
+        topic_leader_node = self.funes.partitions(self.topic)[0].leader
         metric_check = MetricCheck(
             self.logger,
-            self.redpanda,
+            self.funes,
             topic_leader_node, [
                 "vectorized_cloud_storage_successful_uploads_total",
                 "vectorized_cloud_storage_failed_uploads_total"
@@ -1689,7 +1689,7 @@ class ClusterConfigAzureSharedKey(RedpandaTest):
                  lambda a, b: b > a)
             ])
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_azure_shared_key":
                 "notakey02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
@@ -1702,7 +1702,7 @@ class ClusterConfigAzureSharedKey(RedpandaTest):
                    backoff_sec=5,
                    err_msg="Uploads did not fail")
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_azure_shared_key":
                 self.si_settings.cloud_storage_azure_shared_key
@@ -1718,17 +1718,17 @@ class ClusterConfigAzureSharedKey(RedpandaTest):
                    err_msg="Data was not uploaded to cloud")
 
         with expect_http_error(400):
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 {"cloud_storage_azure_shared_key": None}, expect_restart=False)
 
 
-class ClusterConfigNodeAddTest(RedpandaTest):
+class ClusterConfigNodeAddTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, num_brokers=4, **kwargs)
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     def setUp(self):
-        # Skip starting redpanda, so that test can explicitly start
+        # Skip starting funes, so that test can explicitly start
         # it with some override_cfg_params
         pass
 
@@ -1740,16 +1740,16 @@ class ClusterConfigNodeAddTest(RedpandaTest):
         not in their restart-required state once the node comes up.
 
         This indirectly confirms that the snapshots included in node join RPCs
-        are working as intended.  This functionality is added in Redpanda v23.2.x
+        are working as intended.  This functionality is added in Funes v23.2.x
         """
         def assert_restart_status(expect: bool):
             status = self.admin.get_cluster_config_status()
             for n in status:
                 assert n['restart'] is expect
 
-        original_nodes = self.redpanda.nodes[0:3]
-        add_node = self.redpanda.nodes[3]
-        self.redpanda.start(nodes=original_nodes)
+        original_nodes = self.funes.nodes[0:3]
+        add_node = self.funes.nodes[3]
+        self.funes.start(nodes=original_nodes)
 
         # Wait for config status to populate
         wait_until(lambda: len(self.admin.get_cluster_config_status()) == 3,
@@ -1759,21 +1759,21 @@ class ClusterConfigNodeAddTest(RedpandaTest):
         assert_restart_status(False)
 
         # An arbitrary restart-requiring setting with a non-default value
-        new_setting = ('kafka_qdc_idle_depth', 77)
+        new_setting = ('sql_qdc_idle_depth', 77)
         patch_result = self.admin.patch_cluster_config(
             upsert=dict([new_setting]))
         new_version = patch_result['config_version']
         wait_for_version_status_sync(self.admin,
-                                     self.redpanda,
+                                     self.funes,
                                      new_version,
                                      nodes=original_nodes)
         assert_restart_status(True)
 
         # Restart existing nodes to get them into a clean state
-        check_restart_clears(self.admin, self.redpanda, nodes=original_nodes)
+        check_restart_clears(self.admin, self.funes, nodes=original_nodes)
 
         # Add a new node
-        self.redpanda.start_node(add_node)
+        self.funes.start_node(add_node)
 
         # Wait for config status to include new node
         wait_until(lambda: len(self.admin.get_cluster_config_status()) == 4,
@@ -1785,7 +1785,7 @@ class ClusterConfigNodeAddTest(RedpandaTest):
             assert n['restart'] is False
 
 
-class ClusterConfigLegacyDefaultTest(RedpandaTest, ClusterConfigHelpersMixin):
+class ClusterConfigLegacyDefaultTest(FunesTest, ClusterConfigHelpersMixin):
     """
     Test config::legacy_default feature, that defaults for features can be
     dependent on the original version of an upgraded cluster.
@@ -1793,9 +1793,9 @@ class ClusterConfigLegacyDefaultTest(RedpandaTest, ClusterConfigHelpersMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.admin = Admin(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
-        self.installer = self.redpanda._installer
+        self.admin = Admin(self.funes)
+        self.rpk = RpkTool(self.funes)
+        self.installer = self.funes._installer
 
         self.legacy_version = (23, 1)
 
@@ -1808,28 +1808,28 @@ class ClusterConfigLegacyDefaultTest(RedpandaTest, ClusterConfigHelpersMixin):
         pass
 
     def _upgrade(self, wipe_cache):
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        for node in self.redpanda.nodes:
-            self.redpanda.stop_node(node)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        for node in self.funes.nodes:
+            self.funes.stop_node(node)
 
             if wipe_cache:
                 # Erase the cluster config cache, so that the node will replay from
                 # controller log and/or controller snapshots
-                cache_path = f"{self.redpanda.DATA_DIR}/config_cache.yaml"
+                cache_path = f"{self.funes.DATA_DIR}/config_cache.yaml"
                 self.logger.info(
                     "Erasing config cache on {node.name} at {cache_path}")
                 assert node.account.exists(cache_path)
                 node.account.remove(cache_path)
 
-            self.redpanda.start_node(node)
+            self.funes.start_node(node)
 
     @cluster(num_nodes=3)
     @parametrize(wipe_cache=True)
     @parametrize(wipe_cache=False)
     def test_legacy_default(self, wipe_cache: bool):
         old_version, _ = self.installer.latest_for_line(self.legacy_version)
-        self.installer.install(self.redpanda.nodes, old_version)
-        self.redpanda.start()
+        self.installer.install(self.funes.nodes, old_version)
+        self.funes.start()
 
         self._check_value_everywhere(self.key, self.legacy_default)
         self._upgrade(wipe_cache)
@@ -1840,11 +1840,11 @@ class ClusterConfigLegacyDefaultTest(RedpandaTest, ClusterConfigHelpersMixin):
     @parametrize(wipe_cache=False)
     def test_legacy_default_explicit_before_upgrade(self, wipe_cache: bool):
         old_version, _ = self.installer.latest_for_line(self.legacy_version)
-        self.installer.install(self.redpanda.nodes, old_version)
+        self.installer.install(self.funes.nodes, old_version)
 
         expected = self.legacy_default + 1
-        self.redpanda.add_extra_rp_conf({self.key: expected})
-        self.redpanda.start()
+        self.funes.add_extra_rp_conf({self.key: expected})
+        self.funes.start()
 
         self._check_value_everywhere(self.key, expected)
         self._upgrade(wipe_cache)
@@ -1855,13 +1855,13 @@ class ClusterConfigLegacyDefaultTest(RedpandaTest, ClusterConfigHelpersMixin):
     @parametrize(wipe_cache=False)
     def test_legacy_default_explicit_after_upgrade(self, wipe_cache: bool):
         old_version, _ = self.installer.latest_for_line(self.legacy_version)
-        self.installer.install(self.redpanda.nodes, old_version)
-        self.redpanda.start()
+        self.installer.install(self.funes.nodes, old_version)
+        self.funes.start()
 
         self._check_value_everywhere(self.key, self.legacy_default)
 
         self._upgrade(wipe_cache)
         expected = self.new_default + 1
-        self.redpanda.set_cluster_config({self.key: expected})
+        self.funes.set_cluster_config({self.key: expected})
 
         self._check_value_everywhere(self.key, expected)

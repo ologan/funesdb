@@ -29,7 +29,7 @@ static ktp_with_hash makekh(const ss::sstring& t, const int p) {
 }
 
 static ntp maken(const ss::sstring& t, const int p) {
-    return ntp{model::kafka_namespace, model::topic(t), model::partition_id(p)};
+    return ntp{model::sql_namespace, model::topic(t), model::partition_id(p)};
 }
 
 template<typename T>
@@ -84,10 +84,10 @@ BOOST_AUTO_TEST_CASE(test_ktp_equals_cross_with_hash) {
 BOOST_AUTO_TEST_CASE(test_equals_cross) { equals_helper(makek, maken); }
 
 BOOST_AUTO_TEST_CASE(test_equals_not_kakfa_namespace) {
-    BOOST_CHECK_EQUAL(makek("topic", 1), model::ntp("kafka", "topic", 1));
+    BOOST_CHECK_EQUAL(makek("topic", 1), model::ntp("sql", "topic", 1));
 
-    // check that when ntp has a topic other than kafka it is always unequal
-    BOOST_CHECK_NE(makek("topic", 1), model::ntp("not_kafka", "topic", 1));
+    // check that when ntp has a topic other than sql it is always unequal
+    BOOST_CHECK_NE(makek("topic", 1), model::ntp("not_sql", "topic", 1));
     BOOST_CHECK_NE(makek("topic", 1), model::ntp("", "topic", 1));
 }
 

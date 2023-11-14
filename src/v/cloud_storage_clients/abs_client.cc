@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage_clients/abs_client.h"
@@ -457,7 +457,7 @@ ss::future<result<T, error_outcome>> abs_client::send_request(
             vlog(
               abs_log.error,
               "Received [{}] {} error response from ABS. This indicates "
-              "misconfiguration of ABS and/or Redpanda: {}",
+              "misconfiguration of ABS and/or Funes: {}",
               err.http_code(),
               err.code_string(),
               err.message());

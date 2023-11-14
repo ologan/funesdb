@@ -56,14 +56,14 @@ public:
         // processor is actually ready, otherwise it could be possible that
         // the processor picks up after the initial records are added to the
         // partition.
-        wait_for_committed_offset(kafka::offset{});
+        wait_for_committed_offset(sql::offset{});
     }
     void TearDown() override { _p->stop().get(); }
 
     void wait_for_committed_offset(model::offset o) {
         wait_for_committed_offset(model::offset_cast(o));
     }
-    void wait_for_committed_offset(kafka::offset o) {
+    void wait_for_committed_offset(sql::offset o) {
         _offset_tracker->wait_for_committed_offset(o).get();
     }
 
@@ -74,7 +74,7 @@ public:
 
     model::record_batch make_tiny_batch() {
         return model::test::make_random_batch(model::test::record_batch_spec{
-          .offset = kafka::offset_cast(++_offset),
+          .offset = sql::offset_cast(++_offset),
           .allow_compression = false,
           .count = 1});
     }
@@ -92,9 +92,9 @@ public:
     void start() { _p->start().get(); }
 
 private:
-    static constexpr kafka::offset start_offset = kafka::offset(0);
+    static constexpr sql::offset start_offset = sql::offset(0);
 
-    kafka::offset _offset = start_offset;
+    sql::offset _offset = start_offset;
     std::unique_ptr<transform::processor> _p;
     testing::fake_wasm_engine* _engine;
     testing::fake_source* _src;

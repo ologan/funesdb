@@ -15,9 +15,9 @@ import random
 
 from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
-import confluent_kafka as ck
+import confluent_sql as ck
 
 
 class TransactionsMixin:
@@ -28,7 +28,7 @@ class TransactionsMixin:
         assert err != None, err
 
 
-class TxRegistryTest(RedpandaTest):
+class TxRegistryTest(FunesTest):
     topics = (TopicSpec(partition_count=1, replication_factor=3),
               TopicSpec(partition_count=1, replication_factor=3))
 
@@ -45,13 +45,13 @@ class TxRegistryTest(RedpandaTest):
         self.input_t = self.topics[0]
         self.output_t = self.topics[1]
         self.max_records = 100
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
     @cluster(num_nodes=3)
     def find_coordinator_inits_tx_registry_test(self):
         def find_tx_coordinator_passes():
             r = self.admin.find_tx_coordinator(
-                "tx0", node=random.choice(self.redpanda.started_nodes()))
+                "tx0", node=random.choice(self.funes.started_nodes()))
             return r["ec"] == 0
 
         def describe_tx_registry():

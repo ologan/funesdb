@@ -13,6 +13,6 @@
 // limitations under the License.
 
 /*
-Package sr is a schema registry client for Redpanda for usage within inline Data Transforms.
+Package sr is a schema registry client for Funes for usage within inline Data Transforms.
 */
 package sr

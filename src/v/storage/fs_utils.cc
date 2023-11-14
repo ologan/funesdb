@@ -74,7 +74,7 @@ std::optional<segment_full_path> segment_full_path::parse(
 
 segment_full_path segment_full_path::mock(ss::sstring str_path) {
     auto ntp = model::ntp(
-      model::kafka_namespace,
+      model::sql_namespace,
       model::topic_partition(
         model::topic{"testtopic"}, model::partition_id{0}));
 
@@ -89,7 +89,7 @@ segment_full_path segment_full_path::mock(ss::sstring str_path) {
 }
 
 bool segment_full_path::is_internal_topic() const {
-    return dir_part.ntp.ns != model::kafka_namespace;
+    return dir_part.ntp.ns != model::sql_namespace;
 }
 
 segment_full_path segment_full_path::to_index() const {

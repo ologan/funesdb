@@ -1,53 +1,53 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "security/audit/schemas/utils.h"
 
-#include "kafka/protocol/schemata/add_offsets_to_txn_request.h"
-#include "kafka/protocol/schemata/add_partitions_to_txn_request.h"
-#include "kafka/protocol/schemata/alter_configs_request.h"
-#include "kafka/protocol/schemata/alter_partition_reassignments_request.h"
-#include "kafka/protocol/schemata/create_acls_request.h"
-#include "kafka/protocol/schemata/create_partitions_request.h"
-#include "kafka/protocol/schemata/create_topics_request.h"
-#include "kafka/protocol/schemata/delete_acls_request.h"
-#include "kafka/protocol/schemata/delete_groups_request.h"
-#include "kafka/protocol/schemata/delete_records_request.h"
-#include "kafka/protocol/schemata/delete_topics_request.h"
-#include "kafka/protocol/schemata/describe_acls_request.h"
-#include "kafka/protocol/schemata/describe_configs_request.h"
-#include "kafka/protocol/schemata/describe_groups_request.h"
-#include "kafka/protocol/schemata/describe_log_dirs_request.h"
-#include "kafka/protocol/schemata/describe_producers_request.h"
-#include "kafka/protocol/schemata/describe_transactions_request.h"
-#include "kafka/protocol/schemata/end_txn_request.h"
-#include "kafka/protocol/schemata/fetch_request.h"
-#include "kafka/protocol/schemata/find_coordinator_request.h"
-#include "kafka/protocol/schemata/heartbeat_request.h"
-#include "kafka/protocol/schemata/incremental_alter_configs_request.h"
-#include "kafka/protocol/schemata/init_producer_id_request.h"
-#include "kafka/protocol/schemata/join_group_request.h"
-#include "kafka/protocol/schemata/leave_group_request.h"
-#include "kafka/protocol/schemata/list_groups_request.h"
-#include "kafka/protocol/schemata/list_offset_request.h"
-#include "kafka/protocol/schemata/list_partition_reassignments_request.h"
-#include "kafka/protocol/schemata/list_transactions_request.h"
-#include "kafka/protocol/schemata/metadata_request.h"
-#include "kafka/protocol/schemata/offset_commit_request.h"
-#include "kafka/protocol/schemata/offset_delete_request.h"
-#include "kafka/protocol/schemata/offset_fetch_request.h"
-#include "kafka/protocol/schemata/offset_for_leader_epoch_request.h"
-#include "kafka/protocol/schemata/produce_request.h"
-#include "kafka/protocol/schemata/sync_group_request.h"
-#include "kafka/protocol/schemata/txn_offset_commit_request.h"
-#include "kafka/protocol/types.h"
+#include "sql/protocol/schemata/add_offsets_to_txn_request.h"
+#include "sql/protocol/schemata/add_partitions_to_txn_request.h"
+#include "sql/protocol/schemata/alter_configs_request.h"
+#include "sql/protocol/schemata/alter_partition_reassignments_request.h"
+#include "sql/protocol/schemata/create_acls_request.h"
+#include "sql/protocol/schemata/create_partitions_request.h"
+#include "sql/protocol/schemata/create_topics_request.h"
+#include "sql/protocol/schemata/delete_acls_request.h"
+#include "sql/protocol/schemata/delete_groups_request.h"
+#include "sql/protocol/schemata/delete_records_request.h"
+#include "sql/protocol/schemata/delete_topics_request.h"
+#include "sql/protocol/schemata/describe_acls_request.h"
+#include "sql/protocol/schemata/describe_configs_request.h"
+#include "sql/protocol/schemata/describe_groups_request.h"
+#include "sql/protocol/schemata/describe_log_dirs_request.h"
+#include "sql/protocol/schemata/describe_producers_request.h"
+#include "sql/protocol/schemata/describe_transactions_request.h"
+#include "sql/protocol/schemata/end_txn_request.h"
+#include "sql/protocol/schemata/fetch_request.h"
+#include "sql/protocol/schemata/find_coordinator_request.h"
+#include "sql/protocol/schemata/heartbeat_request.h"
+#include "sql/protocol/schemata/incremental_alter_configs_request.h"
+#include "sql/protocol/schemata/init_producer_id_request.h"
+#include "sql/protocol/schemata/join_group_request.h"
+#include "sql/protocol/schemata/leave_group_request.h"
+#include "sql/protocol/schemata/list_groups_request.h"
+#include "sql/protocol/schemata/list_offset_request.h"
+#include "sql/protocol/schemata/list_partition_reassignments_request.h"
+#include "sql/protocol/schemata/list_transactions_request.h"
+#include "sql/protocol/schemata/metadata_request.h"
+#include "sql/protocol/schemata/offset_commit_request.h"
+#include "sql/protocol/schemata/offset_delete_request.h"
+#include "sql/protocol/schemata/offset_fetch_request.h"
+#include "sql/protocol/schemata/offset_for_leader_epoch_request.h"
+#include "sql/protocol/schemata/produce_request.h"
+#include "sql/protocol/schemata/sync_group_request.h"
+#include "sql/protocol/schemata/txn_offset_commit_request.h"
+#include "sql/protocol/types.h"
 #include "net/unresolved_address.h"
 #include "security/acl.h"
 #include "security/audit/schemas/application_activity.h"
@@ -241,7 +241,7 @@ constexpr api_activity::activity_id op_to_crud(security::acl_operation op) {
         return api_activity::activity_id::update;
     case acl_operation::all:
         // The `acl_operation` passed to this function is based off of
-        // the ACL check performed by the Kafka handlers.  None of the
+        // the ACL check performed by the SQL handlers.  None of the
         // handlers should be providing `all` to an ACL check.
         vassert(false, "Cannot convert an ALL acl operation to a CRUD");
     }
@@ -423,88 +423,88 @@ std::ostream& operator<<(std::ostream& os, const ocsf_base_impl& impl) {
               << ", type_uid: " << impl.get_type_uid()() << "}";
 }
 
-event_type kafka_api_to_event_type(kafka::api_key key) {
+event_type sql_api_to_event_type(sql::api_key key) {
     switch (key) {
-    case kafka::alter_configs_api::key:
+    case sql::alter_configs_api::key:
         return event_type::management;
-    case kafka::alter_partition_reassignments_api::key:
+    case sql::alter_partition_reassignments_api::key:
         return event_type::management;
-    case kafka::create_acls_api::key:
+    case sql::create_acls_api::key:
         return event_type::management;
-    case kafka::create_partitions_api::key:
+    case sql::create_partitions_api::key:
         return event_type::management;
-    case kafka::create_topics_api::key:
+    case sql::create_topics_api::key:
         return event_type::management;
-    case kafka::delete_acls_api::key:
+    case sql::delete_acls_api::key:
         return event_type::management;
-    case kafka::delete_groups_api::key:
+    case sql::delete_groups_api::key:
         return event_type::management;
-    case kafka::delete_records_api::key:
+    case sql::delete_records_api::key:
         return event_type::management;
-    case kafka::delete_topics_api::key:
+    case sql::delete_topics_api::key:
         return event_type::management;
-    case kafka::incremental_alter_configs_api::key:
+    case sql::incremental_alter_configs_api::key:
         return event_type::management;
-    case kafka::offset_delete_api::key:
+    case sql::offset_delete_api::key:
         return event_type::management;
-    case kafka::add_partitions_to_txn_api::key:
+    case sql::add_partitions_to_txn_api::key:
         return event_type::produce;
-    case kafka::end_txn_api::key:
+    case sql::end_txn_api::key:
         return event_type::produce;
-    case kafka::init_producer_id_api::key:
+    case sql::init_producer_id_api::key:
         return event_type::produce;
-    case kafka::produce_api::key:
+    case sql::produce_api::key:
         return event_type::produce;
-    case kafka::add_offsets_to_txn_api::key:
+    case sql::add_offsets_to_txn_api::key:
         return event_type::consume;
-    case kafka::fetch_api::key:
+    case sql::fetch_api::key:
         return event_type::consume;
-    case kafka::join_group_api::key:
+    case sql::join_group_api::key:
         return event_type::consume;
-    case kafka::leave_group_api::key:
+    case sql::leave_group_api::key:
         return event_type::consume;
-    case kafka::list_offsets_api::key:
+    case sql::list_offsets_api::key:
         return event_type::consume;
-    case kafka::offset_commit_api::key:
+    case sql::offset_commit_api::key:
         return event_type::consume;
-    case kafka::offset_fetch_api::key:
+    case sql::offset_fetch_api::key:
         return event_type::consume;
-    case kafka::sync_group_api::key:
+    case sql::sync_group_api::key:
         return event_type::consume;
-    case kafka::txn_offset_commit_api::key:
+    case sql::txn_offset_commit_api::key:
         return event_type::consume;
-    case kafka::describe_acls_api::key:
+    case sql::describe_acls_api::key:
         return event_type::describe;
-    case kafka::describe_configs_api::key:
+    case sql::describe_configs_api::key:
         return event_type::describe;
-    case kafka::describe_groups_api::key:
+    case sql::describe_groups_api::key:
         return event_type::describe;
-    case kafka::describe_log_dirs_api::key:
+    case sql::describe_log_dirs_api::key:
         return event_type::describe;
-    case kafka::find_coordinator_api::key:
+    case sql::find_coordinator_api::key:
         return event_type::describe;
-    case kafka::list_groups_api::key:
+    case sql::list_groups_api::key:
         return event_type::describe;
-    case kafka::list_partition_reassignments_api::key:
+    case sql::list_partition_reassignments_api::key:
         return event_type::describe;
-    case kafka::metadata_api::key:
+    case sql::metadata_api::key:
         return event_type::describe;
-    case kafka::offset_for_leader_epoch_api::key:
+    case sql::offset_for_leader_epoch_api::key:
         return event_type::describe;
-    case kafka::describe_producers_api::key:
+    case sql::describe_producers_api::key:
         return event_type::describe;
-    case kafka::describe_transactions_api::key:
+    case sql::describe_transactions_api::key:
         return event_type::describe;
-    case kafka::list_transactions_api::key:
+    case sql::list_transactions_api::key:
         return event_type::describe;
-    case kafka::heartbeat_api::key:
+    case sql::heartbeat_api::key:
         return event_type::heartbeat;
     }
 
     // this method should only be used by handlers or the audit system while an
     // event is being handled meaning if we have reached this spot, there is a
     // bug
-    vassert(false, "Unhandled Kafka API in kafka_api_to_event_type: {}", key);
+    vassert(false, "Unhandled SQL API in sql_api_to_event_type: {}", key);
 }
 
 api_activity make_api_activity_event(
@@ -689,14 +689,14 @@ application_lifecycle
 make_application_lifecycle(application_lifecycle::activity_id activity_id) {
     return {
       activity_id,
-      redpanda_product(),
+      funes_product(),
       severity_id::informational,
       create_timestamp_t()};
 }
 
 application_lifecycle make_application_lifecycle(
   application_lifecycle::activity_id activity_id, ss::sstring feature_name) {
-    auto product = redpanda_product();
+    auto product = funes_product();
     product.feature = feature{.name = std::move(feature_name)};
 
     return {

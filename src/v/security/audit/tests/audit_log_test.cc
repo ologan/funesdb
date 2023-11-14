@@ -1,16 +1,16 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cluster/types.h"
-#include "kafka/types.h"
-#include "redpanda/tests/fixture.h"
+#include "sql/types.h"
+#include "funes/tests/fixture.h"
 #include "security/audit/audit_log_manager.h"
 #include "security/audit/schemas/application_activity.h"
 #include "security/audit/schemas/iam.h"
@@ -48,7 +48,7 @@ ss::future<size_t> pending_audit_events(sa::audit_log_manager& m) {
       std::plus<>());
 }
 
-FIXTURE_TEST(test_audit_init_phase, redpanda_thread_fixture) {
+FIXTURE_TEST(test_audit_init_phase, funes_thread_fixture) {
     /// Initialize auditing configurations
     ss::smp::invoke_on_all([this] {
         std::vector<ss::sstring> enabled_types{"management", "consume"};
@@ -66,10 +66,10 @@ FIXTURE_TEST(test_audit_init_phase, redpanda_thread_fixture) {
           .get("audit_enabled_event_types")
           .set_value(enabled_types);
         auto& node_config = config::node();
-        node_config.get("kafka_api")
+        node_config.get("sql_api")
           .set_value(std::vector<config::broker_authn_endpoint>{
             config::broker_authn_endpoint{
-              .address = net::unresolved_address("127.0.0.1", kafka_port),
+              .address = net::unresolved_address("127.0.0.1", sql_port),
               .authn_method = config::broker_authn_method::sasl}});
     }).get();
 
@@ -101,7 +101,7 @@ FIXTURE_TEST(test_audit_init_phase, redpanda_thread_fixture) {
     /// With the switch enabled the audit topic should be created
     wait_for_topics(
       {cluster::topic_result(model::topic_namespace(
-        model::kafka_namespace, model::kafka_audit_logging_topic))})
+        model::sql_namespace, model::sql_audit_logging_topic))})
       .get();
 
     /// Verify auditing can enqueue up until the max configured, and further

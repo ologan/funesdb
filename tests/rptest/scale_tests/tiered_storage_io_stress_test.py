@@ -18,13 +18,13 @@ from rptest.services.kgo_verifier_services import (
     KgoVerifierRandomConsumer,
     KgoVerifierConsumerGroupConsumer,
 )
-from rptest.services.redpanda import CloudStorageType, SISettings, RESTART_LOG_ALLOW_LIST, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, SISettings, RESTART_LOG_ALLOW_LIST, get_cloud_storage_type
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.utils.mode_checks import skip_debug_mode
 from rptest.utils.si_utils import quiesce_uploads
 
 KGO_LOG_ALLOW_LIST = [
-    # rpc - server.cc:116 - kafka rpc protocol - Error[applying protocol] remote address: 172.18.0.31:56896 - std::out_of_range (Invalid skip(n). Expected:1000097, but skipped:524404)
+    # rpc - server.cc:116 - sql rpc protocol - Error[applying protocol] remote address: 172.18.0.31:56896 - std::out_of_range (Invalid skip(n). Expected:1000097, but skipped:524404)
     r'rpc - .* - std::out_of_range'
 ]
 
@@ -71,23 +71,23 @@ class TieredStorageIoStressTest(PreallocNodesTest):
                          extra_rp_conf=extra_rp_conf,
                          **kwargs)
 
-        self._producer = KgoVerifierProducer(test_context, self.redpanda,
+        self._producer = KgoVerifierProducer(test_context, self.funes,
                                              self.topic, self.MSG_SIZE,
                                              self.PRODUCE_COUNT,
                                              self.preallocated_nodes)
         self._seq_consumer = KgoVerifierSeqConsumer(
             test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             self.MSG_SIZE,
             nodes=self.preallocated_nodes)
         self._rand_consumer = KgoVerifierRandomConsumer(
-            test_context, self.redpanda, self.topic, self.MSG_SIZE,
+            test_context, self.funes, self.topic, self.MSG_SIZE,
             self.RANDOM_READ_COUNT, self.RANDOM_READ_PARALLEL,
             self.preallocated_nodes)
         self._cg_consumer = KgoVerifierConsumerGroupConsumer(
             test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             self.MSG_SIZE,
             self.CONSUMER_GROUP_READERS,
@@ -98,13 +98,13 @@ class TieredStorageIoStressTest(PreallocNodesTest):
         ]
 
     def setUp(self):
-        # Defer redpanda startup to test body
+        # Defer funes startup to test body
         pass
 
     def _workload(self, segment_size: int, interval_uploads: bool):
-        rpk = RpkTool(self.redpanda)
-        rpk.alter_topic_config(self.topic, 'redpanda.remote.write', 'true')
-        rpk.alter_topic_config(self.topic, 'redpanda.remote.read', 'true')
+        rpk = RpkTool(self.funes)
+        rpk.alter_topic_config(self.topic, 'funes.remote.write', 'true')
+        rpk.alter_topic_config(self.topic, 'funes.remote.read', 'true')
         rpk.alter_topic_config(self.topic, 'retention.local.target.bytes',
                                str(segment_size))
 
@@ -115,7 +115,7 @@ class TieredStorageIoStressTest(PreallocNodesTest):
                                      timeout_sec=300,
                                      backoff_sec=5)
 
-        objects = list(self.redpanda.get_objects_from_si())
+        objects = list(self.funes.get_objects_from_si())
         assert len(objects) > 0
         for o in objects:
             self.logger.info(f"S3 object: {o.key}, {o.content_length}")
@@ -141,7 +141,7 @@ class TieredStorageIoStressTest(PreallocNodesTest):
 
         if interval_uploads:
             # Ensure that uploads run to completion.
-            quiesce_uploads(self.redpanda, [self.topic], timeout_sec=120)
+            quiesce_uploads(self.funes, [self.topic], timeout_sec=120)
 
     @skip_debug_mode
     @cluster(num_nodes=4, log_allow_list=KGO_RESTART_LOG_ALLOW_LIST)
@@ -163,9 +163,9 @@ class TieredStorageIoStressTest(PreallocNodesTest):
             # A cache large enough to accommodate a respectable read throughput
             cloud_storage_cache_size=SISettings.cache_size_for_throughput(
                 expected_throughput))
-        self.redpanda.set_si_settings(si_settings)
+        self.funes.set_si_settings(si_settings)
 
-        self.redpanda.start()
+        self.funes.start()
         self._create_initial_topics()
 
         self._workload(segment_size, interval_uploads)

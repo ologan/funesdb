@@ -254,7 +254,7 @@ FIXTURE_TEST(test_tracking_broker_and_command_revisions, topic_table_fixture) {
     using rev_map_t = absl::flat_hash_map<model::node_id, model::revision_id>;
 
     model::topic_namespace tp_ns(
-      model::kafka_namespace, model::topic("test_tp"));
+      model::sql_namespace, model::topic("test_tp"));
 
     model::ntp ntp_0(tp_ns.ns, tp_ns.tp, model::partition_id(0));
 

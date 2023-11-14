@@ -27,7 +27,7 @@ public:
       : std::runtime_error(std::move(msg)) {}
 };
 
-/// Main orchestration tool for the redpanda self_test framework. This tool
+/// Main orchestration tool for the funes self_test framework. This tool
 /// sends requests to all peers that will start or stop individual self_test
 /// jobs such as disk, network tests, etc. The status() endpoint can be used
 /// to query the status of all self_tests running cluster-wide.

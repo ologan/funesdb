@@ -10,36 +10,36 @@
 import re
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_installer import FunesInstaller, wait_for_num_versions
+from rptest.services.funes import FunesService
 from ducktape.utils.util import wait_until
 from typing import (Any, Optional)
 from ducktape.tests.test import TestContext
 
-from confluent_kafka import (Producer, KafkaException, Message)
+from confluent_sql import (Producer, SQLException, Message)
 from random import choice
 from string import ascii_uppercase
 
 
 def on_delivery(err: Optional[Any], msg: Message) -> None:
     if err is not None:
-        raise KafkaException(err)
+        raise SQLException(err)
 
 
 PAYLOAD_1KB = ''.join(choice(ascii_uppercase) for i in range(1024))
 
 
-class TxAbortSnapshotTest(RedpandaTest):
+class TxAbortSnapshotTest(FunesTest):
     topics = [TopicSpec()]
     """
     Checks that the abort indexes for deleted segment offsets are cleaned up.
     """
     def __init__(self, test_context: TestContext):
         # NOTE this should work with delete_retention_ms instead of log_retention_ms, but due to
-        # https://github.com/redpanda-data/redpanda/issues/13362 this is not possible
+        # https://github.com/redpanda-data/funes/issues/13362 this is not possible
         extra_rp_conf = {
             "default_topic_replications": 3,
             "default_topic_partitions": 1,
@@ -53,7 +53,7 @@ class TxAbortSnapshotTest(RedpandaTest):
 
     def fill_idx(self, topic: str) -> None:
         p = Producer({
-            'bootstrap.servers': self.redpanda.brokers(),
+            'bootstrap.servers': self.funes.brokers(),
             'transactional.id': '1',
         })
         p.init_transactions()
@@ -68,7 +68,7 @@ class TxAbortSnapshotTest(RedpandaTest):
 
     def fill_segment(self, topic: str) -> None:
         p = Producer({
-            "bootstrap.servers": self.redpanda.brokers(),
+            "bootstrap.servers": self.funes.brokers(),
             "enable.idempotence": True,
             "retries": 5
         })
@@ -81,13 +81,13 @@ class TxAbortSnapshotTest(RedpandaTest):
 
     def find_indexes(self, topic: str) -> dict[str, str]:
         idxes = dict()
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             idxes[node.account.hostname] = []
-            cmd = f"find {RedpandaService.DATA_DIR}"
+            cmd = f"find {FunesService.DATA_DIR}"
             out_iter = node.account.ssh_capture(cmd)
             for line in out_iter:
                 m = re.match(
-                    f"{RedpandaService.DATA_DIR}/kafka/{topic}/\\d+_\\d+/(abort.idx.\\d+.\\d+)",
+                    f"{FunesService.DATA_DIR}/sql/{topic}/\\d+_\\d+/(abort.idx.\\d+.\\d+)",
                     line)
                 if m:
                     idxes[node.account.hostname].append(m.group(1))
@@ -95,13 +95,13 @@ class TxAbortSnapshotTest(RedpandaTest):
 
     def find_segments(self, topic: str) -> dict[str, list[str]]:
         segments = dict()
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             segments[node.account.hostname] = []
-            cmd = f"find {RedpandaService.DATA_DIR}"
+            cmd = f"find {FunesService.DATA_DIR}"
             out_iter = node.account.ssh_capture(cmd)
             for line in out_iter:
                 m = re.match(
-                    f"{RedpandaService.DATA_DIR}/kafka/{topic}/\\d+_\\d+/(.+).log",
+                    f"{FunesService.DATA_DIR}/sql/{topic}/\\d+_\\d+/(.+).log",
                     line)
                 if m:
                     self.logger.info(f"{node.account.hostname} {line}")
@@ -112,11 +112,11 @@ class TxAbortSnapshotTest(RedpandaTest):
     def test_index_removal(self) -> None:
         self.fill_idx(self.topics[0].name)
         segments = self.find_segments(self.topics[0].name)
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             assert len(segments[node.account.hostname]) == 1
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         idx = self.find_indexes(self.topics[0].name)
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             assert len(idx[node.account.hostname]) > 0
         self.fill_segment(self.topics[0].name)
 
@@ -132,11 +132,11 @@ class TxAbortSnapshotTest(RedpandaTest):
         wait_until(segments_gone, timeout_sec=60, backoff_sec=1)
         self.fill_segment(self.topics[0].name)
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         def indices_gone():
             current_idx = self.find_indexes(self.topics[0].name)
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 idxes = current_idx[node.account.hostname]
                 if len(idxes) != 0:
                     self.logger.debug(

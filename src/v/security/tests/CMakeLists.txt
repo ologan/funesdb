@@ -1,6 +1,6 @@
 rp_test(
   UNIT_TEST
-  BINARY_NAME test_kafka_security
+  BINARY_NAME test_sql_security
   SOURCES
     scram_algorithm_test.cc
     credential_store_test.cc
@@ -12,13 +12,13 @@ rp_test(
     url_test.cc
     oidc_principal_mapping_test.cc
   DEFINITIONS BOOST_TEST_DYN_LINK
-  LIBRARIES Boost::unit_test_framework v::kafka_protocol v::storage v::security
-  LABELS kafka
+  LIBRARIES Boost::unit_test_framework v::sql_protocol v::storage v::security
+  LABELS sql
 )
 
 rp_test(
   UNIT_TEST
-  BINARY_NAME test_kafka_security_single_thread
+  BINARY_NAME test_sql_security_single_thread
   SOURCES
     ephemeral_credential_store_test.cc
   DEFINITIONS BOOST_TEST_DYN_LINK
@@ -27,5 +27,5 @@ rp_test(
     v::security
   ARGS "-- -c 1"
   LABELS
-    kafka
+    sql
 )

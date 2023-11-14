@@ -14,12 +14,12 @@ from ducktape.mark import matrix, parametrize
 from ducktape.utils.util import wait_until
 
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, SISettings, MetricsEndpoint, get_cloud_storage_type
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import CloudStorageType, SISettings, MetricsEndpoint, get_cloud_storage_type
+from rptest.tests.funes_test import FunesTest
 from rptest.util import (produce_until_segments, produce_total_bytes,
                          wait_for_local_storage_truncate, segments_count,
                          expect_exception)
@@ -35,7 +35,7 @@ def bytes_for_segments(want_segments, segment_size):
     return int(want_segments * segment_size)
 
 
-class RetentionPolicyTest(RedpandaTest):
+class RetentionPolicyTest(FunesTest):
     topics = (TopicSpec(partition_count=1,
                         replication_factor=3,
                         cleanup_policy=TopicSpec.CLEANUP_DELETE), )
@@ -66,7 +66,7 @@ class RetentionPolicyTest(RedpandaTest):
         """
         # produce until segments have been compacted
         produce_until_segments(
-            self.redpanda,
+            self.funes,
             topic=self.topic,
             partition_idx=0,
             count=10,
@@ -79,7 +79,7 @@ class RetentionPolicyTest(RedpandaTest):
             self.client().alter_topic_configs(self.topic, {
                 property: local_retention,
             })
-            wait_for_local_storage_truncate(redpanda=self.redpanda,
+            wait_for_local_storage_truncate(funes=self.funes,
                                             topic=self.topic,
                                             target_bytes=local_retention)
         else:
@@ -89,7 +89,7 @@ class RetentionPolicyTest(RedpandaTest):
                 property: 10000,
             })
             wait_until(lambda: next(
-                segments_count(self.redpanda, self.topic, 0)) <= 5,
+                segments_count(self.funes, self.topic, 0)) <= 5,
                        timeout_sec=120)
 
     @cluster(num_nodes=3)
@@ -105,7 +105,7 @@ class RetentionPolicyTest(RedpandaTest):
 
         # produce until segments have been compacted
         produce_until_segments(
-            self.redpanda,
+            self.funes,
             topic=self.topic,
             partition_idx=0,
             count=20,
@@ -113,11 +113,11 @@ class RetentionPolicyTest(RedpandaTest):
         )
 
         # restart all nodes to force replicating raft configuration
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
-        kafka_tools = KafkaCliTools(self.redpanda)
+        sql_tools = SQLCliTools(self.funes)
         # Wait for controller, alter configs doesn't have a retry loop
-        kafka_tools.describe_topic(self.topic)
+        sql_tools.describe_topic(self.topic)
 
         # Retain progressively less data, and validate that retention policy is applied
         for retain_segments in (15, 10, 5):
@@ -125,12 +125,12 @@ class RetentionPolicyTest(RedpandaTest):
             self.client().alter_topic_configs(
                 self.topic,
                 {TopicSpec.PROPERTY_RETENTION_BYTES: local_retention})
-            wait_for_local_storage_truncate(self.redpanda,
+            wait_for_local_storage_truncate(self.funes,
                                             self.topic,
                                             target_bytes=local_retention)
 
 
-class RetentionPolicyToggleTest(RedpandaTest):
+class RetentionPolicyToggleTest(FunesTest):
     topics = (TopicSpec(partition_count=1,
                         replication_factor=3,
                         cleanup_policy=TopicSpec.CLEANUP_COMPACT), )
@@ -161,7 +161,7 @@ class RetentionPolicyToggleTest(RedpandaTest):
             })
 
         produce_until_segments(
-            self.redpanda,
+            self.funes,
             topic=self.topic,
             partition_idx=0,
             count=10,
@@ -173,7 +173,7 @@ class RetentionPolicyToggleTest(RedpandaTest):
                 TopicSpec.PROPERTY_RETENTION_BYTES: local_retention,
             })
 
-        wait_for_local_storage_truncate(redpanda=self.redpanda,
+        wait_for_local_storage_truncate(funes=self.funes,
                                         topic=self.topic,
                                         target_bytes=local_retention)
 
@@ -183,16 +183,16 @@ class RetentionPolicyToggleTest(RedpandaTest):
                 TopicSpec.PROPERTY_CLEANUP_POLICY: TopicSpec.CLEANUP_COMPACT,
             })
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         start_offset_before = next(rpk.describe_topic(self.topic)).start_offset
-        produce_total_bytes(self.redpanda, self.topic, 10 * 1024 * 1024)
+        produce_total_bytes(self.funes, self.topic, 10 * 1024 * 1024)
         time.sleep(5 * self.log_compaction_interval_ms / 1000)
         start_offset_after = next(rpk.describe_topic(self.topic)).start_offset
         assert start_offset_before == start_offset_after,\
             f"start offsets shouldn't move if cleanup.policy=compact; before: {start_offset_before}, after: {start_offset_after}"
 
 
-class ShadowIndexingLocalRetentionTest(RedpandaTest):
+class ShadowIndexingLocalRetentionTest(FunesTest):
     segment_size = 1000000  # 1MB
     default_retention_segments = 2
     retention_segments = 4
@@ -213,12 +213,12 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
                              extra_rp_conf=extra_rp_conf,
                              log_level="trace")
 
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
         self.s3_bucket_name = si_settings.cloud_storage_bucket
 
     def segments_removed(self, limit: int):
-        segs = self.redpanda.node_storage(self.redpanda.nodes[0]).segments(
-            "kafka", self.topic_name, 0)
+        segs = self.funes.node_storage(self.funes.nodes[0]).segments(
+            "sql", self.topic_name, 0)
         self.logger.debug(f"Current segments: {segs}")
 
         return len(segs) <= limit
@@ -243,7 +243,7 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
         level remote write configurations and checks if segments were removed
         at the end.
         """
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"cloud_storage_enable_remote_write": cluster_remote_write},
             expect_restart=True)
 
@@ -252,7 +252,7 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
                               replicas=1,
                               config={
                                   "cleanup.policy": TopicSpec.CLEANUP_DELETE,
-                                  "redpanda.remote.write": topic_remote_write
+                                  "funes.remote.write": topic_remote_write
                               })
 
         if topic_remote_write != "-1":
@@ -260,7 +260,7 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
         else:
             expect_deletion = cluster_remote_write
 
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=self.total_segments *
                             self.segment_size)
@@ -297,14 +297,14 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
                               config={
                                   "cleanup.policy":
                                   TopicSpec.CLEANUP_DELETE,
-                                  "redpanda.remote.write":
+                                  "funes.remote.write":
                                   "true",
                                   "retention.local.target.bytes":
                                   str(self.segment_size *
                                       self.retention_segments)
                               })
 
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=self.total_segments *
                             self.segment_size)
@@ -329,7 +329,7 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
         by cloud based retention settings if cloud based retention is more strict
         """
         # set cloud retention to 10 seconds
-        self.redpanda.set_cluster_config({"delete_retention_ms": 10000},
+        self.funes.set_cluster_config({"delete_retention_ms": 10000},
                                          expect_restart=False)
 
         # create topic with large local retention
@@ -339,13 +339,13 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
                               config={
                                   "cleanup.policy":
                                   TopicSpec.CLEANUP_DELETE,
-                                  "redpanda.remote.write":
+                                  "funes.remote.write":
                                   "true",
                                   "retention.local.target.ms":
                                   str(local_retention_ms)
                               })
 
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=self.total_segments *
                             self.segment_size)
@@ -356,7 +356,7 @@ class ShadowIndexingLocalRetentionTest(RedpandaTest):
                    err_msg=f"Segments were not removed")
 
 
-class ShadowIndexingCloudRetentionTest(RedpandaTest):
+class ShadowIndexingCloudRetentionTest(FunesTest):
     segment_size = 1000000  # 1MB
     topic_name = "si_test_topic"
 
@@ -372,7 +372,7 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                              extra_rp_conf=extra_rp_conf,
                              log_level="trace")
 
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
         self.s3_bucket_name = si_settings.cloud_storage_bucket
 
     @cluster(num_nodes=3)
@@ -382,10 +382,10 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
         Test that retention deletes the right number of segments. The test sets the
         cloud retention limit to 10 segments and then produces 20 segments.
         
-        We check via the redpanda_cloud_storage_deleted_segments that 10 segments
+        We check via the funes_cloud_storage_deleted_segments that 10 segments
         have been deleted from the cloud.
         """
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_enable_remote_write": True,
                 "cloud_storage_housekeeping_interval_ms": 100
@@ -400,12 +400,12 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                                   "retention.bytes": 10 * self.segment_size,
                               })
 
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=20 * self.segment_size)
 
         def deleted_segments_count() -> int:
-            metrics = self.redpanda.metrics_sample(
+            metrics = self.funes.metrics_sample(
                 "deleted_segments",
                 metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
 
@@ -417,7 +417,7 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
             self.logger.debug(f"Deleted {deleted} segments from the cloud")
             return deleted
 
-        # https://github.com/redpanda-data/redpanda/issues/8658#issuecomment-1420905967
+        # https://github.com/redpanda-data/funes/issues/8658#issuecomment-1420905967
         wait_until(lambda: 9 <= deleted_segments_count() <= 10,
                    timeout_sec=10,
                    backoff_sec=1,
@@ -438,7 +438,7 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                           replication_factor=3,
                           cleanup_policy=TopicSpec.CLEANUP_DELETE)
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_enable_remote_write": True,
                 "cloud_storage_housekeeping_interval_ms": 100
@@ -452,12 +452,12 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                                   "cleanup.policy": topic.cleanup_policy,
                               })
 
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=total_bytes)
 
         def cloud_log_size() -> int:
-            s3_snapshot = BucketView(self.redpanda, topics=[topic])
+            s3_snapshot = BucketView(self.funes, topics=[topic])
             cloud_log_size = s3_snapshot.cloud_log_size_for_ntp(topic.name, 0)
             self.logger.debug(f"Current cloud log size is: {cloud_log_size}")
             return cloud_log_size
@@ -502,7 +502,7 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                           replication_factor=3,
                           cleanup_policy=TopicSpec.CLEANUP_DELETE)
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_enable_remote_write": True,
                 "cloud_storage_housekeeping_interval_ms": 100
@@ -516,20 +516,20 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                                   "cleanup.policy": topic.cleanup_policy,
                               })
 
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=total_bytes)
 
         def cloud_log_segment_count() -> int:
-            s3_snapshot = BucketView(self.redpanda, topics=[topic])
+            s3_snapshot = BucketView(self.funes, topics=[topic])
             count = s3_snapshot.cloud_log_segment_count_for_ntp(topic.name, 0)
             self.logger.debug(
                 f"Current count of segments in manifest is: {count}")
             return count
 
         local_seg_count = len(
-            self.redpanda.node_storage(self.redpanda.nodes[0]).segments(
-                "kafka", topic.name, 0))
+            self.funes.node_storage(self.funes.nodes[0]).segments(
+                "sql", topic.name, 0))
 
         self.logger.info(
             f"Waiting for {local_seg_count - 1} segments to be uploaded to the cloud"
@@ -568,7 +568,7 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                           cleanup_policy=TopicSpec.CLEANUP_DELETE)
 
         # Cluster-wide settings have remote_read & remote_write enabled
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_enable_remote_write": True,
                 "cloud_storage_enable_remote_read": True,
@@ -584,22 +584,22 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                               replicas=topic.replication_factor,
                               config={
                                   "cleanup.policy": topic.cleanup_policy,
-                                  "redpanda.remote.write": "false",
-                                  "redpanda.remote.read": "false",
+                                  "funes.remote.write": "false",
+                                  "funes.remote.read": "false",
                               })
 
         before_alter = self.rpk.describe_topic_configs(topic.name)
-        assert before_alter['redpanda.remote.write'][0] == 'false'
-        assert before_alter['redpanda.remote.read'][0] == 'false'
+        assert before_alter['funes.remote.write'][0] == 'false'
+        assert before_alter['funes.remote.read'][0] == 'false'
 
         # Write some data to the topic, and assert that nothing has been
         # written out to S3
-        produce_total_bytes(self.redpanda,
+        produce_total_bytes(self.funes,
                             topic=self.topic_name,
                             bytes_to_produce=total_bytes)
 
         def ntp_in_manifest() -> int:
-            s3_snapshot = BucketView(self.redpanda, topics=[topic])
+            s3_snapshot = BucketView(self.funes, topics=[topic])
             return s3_snapshot.is_ntp_in_manifest(topic.name, 0)
 
         # Sleep for 4 cloud_storage_housekeeping_interval_ms, then assert ntp does
@@ -609,18 +609,18 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
         ), "Segment uploaded, when it should not exist"
 
         # Now modify topic properties to enable SI read/write for the topic
-        self.rpk.alter_topic_config(topic.name, "redpanda.remote.write",
+        self.rpk.alter_topic_config(topic.name, "funes.remote.write",
                                     "true")
-        self.rpk.alter_topic_config(topic.name, "redpanda.remote.read", "true")
+        self.rpk.alter_topic_config(topic.name, "funes.remote.read", "true")
         after_alter = self.rpk.describe_topic_configs(topic.name)
-        assert after_alter['redpanda.remote.write'][0] == 'true'
-        assert after_alter['redpanda.remote.read'][0] == 'true'
+        assert after_alter['funes.remote.write'][0] == 'true'
+        assert after_alter['funes.remote.read'][0] == 'true'
 
         # Wait for upload to occur first
         wait_until(lambda: ntp_in_manifest(), timeout_sec=10)
 
         def cloud_log_size() -> int:
-            s3_snapshot = BucketView(self.redpanda, topics=[topic])
+            s3_snapshot = BucketView(self.funes, topics=[topic])
             cloud_log_size = s3_snapshot.cloud_log_size_for_ntp(topic.name, 0)
             self.logger.debug(f"Current cloud log size is: {cloud_log_size}")
             return cloud_log_size
@@ -643,7 +643,7 @@ class ShadowIndexingCloudRetentionTest(RedpandaTest):
                    err_msg=f"Too many bytes in the cloud")
 
 
-class BogusTimestampTest(RedpandaTest):
+class BogusTimestampTest(FunesTest):
     segment_size = 1048576
     topics = (
         TopicSpec(
@@ -672,7 +672,7 @@ class BogusTimestampTest(RedpandaTest):
         """
 
         # broker_time_based_retention fixes this test case for new segments. (disable it to simulate a legacy condition)
-        self.redpanda.set_feature_active('broker_time_based_retention',
+        self.funes.set_feature_active('broker_time_based_retention',
                                          use_broker_timestamps,
                                          timeout_sec=10)
 
@@ -693,7 +693,7 @@ class BogusTimestampTest(RedpandaTest):
 
             # Write enough valid-timestamped records that one should appear in the index
             producer = KgoVerifierProducer(context=self.test_context,
-                                           redpanda=self.redpanda,
+                                           funes=self.funes,
                                            topic=self.topic,
                                            msg_size=msg_size,
                                            msg_count=valid_records,
@@ -704,7 +704,7 @@ class BogusTimestampTest(RedpandaTest):
 
             # Write the rest of the messages with invalid timestamps
             producer = KgoVerifierProducer(context=self.test_context,
-                                           redpanda=self.redpanda,
+                                           funes=self.funes,
                                            topic=self.topic,
                                            msg_size=msg_size,
                                            msg_count=msg_count - valid_records,
@@ -716,7 +716,7 @@ class BogusTimestampTest(RedpandaTest):
             # Write msg_count messages with timestamps in the future
             producer = KgoVerifierProducer(
                 context=self.test_context,
-                redpanda=self.redpanda,
+                funes=self.funes,
                 topic=self.topic,
                 msg_size=msg_size,
                 msg_count=(self.segment_size // msg_size) * segments_count,
@@ -728,14 +728,14 @@ class BogusTimestampTest(RedpandaTest):
         if not use_broker_timestamps:
             # We should have written the expected number of segments, and nothing can
             # have been gc'd yet because all the segments have max timestmap in the future
-            segs = self.redpanda.node_storage(self.redpanda.nodes[0]).segments(
-                "kafka", self.topic, 0)
+            segs = self.funes.node_storage(self.funes.nodes[0]).segments(
+                "sql", self.topic, 0)
             self.logger.debug(f"Segments after write: {segs}")
             assert len(segs) >= segments_count
 
             # Give retention code some time to kick in: we are expecting that it does not
             # remove anything because the timestamps are too far in the future.
-            with self.redpanda.monitor_log(self.redpanda.nodes[0]) as mon:
+            with self.funes.monitor_log(self.funes.nodes[0]) as mon:
                 # Time period much larger than what we set log_compaction_interval_ms to
                 sleep(10)
 
@@ -746,15 +746,15 @@ class BogusTimestampTest(RedpandaTest):
                                backoff_sec=1)
 
             # The GC should not have deleted anything
-            segs = self.redpanda.node_storage(self.redpanda.nodes[0]).segments(
-                "kafka", self.topic, 0)
+            segs = self.funes.node_storage(self.funes.nodes[0]).segments(
+                "sql", self.topic, 0)
             self.logger.debug(f"Segments after first GC: {segs}")
             assert len(segs) >= segments_count
 
-            # Enable the escape hatch to tell Redpanda to correct timestamps that are
+            # Enable the escape hatch to tell Funes to correct timestamps that are
             # too far in the future
-            with self.redpanda.monitor_log(self.redpanda.nodes[0]) as mon:
-                self.redpanda.set_cluster_config({
+            with self.funes.monitor_log(self.funes.nodes[0]) as mon:
+                self.funes.set_cluster_config({
                     'storage_ignore_timestamps_in_future_sec':
                     60,
                 })
@@ -773,13 +773,13 @@ class BogusTimestampTest(RedpandaTest):
         # either with broker_time_based_retention active or storage_ignore_timestamps_in_future_sec enable, we are now able to apply retention
 
         def prefix_truncated():
-            segs = self.redpanda.node_storage(self.redpanda.nodes[0]).segments(
-                "kafka", self.topic, 0)
+            segs = self.funes.node_storage(self.funes.nodes[0]).segments(
+                "sql", self.topic, 0)
             self.logger.debug(f"Segments: {segs}")
             return len(segs) <= 1
 
         # Segments should be cleaned up now that we've switched on force-correction
         # of timestamps in the future
-        self.redpanda.wait_until(prefix_truncated,
+        self.funes.wait_until(prefix_truncated,
                                  timeout_sec=30,
                                  backoff_sec=1)

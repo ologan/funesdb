@@ -23,9 +23,9 @@ func NewConfigCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short: "Interact with cluster configuration properties",
 		Long: `Interact with cluster configuration properties.
 
-Cluster properties are redpanda settings which apply to all nodes in
+Cluster properties are funes settings which apply to all nodes in
 the cluster.  These are separate to node properties, which are set with
-'rpk redpanda config'.
+'rpk funes config'.
 
 Use the 'edit' subcommand to interactively modify the cluster configuration, or
 'export' and 'import' to write configuration to a file that can be edited and
@@ -39,7 +39,7 @@ some expertize to set safely, so if in doubt, avoid using '--all'.
 Modified properties are propagated immediately to all nodes.  The 'status'
 subcommand can be used to verify that all nodes are up to date, and identify
 any settings which were rejected by a node, for example if a node is running a
-different redpanda version that does not recognize certain properties.`,
+different funes version that does not recognize certain properties.`,
 	}
 	cmd.PersistentFlags().BoolVar(
 		&all,

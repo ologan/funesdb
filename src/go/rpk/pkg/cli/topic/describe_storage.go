@@ -21,7 +21,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/adminapi"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -57,8 +57,8 @@ func newDescribeStorageCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			out.MaybeDie(err, "unable to load config: %v", err)
 			out.CheckExitCloudAdmin(p)
 
-			cl, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			cl, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer cl.Close()
 
 			adminCl, err := adminapi.NewClient(fs, p)

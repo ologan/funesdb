@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/upload_housekeeping_service.h"
@@ -349,7 +349,7 @@ ss::future<> housekeeping_workflow::run_jobs_bg() {
         // returning true and the ss::condition_variable::wait method returning,
         // meaning that upon the return from this method, there is no guarantee
         // that the predicate is still true. This issue was seen in
-        // https://github.com/redpanda-data/redpanda/issues/8964.
+        // https://github.com/redpanda-data/funes/issues/8964.
         if (!jobs_available()) {
             continue;
         }

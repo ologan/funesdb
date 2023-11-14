@@ -152,38 +152,38 @@ func TestBackcompat(t *testing.T) {
 		},
 
 		{
-			name: "resource type cluster sets kafka-cluster",
+			name: "resource type cluster sets sql-cluster",
 			in: acls{
 				resourceType: "cluster",
 			},
 			exp: acls{
 				resourceType: "cluster",
-				resourceName: kafkaCluster,
+				resourceName: sqlCluster,
 				cluster:      true,
 			},
 		},
 
 		{
-			name: "resource type cluster sets kafka-cluster",
+			name: "resource type cluster sets sql-cluster",
 			in: acls{
 				resourceType: "cluster",
 			},
 			exp: acls{
 				resourceType: "cluster",
-				resourceName: kafkaCluster,
+				resourceName: sqlCluster,
 				cluster:      true,
 			},
 		},
 
 		{
-			name: "resource type cluster name kafka-cluster is ok",
+			name: "resource type cluster name sql-cluster is ok",
 			in: acls{
 				resourceType: "cluster",
-				resourceName: kafkaCluster,
+				resourceName: sqlCluster,
 			},
 			exp: acls{
 				resourceType: "cluster",
-				resourceName: kafkaCluster,
+				resourceName: sqlCluster,
 				cluster:      true,
 			},
 		},

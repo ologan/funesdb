@@ -16,7 +16,7 @@ namespace cluster {
 
 struct schema_id_validation_validator {
     static constexpr const char* error_message
-      = "Mismatch between redpanda.* and confluent.* schema id validation "
+      = "Mismatch between funes.* and confluent.* schema id validation "
         "properties ";
     static constexpr errc ec = errc::topic_invalid_config;
 

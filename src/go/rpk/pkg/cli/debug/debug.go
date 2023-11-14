@@ -19,7 +19,7 @@ import (
 func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "debug",
-		Short: "Debug the local Redpanda process",
+		Short: "Debug the local Funes process",
 	}
 
 	cmd.AddCommand(

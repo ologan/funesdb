@@ -12,7 +12,7 @@
 #include "cluster/tx_coordinator_mapper.h"
 #include "features/feature_table.h"
 #include "finjector/hbadger.h"
-#include "kafka/protocol/types.h"
+#include "sql/protocol/types.h"
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "model/record.h"
@@ -74,7 +74,7 @@ FIXTURE_TEST(test_tm_stm_new_tx, tm_stm_test_fixture) {
     wait_for_confirmed_leader();
     wait_for_meta_initialized();
 
-    auto tx_id = kafka::transactional_id("app-id-1");
+    auto tx_id = sql::transactional_id("app-id-1");
     auto pid = model::producer_identity{1, 0};
 
     auto op_code = stm
@@ -90,9 +90,9 @@ FIXTURE_TEST(test_tm_stm_new_tx, tm_stm_test_fixture) {
     expect_tx(stm.mark_tx_ongoing(_raft->term(), tx_id).get0());
     std::vector<tm_transaction::tx_partition> partitions = {
       tm_transaction::tx_partition{
-        .ntp = model::ntp("kafka", "topic", 0), .etag = model::term_id(0)},
+        .ntp = model::ntp("sql", "topic", 0), .etag = model::term_id(0)},
       tm_transaction::tx_partition{
-        .ntp = model::ntp("kafka", "topic", 1), .etag = model::term_id(0)}};
+        .ntp = model::ntp("sql", "topic", 1), .etag = model::term_id(0)}};
     BOOST_REQUIRE_EQUAL(
       stm.add_partitions(_raft->term(), tx_id, partitions).get0(),
       cluster::tm_stm::op_status::success);
@@ -124,7 +124,7 @@ FIXTURE_TEST(test_tm_stm_seq_tx, tm_stm_test_fixture) {
     wait_for_confirmed_leader();
     wait_for_meta_initialized();
 
-    auto tx_id = kafka::transactional_id("app-id-1");
+    auto tx_id = sql::transactional_id("app-id-1");
     auto pid = model::producer_identity{1, 0};
 
     auto op_code = stm
@@ -136,9 +136,9 @@ FIXTURE_TEST(test_tm_stm_seq_tx, tm_stm_test_fixture) {
     auto tx2 = stm.mark_tx_ongoing(_raft->term(), tx_id).get0();
     std::vector<tm_transaction::tx_partition> partitions = {
       tm_transaction::tx_partition{
-        .ntp = model::ntp("kafka", "topic", 0), .etag = model::term_id(0)},
+        .ntp = model::ntp("sql", "topic", 0), .etag = model::term_id(0)},
       tm_transaction::tx_partition{
-        .ntp = model::ntp("kafka", "topic", 1), .etag = model::term_id(0)}};
+        .ntp = model::ntp("sql", "topic", 1), .etag = model::term_id(0)}};
     BOOST_REQUIRE_EQUAL(
       stm.add_partitions(_raft->term(), tx_id, partitions).get0(),
       cluster::tm_stm::op_status::success);
@@ -159,7 +159,7 @@ FIXTURE_TEST(test_tm_stm_re_tx, tm_stm_test_fixture) {
     wait_for_confirmed_leader();
     wait_for_meta_initialized();
 
-    auto tx_id = kafka::transactional_id("app-id-1");
+    auto tx_id = sql::transactional_id("app-id-1");
     auto pid1 = model::producer_identity{1, 0};
 
     auto op_code = stm
@@ -170,9 +170,9 @@ FIXTURE_TEST(test_tm_stm_re_tx, tm_stm_test_fixture) {
     auto tx1 = expect_tx(stm.get_tx(tx_id).get0());
     std::vector<tm_transaction::tx_partition> partitions = {
       tm_transaction::tx_partition{
-        .ntp = model::ntp("kafka", "topic", 0), .etag = model::term_id(0)},
+        .ntp = model::ntp("sql", "topic", 0), .etag = model::term_id(0)},
       tm_transaction::tx_partition{
-        .ntp = model::ntp("kafka", "topic", 1), .etag = model::term_id(0)}};
+        .ntp = model::ntp("sql", "topic", 1), .etag = model::term_id(0)}};
     auto tx2 = stm.mark_tx_ongoing(_raft->term(), tx_id).get0();
     BOOST_REQUIRE_EQUAL(
       stm.add_partitions(_raft->term(), tx_id, partitions).get0(),
@@ -203,7 +203,7 @@ constexpr size_t check_size = 1000;
 
 void test_tm_hosts_tx(cluster::tm_stm& stm, int32_t partition_amount) {
     for (int i = 0; i < check_size; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         uint32_t tx_id_hash = cluster::get_tx_id_hash(tx_id);
         if (tx_id_hash <= UINT32_MAX / partition_amount) {
             BOOST_REQUIRE(stm.hosts(tx_id));
@@ -216,7 +216,7 @@ void test_tm_hosts_tx(cluster::tm_stm& stm, int32_t partition_amount) {
 void test_tm_hosts_tx_include_exclude(
   cluster::tm_stm& stm, int32_t partition_amount, const raft::consensus* c) {
     for (int i = check_size; i < check_size * 2; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         bool is_already_hosted = stm.hosts(tx_id);
         cluster::tm_stm::op_status exclude_hash_res
           = stm.exclude_hosted_transaction(c->term(), tx_id).get0();
@@ -231,7 +231,7 @@ void test_tm_hosts_tx_include_exclude(
     }
 
     for (int i = check_size * 2; i < check_size * 3; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         bool is_already_hosted = stm.hosts(tx_id);
         cluster::tm_stm::op_status include_hash_res
           = stm.include_hosted_transaction(c->term(), tx_id).get0();
@@ -249,16 +249,16 @@ void test_tm_hosts_tx_include_exclude(
 void test_tm_hosts_tx_include_exclude_saved_in_snapshot(
   cluster::tm_stm& stm, int32_t partition_amount, const raft::consensus* c) {
     for (int i = check_size; i < check_size * 2; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         BOOST_REQUIRE(!stm.hosts(tx_id));
     }
     for (int i = check_size * 2; i < check_size * 3; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         BOOST_REQUIRE(stm.hosts(tx_id));
     }
 
     for (int i = check_size; i < check_size * 2; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         cluster::tm_stm::op_status include_hash_res
           = stm.include_hosted_transaction(c->term(), tx_id).get0();
         BOOST_REQUIRE_EQUAL(
@@ -267,7 +267,7 @@ void test_tm_hosts_tx_include_exclude_saved_in_snapshot(
     }
 
     for (int i = check_size * 2; i < check_size * 3; ++i) {
-        kafka::transactional_id tx_id(std::to_string(i));
+        sql::transactional_id tx_id(std::to_string(i));
         cluster::tm_stm::op_status exclude_hash_res
           = stm.exclude_hosted_transaction(c->term(), tx_id).get0();
         BOOST_REQUIRE_EQUAL(
@@ -283,7 +283,7 @@ FIXTURE_TEST(test_tm_stm_hosted_hash_1_partition, tm_stm_test_fixture) {
     wait_for_confirmed_leader();
     wait_for_meta_initialized();
 
-    auto tx_id = kafka::transactional_id("test_tx_id");
+    auto tx_id = sql::transactional_id("test_tx_id");
 
     BOOST_ASSERT(!stm.hosts(tx_id));
     cluster::tm_stm::op_status init_hash_res
@@ -322,7 +322,7 @@ FIXTURE_TEST(test_tm_stm_hosted_hash_16_partition, tm_stm_test_fixture) {
     wait_for_confirmed_leader();
     wait_for_meta_initialized();
 
-    auto tx_id = kafka::transactional_id("test_tx_id");
+    auto tx_id = sql::transactional_id("test_tx_id");
 
     BOOST_ASSERT(!stm.hosts(tx_id));
     cluster::tm_stm::op_status init_hash_res

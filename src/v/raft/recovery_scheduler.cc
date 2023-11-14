@@ -55,7 +55,7 @@ void follower_recovery_state::update_progress(
     // Leader last offset can go backwards in the following cases:
     // 1. leadership change
     // 2. reordered request
-    // 3. request from pre 23.3 redpanda (where we can't always determine the
+    // 3. request from pre 23.3 funes (where we can't always determine the
     // last offset and it will be model::offset{}).
     //
     // Of these only 1 is valid but for the purposes of progress tracking it
@@ -138,9 +138,9 @@ recovery_scheduler_base::~recovery_scheduler_base() {
 }
 
 static bool is_internal(const model::ntp& ntp) {
-    return ntp.ns == model::redpanda_ns
-           || ntp.ns == model::kafka_internal_namespace
-           || (ntp.ns == model::kafka_namespace && ntp.tp.topic == model::kafka_consumer_offsets_topic);
+    return ntp.ns == model::funes_ns
+           || ntp.ns == model::sql_internal_namespace
+           || (ntp.ns == model::sql_namespace && ntp.tp.topic == model::sql_consumer_offsets_topic);
 }
 
 void recovery_scheduler_base::add(follower_recovery_state& frs) {

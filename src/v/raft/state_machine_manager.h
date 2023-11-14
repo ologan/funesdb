@@ -67,7 +67,7 @@ public:
     /**
      * In classic Raft protocol a snapshot is always taken from the current STM
      * state i.e last snapshot index is derived from last_applied_offset. In
-     * Redpanda we use different approach. Data eviction policy forces us to
+     * Funes we use different approach. Data eviction policy forces us to
      * allow state machines to take snapshot at arbitrary offsets.
      */
     ss::future<iobuf> take_snapshot(model::offset);

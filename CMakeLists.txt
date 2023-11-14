@@ -1,4 +1,4 @@
-# Redirect control for internal Redpanda builds
+# Redirect control for internal Funes builds
 if(VECTORIZED_CMAKE_DIR)
   cmake_minimum_required(VERSION 3.22)
   list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -7,7 +7,7 @@ if(VECTORIZED_CMAKE_DIR)
 endif()
 
 cmake_minimum_required(VERSION 3.24)
-project(redpanda LANGUAGES CXX)
+project(funes LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -21,17 +21,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # often fail due to being oom killed at the end of the build when many large
 # targets are being linked in parallel.
 include(CheckLinkerFlag)
-set(Redpanda_LINKER "lld" CACHE STRING "Linker to use")
-set(Redpanda_LINKER_FLAGS "-fuse-ld=${Redpanda_LINKER}")
-check_linker_flag(CXX ${Redpanda_LINKER_FLAGS} HAVE_Redpanda_LINKER_FLAGS)
-if(NOT HAVE_Redpanda_LINKER_FLAGS)
-  message(FATAL_ERROR "Linker ${Redpanda_LINKER} not found or not supported")
+set(Funes_LINKER "lld" CACHE STRING "Linker to use")
+set(Funes_LINKER_FLAGS "-fuse-ld=${Funes_LINKER}")
+check_linker_flag(CXX ${Funes_LINKER_FLAGS} HAVE_Funes_LINKER_FLAGS)
+if(NOT HAVE_Funes_LINKER_FLAGS)
+  message(FATAL_ERROR "Linker ${Funes_LINKER} not found or not supported")
 endif()
-add_link_options(${Redpanda_LINKER_FLAGS})
+add_link_options(${Funes_LINKER_FLAGS})
 
 # enable sanitizers. will propogate to all targets, including dependencies
-option(Redpanda_ENABLE_SANITIZERS "Enable sanitizers (address, leak, undefined)" OFF)
-if(Redpanda_ENABLE_SANITIZERS)
+option(Funes_ENABLE_SANITIZERS "Enable sanitizers (address, leak, undefined)" OFF)
+if(Funes_ENABLE_SANITIZERS)
   add_link_options(-fsanitize=address,leak,undefined)
   add_compile_options(-fsanitize=address,leak,undefined)
 endif()
@@ -40,8 +40,8 @@ include(dependencies)
 include(v_library)
 include(testing)
 
-option(Redpanda_ENABLE_COVERAGE "Enable coverage" OFF)
-if(Redpanda_ENABLE_COVERAGE)
+option(Funes_ENABLE_COVERAGE "Enable coverage" OFF)
+if(Funes_ENABLE_COVERAGE)
   add_compile_options(-O0 -g --coverage)
   add_link_options(--coverage)
 endif()

@@ -39,24 +39,24 @@ public:
 
     ss::future<ss::stop_iteration> operator()(model::record_batch b) {
         // This is a "safe" cast as all our offsets come from the translating
-        // reader, but we don't have a seperate type for kafka::record_batch vs
+        // reader, but we don't have a seperate type for sql::record_batch vs
         // model::record_batch.
         _last_offset = model::offset_cast(b.last_offset());
         _probe->increment_read_bytes(b.size_bytes());
         co_await _output->push_eventually(std::move(b));
         co_return ss::stop_iteration::no;
     }
-    std::optional<kafka::offset> end_of_stream() const { return _last_offset; }
+    std::optional<sql::offset> end_of_stream() const { return _last_offset; }
 
 private:
-    std::optional<kafka::offset> _last_offset;
+    std::optional<sql::offset> _last_offset;
     ss::queue<model::record_batch>* _output;
     probe* _probe;
 };
 
 struct drain_result {
     ss::chunked_fifo<model::record_batch> batches;
-    kafka::offset latest_offset;
+    sql::offset latest_offset;
 };
 
 ss::future<drain_result>
@@ -175,17 +175,17 @@ ss::future<> processor::poll_sleep() {
     }
 }
 
-ss::future<kafka::offset> processor::load_start_offset() {
+ss::future<sql::offset> processor::load_start_offset() {
     co_await _offset_tracker->wait_for_previous_flushes(&_as);
     auto latest_committed = co_await _offset_tracker->load_committed_offset();
     auto latest = _source->latest_offset();
     if (latest_committed) {
-        auto start_offset = kafka::next_offset(latest_committed.value());
+        auto start_offset = sql::next_offset(latest_committed.value());
         report_lag(latest - start_offset);
         co_return start_offset;
     }
     // We "commit" at the previous offset so that we resume at the latest.
-    co_await _offset_tracker->commit_offset(kafka::prev_offset(latest));
+    co_await _offset_tracker->commit_offset(sql::prev_offset(latest));
     co_return latest;
 }
 
@@ -205,7 +205,7 @@ ss::future<> processor::run_consumer_loop() {
             co_await poll_sleep();
             continue;
         }
-        offset = kafka::next_offset(*last_offset);
+        offset = sql::next_offset(*last_offset);
         vlog(_logger.trace, "consumed up to offset {}", offset);
     }
 }

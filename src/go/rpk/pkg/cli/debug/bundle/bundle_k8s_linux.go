@@ -59,7 +59,7 @@ func executeK8SBundle(ctx context.Context, bp bundleParams) error {
 	var errs *multierror.Error
 
 	steps := []step{
-		saveKafkaMetadata(ctx, ps, bp.cl),
+		saveSQLMetadata(ctx, ps, bp.cl),
 		saveDataDirStructure(ps, bp.y),
 		saveConfig(ps, bp.yActual),
 		saveCPUInfo(ps),
@@ -198,8 +198,8 @@ func getClusterDomain() string {
 func saveClusterAdminAPICalls(ctx context.Context, ps *stepParams, fs afero.Fs, p *config.RpkProfile, adminAddresses []string) step {
 	return func() error {
 		p = &config.RpkProfile{
-			KafkaAPI: config.RpkKafkaAPI{
-				SASL: p.KafkaAPI.SASL,
+			SQLAPI: config.RpkSQLAPI{
+				SASL: p.SQLAPI.SASL,
 			},
 			AdminAPI: config.RpkAdminAPI{
 				Addresses: adminAddresses,
@@ -244,8 +244,8 @@ func saveSingleAdminAPICalls(ctx context.Context, ps *stepParams, fs afero.Fs, p
 		for _, a := range adminAddresses {
 			a := a
 			p = &config.RpkProfile{
-				KafkaAPI: config.RpkKafkaAPI{
-					SASL: p.KafkaAPI.SASL,
+				SQLAPI: config.RpkSQLAPI{
+					SASL: p.SQLAPI.SASL,
 				},
 				AdminAPI: config.RpkAdminAPI{
 					Addresses: []string{a},

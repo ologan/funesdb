@@ -205,7 +205,7 @@ private:
     mutex _lock;
     /**
      * We will persist highest known offset every 64MB, given this during
-     * bootstrap redpanda will have to read up to 64MB per raft group.
+     * bootstrap funes will have to read up to 64MB per raft group.
      */
     size_t _bytes_since_last_offset_update = 0;
 

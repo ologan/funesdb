@@ -10,13 +10,13 @@
 from rptest.services.cluster import cluster
 from ducktape.errors import DucktapeError
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 
 import subprocess
 
 
-class TxReadsWritesTest(RedpandaTest):
+class TxReadsWritesTest(FunesTest):
     """
     Verify that segment indices are recovered on startup.
     """
@@ -35,9 +35,9 @@ class TxReadsWritesTest(RedpandaTest):
     def test_reads_writes(self):
         verifier_jar = "/opt/verifiers/verifiers.jar"
 
-        self.redpanda.logger.info("creating topics")
+        self.funes.logger.info("creating topics")
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic("topic1", partitions=1, replicas=1)
 
         test = "concurrent-reads-writes"
@@ -47,13 +47,13 @@ class TxReadsWritesTest(RedpandaTest):
                 java="java",
                 verifier_jar=verifier_jar,
                 test=test,
-                brokers=self.redpanda.brokers())
+                brokers=self.funes.brokers())
             subprocess.check_output(["/bin/sh", "-c", cmd],
                                     stderr=subprocess.STDOUT)
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 "txn test \"{test}\" passed".format(test=test))
         except subprocess.CalledProcessError as e:
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 "txn test \"{test}\" failed".format(test=test))
             errors = ""
             errors += test + "\n"

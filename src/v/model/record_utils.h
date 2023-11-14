@@ -22,7 +22,7 @@ class record;
 
 void crc_record_batch_header(crc::crc32c&, const record_batch_header&);
 
-/// \brief int32_t because that's what kafka uses
+/// \brief int32_t because that's what sql uses
 int32_t crc_record_batch(const record_batch& b);
 int32_t crc_record_batch(const record_batch_header&, const iobuf&);
 

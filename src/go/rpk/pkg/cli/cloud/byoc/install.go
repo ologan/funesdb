@@ -29,7 +29,7 @@ import (
 )
 
 func newInstallCommand(fs afero.Fs, p *config.Params) *cobra.Command {
-	var redpandaID string
+	var funesID string
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install the BYOC plugin",
@@ -43,7 +43,7 @@ exists if you want to download the plugin ahead of time.
 		Run: func(cmd *cobra.Command, _ []string) {
 			cfg, err := p.Load(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
-			_, _, installed, err := loginAndEnsurePluginVersion(cmd.Context(), fs, cfg, redpandaID, false) // latest is always false, we only want to install the pinned byoc version when using `rpk cloud byoc install`
+			_, _, installed, err := loginAndEnsurePluginVersion(cmd.Context(), fs, cfg, funesID, false) // latest is always false, we only want to install the pinned byoc version when using `rpk cloud byoc install`
 			out.MaybeDie(err, "unable to install byoc plugin: %v", err)
 			if !installed {
 				fmt.Print(`
@@ -59,12 +59,12 @@ autocompletion, start a new terminal and tab complete through it!
 `)
 		},
 	}
-	cmd.Flags().StringVar(&redpandaID, flagRedpandaID, "", flagRedpandaIDDesc)
-	cmd.MarkFlagRequired(flagRedpandaID)
+	cmd.Flags().StringVar(&funesID, flagFunesID, "", flagFunesIDDesc)
+	cmd.MarkFlagRequired(flagFunesID)
 	return cmd
 }
 
-func loginAndEnsurePluginVersion(ctx context.Context, fs afero.Fs, cfg *config.Config, redpandaID string, isLatest bool) (binPath string, token string, installed bool, rerr error) {
+func loginAndEnsurePluginVersion(ctx context.Context, fs afero.Fs, cfg *config.Config, funesID string, isLatest bool) (binPath string, token string, installed bool, rerr error) {
 	// First load our configuration and token.
 	pluginDir, err := plugin.DefaultBinPath()
 	if err != nil {
@@ -102,9 +102,9 @@ func loginAndEnsurePluginVersion(ctx context.Context, fs afero.Fs, cfg *config.C
 			return "", "", false, fmt.Errorf("unable to get latest installpack: %v", err)
 		}
 	} else {
-		cluster, err := cl.Cluster(ctx, redpandaID)
+		cluster, err := cl.Cluster(ctx, funesID)
 		if err != nil {
-			return "", "", false, fmt.Errorf("unable to request cluster details for %q: %w", redpandaID, err)
+			return "", "", false, fmt.Errorf("unable to request cluster details for %q: %w", funesID, err)
 		}
 		pack, err = cl.InstallPack(ctx, cluster.Spec.InstallPackVersion)
 		if err != nil {

@@ -76,15 +76,15 @@ public:
     /// after a configuration change.
     void maybe_construct_archiver();
 
-    ss::future<result<kafka_result>>
+    ss::future<result<sql_result>>
     replicate(model::record_batch_reader&&, raft::replicate_options);
 
     /// Truncate the beginning of the log up until a given offset
     /// Can only be performed on logs that are deletable and non internal
     ss::future<std::error_code> prefix_truncate(
-      model::offset o, kafka::offset ko, ss::lowres_clock::time_point deadline);
+      model::offset o, sql::offset ko, ss::lowres_clock::time_point deadline);
 
-    kafka_stages replicate_in_stages(
+    sql_stages replicate_in_stages(
       model::batch_identity,
       model::record_batch_reader&&,
       raft::replicate_options);
@@ -102,7 +102,7 @@ public:
     }
 
     ss::future<result<model::offset, std::error_code>>
-    sync_kafka_start_offset_override(model::timeout_clock::duration timeout) {
+    sync_sql_start_offset_override(model::timeout_clock::duration timeout) {
         if (_log_eviction_stm && !is_read_replica_mode_enabled()) {
             auto offset_res
               = co_await _log_eviction_stm->sync_start_offset_override(timeout);
@@ -115,10 +115,10 @@ public:
             if (
               offset_res.value() != model::offset{}
               && _raft->start_offset() < offset_res.value()) {
-                auto start_kafka_offset
+                auto start_sql_offset
                   = offset_translator_state->from_log_offset(
                     offset_res.value());
-                co_return start_kafka_offset;
+                co_return start_sql_offset;
             }
             // If a start override is no longer in the offset translator state,
             // it may have been uploaded and persisted in the manifest.
@@ -132,10 +132,10 @@ public:
                     co_return errc::timeout;
                 }
             }
-            auto start_kafka_offset = _archival_meta_stm->manifest()
-                                        .get_start_kafka_offset_override();
-            if (start_kafka_offset != kafka::offset{}) {
-                co_return kafka::offset_cast(start_kafka_offset);
+            auto start_sql_offset = _archival_meta_stm->manifest()
+                                        .get_start_sql_offset_override();
+            if (start_sql_offset != sql::offset{}) {
+                co_return sql::offset_cast(start_sql_offset);
             }
         }
         co_return model::offset{};
@@ -151,19 +151,19 @@ public:
     model::offset committed_offset() const { return _raft->committed_offset(); }
 
     /**
-     * <kafka>The last stable offset (LSO) is defined as the first offset such
+     * <sql>The last stable offset (LSO) is defined as the first offset such
      * that all lower offsets have been "decided." Non-transactional messages
      * are considered decided immediately, but transactional messages are only
      * decided when the corresponding COMMIT or ABORT marker is written. This
      * implies that the last stable offset will be equal to the high watermark
      * if there are no transactional messages in the log. Note also that the LSO
-     * cannot advance beyond the high watermark.  </kafka>
+     * cannot advance beyond the high watermark.  </sql>
      *
      * There are two important pieces in this comment:
      *
      *   1) "non-transaction message are considered decided immediately".
      *   Since we currently use the commited_offset to report the end of log to
-     *   kafka clients, simply report the next offset.
+     *   sql clients, simply report the next offset.
      *
      *   2) "first offset such that all lower offsets have been decided". this
      *   is describing a strictly greater than relationship.
@@ -178,7 +178,7 @@ public:
 
     /**
      * All batches with offets smaller than high watermark are visible to
-     * consumers. Named high_watermark to be consistent with Kafka nomenclature.
+     * consumers. Named high_watermark to be consistent with SQL nomenclature.
      */
     model::offset high_watermark() const {
         return model::next_offset(_raft->last_visible_index());
@@ -355,7 +355,7 @@ public:
     /// Starting offset in the object store
     model::offset start_cloud_offset() const;
 
-    /// Kafka offset one past the end of the last offset (i.e. the high
+    /// SQL offset one past the end of the last offset (i.e. the high
     /// watermark as reported by object storage).
     model::offset next_cloud_offset() const;
 
@@ -364,23 +364,23 @@ public:
       storage::log_reader_config config,
       std::optional<model::timeout_clock::time_point> deadline = std::nullopt);
 
-    std::optional<model::offset> kafka_start_offset_override() const {
+    std::optional<model::offset> sql_start_offset_override() const {
         if (_log_eviction_stm && !is_read_replica_mode_enabled()) {
             auto o = _log_eviction_stm->start_offset_override();
             if (o != model::offset{} && _raft->start_offset() < o) {
                 auto offset_translator_state = get_offset_translator_state();
-                auto start_kafka_offset
+                auto start_sql_offset
                   = offset_translator_state->from_log_offset(o);
-                return start_kafka_offset;
+                return start_sql_offset;
             }
             // If a start override is no longer in the offset translator state,
             // it may have been uploaded and persisted in the manifest.
         }
         if (_archival_meta_stm) {
             auto o = _archival_meta_stm->manifest()
-                       .get_start_kafka_offset_override();
-            if (o != kafka::offset{}) {
-                return kafka::offset_cast(o);
+                       .get_start_sql_offset_override();
+            if (o != sql::offset{}) {
+                return sql::offset_cast(o);
             }
         }
         return std::nullopt;

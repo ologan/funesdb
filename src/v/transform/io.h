@@ -47,9 +47,9 @@ public:
     virtual ss::future<> start() = 0;
     virtual ss::future<> stop() = 0;
 
-    virtual kafka::offset latest_offset() = 0;
+    virtual sql::offset latest_offset() = 0;
     virtual ss::future<model::record_batch_reader>
-    read_batch(kafka::offset, ss::abort_source*) = 0;
+    read_batch(sql::offset, ss::abort_source*) = 0;
 };
 
 /**
@@ -80,14 +80,14 @@ public:
     /**
      * Load the latest offset we've committed.
      */
-    virtual ss::future<std::optional<kafka::offset>>
+    virtual ss::future<std::optional<sql::offset>>
     load_committed_offset() = 0;
 
     /**
      * Commit progress. The offset here is how far on the input partition we've
      * transformed and successfully written to the output topic.
      */
-    virtual ss::future<> commit_offset(kafka::offset) = 0;
+    virtual ss::future<> commit_offset(sql::offset) = 0;
 };
 
 } // namespace transform

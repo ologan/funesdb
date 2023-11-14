@@ -9,18 +9,18 @@
 
 from rptest.services.cluster import cluster
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 
-from confluent_kafka import (Producer, KafkaException)
+from confluent_sql import (Producer, SQLException)
 
 
 def on_delivery(err, msg):
     if err is not None:
-        raise KafkaException(err)
+        raise SQLException(err)
 
 
-class ScramlessEosTest(RedpandaTest):
+class ScramlessEosTest(FunesTest):
     def __init__(self, test_context):
         extra_rp_conf = {
             "default_topic_replications": 3,
@@ -34,11 +34,11 @@ class ScramlessEosTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_idempotent_write_passes(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic("topic1")
 
         producer = Producer({
-            "bootstrap.servers": self.redpanda.brokers(),
+            "bootstrap.servers": self.funes.brokers(),
             "enable.idempotence": True,
             "retries": 5
         })
@@ -50,11 +50,11 @@ class ScramlessEosTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_tx_init_passes(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic("topic1")
 
         producer = Producer({
-            "bootstrap.servers": self.redpanda.brokers(),
+            "bootstrap.servers": self.funes.brokers(),
             "enable.idempotence": True,
             "transactional.id": "tx-id-1",
             "retries": 5

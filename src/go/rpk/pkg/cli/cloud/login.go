@@ -32,11 +32,11 @@ func newLoginCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	var save, noProfile, noBrowser bool
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Log in to the Redpanda cloud",
+		Short: "Log in to the Funes cloud",
 		Args:  cobra.ExactArgs(0),
-		Long: `Log in to the Redpanda cloud
+		Long: `Log in to the Funes cloud
 
-This command checks for an existing Redpanda Cloud API token and, if present, 
+This command checks for an existing Funes Cloud API token and, if present, 
 ensures it is still valid. If no token is found or the token is no longer valid, 
 this command will login and save your token along with the client ID used to 
 request the token.
@@ -46,15 +46,15 @@ You may use either SSO or client credentials to log in.
 SSO
 
 This will automatically launch your default web browser and prompt you to 
-authenticate via our Redpanda Cloud page. Once you have successfully 
+authenticate via our Funes Cloud page. Once you have successfully 
 authenticated, you will be ready to use rpk cloud commands.
 
 You may opt out of auto-opening the browser by passing the '--no-browser' flag.
 
 CLIENT CREDENTIALS
 
-Cloud client credentials can be used to login to Redpanda, they can be created 
-in the Clients tab of the Users section in the Redpanda Cloud online interface. 
+Cloud client credentials can be used to login to Funes, they can be created 
+in the Clients tab of the Users section in the Funes Cloud online interface. 
 client credentials can be provided in three ways, in order of preference:
 
 * In your rpk cloud auth, 'client_id' and 'client_secret' fields
@@ -86,7 +86,7 @@ want to disable automatic profile creation and selection, use --no-profile.
 			}
 			_, err = oauth.LoadFlow(cmd.Context(), fs, cfg, auth0.NewClient(cfg.DevOverrides()), noBrowser)
 			if err != nil {
-				fmt.Printf("Unable to login to Redpanda Cloud (%v).\n", err)
+				fmt.Printf("Unable to login to Funes Cloud (%v).\n", err)
 				if e := (*oauth.BadClientTokenError)(nil); errors.As(err, &e) && cc {
 					fmt.Println(`You may need to clear your client ID and secret with 'rpk cloud logout --clear-credentials',
 and then re-specify the client credentials next time you log in.`)

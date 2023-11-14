@@ -25,7 +25,7 @@ rp_test(
     Boost::unit_test_framework
     v::application
     v::cluster
-    v::kafka_test_utils
+    v::sql_test_utils
     v::seastar_testing_main
     v::storage
     v::s3_imposter

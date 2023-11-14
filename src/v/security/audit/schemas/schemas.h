@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 #pragma once
 
@@ -94,7 +94,7 @@ protected:
       T activity_id)
       : _category_uid(category_uid)
       , _class_uid(class_uid)
-      , _metadata(ocsf_redpanda_metadata())
+      , _metadata(ocsf_funes_metadata())
       , _severity_id(severity_id)
       , _start_time(time)
       , _time(time)

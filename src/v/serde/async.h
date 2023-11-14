@@ -127,8 +127,8 @@ template<typename T>
 ss::future<> write_async(iobuf& out, T t) {
     using Type = std::decay_t<T>;
     if constexpr (is_envelope<Type> && has_serde_async_write<Type>) {
-        write(out, Type::redpanda_serde_version);
-        write(out, Type::redpanda_serde_compat_version);
+        write(out, Type::funes_serde_version);
+        write(out, Type::funes_serde_compat_version);
 
         auto size_placeholder = out.reserve(sizeof(serde_size_t));
 

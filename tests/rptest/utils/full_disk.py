@@ -2,17 +2,17 @@ from logging import Logger
 import random
 
 from ducktape.utils.util import wait_until
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 from rptest.services.admin import Admin
 
 
 class FullDiskHelper:
     CONF_MIN_FREE_BYTES = "storage_min_free_bytes"
 
-    def __init__(self, logger: Logger, redpanda: RedpandaService):
+    def __init__(self, logger: Logger, funes: FunesService):
         self.logger = logger
-        self.redpanda = redpanda
-        self.admin = Admin(redpanda)
+        self.funes = funes
+        self.admin = Admin(funes)
 
     # TODO factor out similar code in cluster_config_test.py
     def _wait_for_node_config_value(self, key: str, value: int) -> None:
@@ -29,7 +29,7 @@ class FullDiskHelper:
         self.logger.debug(f"Verified val {value} for {key}.")
 
     def _set_low_space(self, degraded, *, node=None):
-        victim = node or random.choice(self.redpanda.nodes)
+        victim = node or random.choice(self.funes.nodes)
         new_threshold: int = 0
         if degraded:
             new_threshold = 2**60  # arbitrary huge value
@@ -38,7 +38,7 @@ class FullDiskHelper:
         updates = {self.CONF_MIN_FREE_BYTES: new_threshold}
         self.logger.debug(f" victim {victim.name}, " +
                           f"new_thresh {new_threshold}")
-        self.redpanda.set_cluster_config(updates)
+        self.funes.set_cluster_config(updates)
 
         # self.admin.patch_cluster_config(upsert=updates, remove=[])
         self.logger.debug(f"Confirming new config values..")

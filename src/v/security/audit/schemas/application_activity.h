@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -49,7 +49,7 @@ public:
       : ocsf_base_event(
         category_uid::application_activity,
         class_uid::api_activity,
-        ocsf_redpanda_metadata_cloud_profile(),
+        ocsf_funes_metadata_cloud_profile(),
         severity_id,
         time,
         activity_id)

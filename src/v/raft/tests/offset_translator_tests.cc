@@ -100,9 +100,9 @@ struct base_fixture {
 void validate_translation(
   raft::offset_translator& tr,
   model::offset log_offset,
-  model::offset kafka_offset) {
-    BOOST_REQUIRE_EQUAL(tr.state()->from_log_offset(log_offset), kafka_offset);
-    BOOST_REQUIRE_EQUAL(tr.state()->to_log_offset(kafka_offset), log_offset);
+  model::offset sql_offset) {
+    BOOST_REQUIRE_EQUAL(tr.state()->from_log_offset(log_offset), sql_offset);
+    BOOST_REQUIRE_EQUAL(tr.state()->to_log_offset(sql_offset), log_offset);
 }
 
 struct offset_translator_fixture : base_fixture {
@@ -112,25 +112,25 @@ struct offset_translator_fixture : base_fixture {
     }
 
     void validate_offset_translation(
-      model::offset log_offset, model::offset kafka_offset) {
-        validate_translation(tr, log_offset, kafka_offset);
+      model::offset log_offset, model::offset sql_offset) {
+        validate_translation(tr, log_offset, sql_offset);
     }
 
     raft::offset_translator tr;
 };
 
-FIXTURE_TEST(test_translating_to_kafka_offsets, offset_translator_fixture) {
+FIXTURE_TEST(test_translating_to_sql_offsets, offset_translator_fixture) {
     std::set<model::offset> batch_offsets{
       model::offset(0),
       model::offset(1),
-      // data batch @ 2 -> kafka 0
+      // data batch @ 2 -> sql 0
       model::offset(3),
       model::offset(4),
       model::offset(5),
-      // data batch @ 6 -> kafka 1
+      // data batch @ 6 -> sql 1
       model::offset(7),
       model::offset(8),
-      // data batch @ 9 -> kafka 3
+      // data batch @ 9 -> sql 3
       model::offset(10)};
 
     for (auto o : batch_offsets) {
@@ -146,17 +146,17 @@ FIXTURE_TEST(test_translating_to_kafka_offsets, offset_translator_fixture) {
 }
 
 FIXTURE_TEST(
-  test_translating_to_kafka_offsets_first, offset_translator_fixture) {
-    std::set<model::offset> batch_offsets{// data batch @ 0 -> kafka 0
-                                          // data batch @ 1 -> kafka 1
+  test_translating_to_sql_offsets_first, offset_translator_fixture) {
+    std::set<model::offset> batch_offsets{// data batch @ 0 -> sql 0
+                                          // data batch @ 1 -> sql 1
                                           model::offset(2),
                                           model::offset(3),
                                           model::offset(4),
                                           model::offset(5),
                                           model::offset(6),
-                                          // data batch @ 7 -> kafka 2
+                                          // data batch @ 7 -> sql 2
                                           model::offset(8),
-                                          // data batch @ 9 -> kafka 3
+                                          // data batch @ 9 -> sql 3
                                           model::offset(10)};
 
     for (auto o : batch_offsets) {
@@ -193,8 +193,8 @@ FIXTURE_TEST(random_translation_test, offset_translator_fixture) {
         if (batch_offsets.contains(log_offset)) {
             continue;
         }
-        auto kafka_offset = tr.state()->from_log_offset(log_offset);
-        auto reverse_log_offset = tr.state()->to_log_offset(kafka_offset);
+        auto sql_offset = tr.state()->from_log_offset(log_offset);
+        auto reverse_log_offset = tr.state()->to_log_offset(sql_offset);
         BOOST_REQUIRE_EQUAL(log_offset, reverse_log_offset);
     }
 }
@@ -222,9 +222,9 @@ FIXTURE_TEST(random_translation_test_with_hint, offset_translator_fixture) {
         if (batch_offsets.contains(log_offset)) {
             continue;
         }
-        auto kafka_offset = tr.state()->from_log_offset(log_offset);
+        auto sql_offset = tr.state()->from_log_offset(log_offset);
         auto reverse_log_offset = tr.state()->to_log_offset(
-          kafka_offset, prev_log_offset);
+          sql_offset, prev_log_offset);
         prev_log_offset = reverse_log_offset;
         BOOST_REQUIRE_EQUAL(log_offset, reverse_log_offset);
     }
@@ -249,7 +249,7 @@ FIXTURE_TEST(immutability_test, offset_translator_fixture) {
     tr.process(create_batch(
       model::record_batch_type::raft_data, model::offset(end_offset - 1)));
 
-    // log offset -> kafka offset
+    // log offset -> sql offset
     std::unordered_map<model::offset, model::offset> offsets_mapping;
 
     // go over whole offset space
@@ -259,11 +259,11 @@ FIXTURE_TEST(immutability_test, offset_translator_fixture) {
         if (batch_offsets.contains(log_offset)) {
             continue;
         }
-        auto kafka_offset = tr.state()->from_log_offset(log_offset);
-        auto reverse_log_offset = tr.state()->to_log_offset(kafka_offset);
+        auto sql_offset = tr.state()->from_log_offset(log_offset);
+        auto reverse_log_offset = tr.state()->to_log_offset(sql_offset);
 
         BOOST_REQUIRE_EQUAL(log_offset, reverse_log_offset);
-        offsets_mapping.emplace(log_offset, kafka_offset);
+        offsets_mapping.emplace(log_offset, sql_offset);
     }
 
     auto validate_offsets_immutable = [&](int64_t start) {
@@ -359,7 +359,7 @@ struct fuzz_checker {
 
                 for (auto o = batch.base_offset(); o <= batch.last_offset();
                      ++o) {
-                    _self._kafka_offsets.push_back(
+                    _self._sql_offsets.push_back(
                       model::offset{_self._log_offsets.size()});
                     if (
                       batch.header().type
@@ -413,12 +413,12 @@ struct fuzz_checker {
           storage::truncate_config(truncate_at, ss::default_priority_class()));
 
         if (_log->offsets().dirty_offset() < 0) {
-            _kafka_offsets.clear();
+            _sql_offsets.clear();
             _log_offsets.clear();
         } else {
-            _kafka_offsets.resize(_log->offsets().dirty_offset() + 1);
+            _sql_offsets.resize(_log->offsets().dirty_offset() + 1);
             while (!_log_offsets.empty()
-                   && _log_offsets.back()() >= _kafka_offsets.size()) {
+                   && _log_offsets.back()() >= _sql_offsets.size()) {
                 _log_offsets.pop_back();
             }
         }
@@ -449,14 +449,14 @@ struct fuzz_checker {
             co_await _tr->prefix_truncate(_snapshot_offset);
         }
 
-        if (new_start_offset() < _kafka_offsets.size()) {
+        if (new_start_offset() < _sql_offsets.size()) {
             _snapshot_delta = new_start_offset
-                              - _kafka_offsets[new_start_offset];
+                              - _sql_offsets[new_start_offset];
         } else {
-            _snapshot_delta = _kafka_offsets.size() - _log_offsets.size();
+            _snapshot_delta = _sql_offsets.size() - _log_offsets.size();
         }
 
-        // _kafka_offsets and _log_offsets don't get prefix-truncated, we
+        // _sql_offsets and _log_offsets don't get prefix-truncated, we
         // rely on _snapshot_offset to filter out prefix-truncated entries.
     }
 
@@ -485,32 +485,32 @@ struct fuzz_checker {
         }
 
         // check translation for high watermark (first unoccupied offset)
-        model::offset hwm_lo{_kafka_offsets.size()};
+        model::offset hwm_lo{_sql_offsets.size()};
         model::offset hwm_ko{_log_offsets.size()};
         BOOST_TEST_CONTEXT("With log offset: " << hwm_lo) {
             BOOST_REQUIRE_EQUAL(hwm_ko, _tr->state()->from_log_offset(hwm_lo));
         }
-        BOOST_TEST_CONTEXT("With kafka offset: " << hwm_ko) {
+        BOOST_TEST_CONTEXT("With sql offset: " << hwm_ko) {
             BOOST_REQUIRE_EQUAL(hwm_lo, _tr->state()->to_log_offset(hwm_ko));
         }
 
         int64_t start_log_offset = model::next_offset(_snapshot_offset)();
-        if (start_log_offset >= _kafka_offsets.size()) {
+        if (start_log_offset >= _sql_offsets.size()) {
             // empty log
             return;
         }
 
-        for (int64_t lo = start_log_offset; lo < _kafka_offsets.size(); ++lo) {
+        for (int64_t lo = start_log_offset; lo < _sql_offsets.size(); ++lo) {
             BOOST_TEST_CONTEXT("With log offset: " << lo) {
                 BOOST_REQUIRE_EQUAL(
-                  _kafka_offsets[lo],
+                  _sql_offsets[lo],
                   _tr->state()->from_log_offset(model::offset{lo}));
             }
         }
 
-        int64_t start_kafka_offset = _kafka_offsets[start_log_offset];
-        for (int64_t ko = start_kafka_offset; ko < _log_offsets.size(); ++ko) {
-            BOOST_TEST_CONTEXT("With kafka offset: " << ko) {
+        int64_t start_sql_offset = _sql_offsets[start_log_offset];
+        for (int64_t ko = start_sql_offset; ko < _log_offsets.size(); ++ko) {
+            BOOST_TEST_CONTEXT("With sql offset: " << ko) {
                 BOOST_REQUIRE_EQUAL(
                   _log_offsets[ko],
                   _tr->state()->to_log_offset(model::offset{ko}));
@@ -530,9 +530,9 @@ struct fuzz_checker {
     model::offset _snapshot_offset;
     int64_t _snapshot_delta = 0;
 
-    // kafka offsets for each log offset from 0 to tip of the log.
-    std::vector<model::offset> _kafka_offsets;
-    // log_offsets for each kafka offset from 0 to last kafka offset.
+    // sql offsets for each log offset from 0 to tip of the log.
+    std::vector<model::offset> _sql_offsets;
+    // log_offsets for each sql offset from 0 to last sql offset.
     std::vector<model::offset> _log_offsets;
 };
 
@@ -601,16 +601,16 @@ FIXTURE_TEST(fuzz_operations_test, base_fixture) {
 
 FIXTURE_TEST(test_moving_persistent_state, base_fixture) {
     std::set<model::offset> batch_offsets{
-      // data batch @ 0 -> kafka 0
-      // data batch @ 1 -> kafka 1
+      // data batch @ 0 -> sql 0
+      // data batch @ 1 -> sql 1
       model::offset(2),
       model::offset(3),
       model::offset(4),
       model::offset(5),
       model::offset(6),
-      // data batch @ 7 -> kafka 2
+      // data batch @ 7 -> sql 2
       model::offset(8),
-      // data batch @ 9 -> kafka 3
+      // data batch @ 9 -> sql 3
     };
     auto local_ot = make_offset_translator();
     local_ot

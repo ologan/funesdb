@@ -10,15 +10,15 @@
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.services.rpk_consumer import RpkConsumer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.utils.partition_metrics import PartitionMetrics
 
 
-class PartitionMetricsTest(RedpandaTest):
+class PartitionMetricsTest(FunesTest):
     """
     Produce and consume some data then confirm partition metrics
     """
@@ -26,7 +26,7 @@ class PartitionMetricsTest(RedpandaTest):
 
     def __init__(self, test_context):
         super(PartitionMetricsTest, self).__init__(test_context=test_context)
-        self.pm = PartitionMetrics(self.redpanda)
+        self.pm = PartitionMetrics(self.funes)
 
     @cluster(num_nodes=3)
     def test_partition_metrics(self):
@@ -41,14 +41,14 @@ class PartitionMetricsTest(RedpandaTest):
         assert self.pm.records_fetched() == 0
 
         # Produce some data (10240 records * 512 bytes = 5MB of data)
-        kafka_tools = KafkaCliTools(self.redpanda)
-        kafka_tools.produce(self.topic, num_records, records_size, acks=-1)
+        sql_tools = SQLCliTools(self.funes)
+        sql_tools.produce(self.topic, num_records, records_size, acks=-1)
 
         rec_produced = self.pm.records_produced()
-        self.redpanda.logger.info(f"records produced: {rec_produced}")
+        self.funes.logger.info(f"records produced: {rec_produced}")
         assert rec_produced == num_records
         bytes_produced = self.pm.bytes_produced()
-        self.redpanda.logger.info(f"bytes produced: {bytes_produced}")
+        self.funes.logger.info(f"bytes produced: {bytes_produced}")
         # bytes produced should be bigger than sent records size because of
         # batch headers overhead
         assert bytes_produced >= num_records * records_size
@@ -58,14 +58,14 @@ class PartitionMetricsTest(RedpandaTest):
         assert self.pm.records_fetched() == 0
 
         # read all messages
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.consume(self.topic, n=num_records)
 
         rec_fetched = self.pm.records_fetched()
-        self.redpanda.logger.info(f"records fetched: {rec_fetched}")
+        self.funes.logger.info(f"records fetched: {rec_fetched}")
 
         bytes_fetched = self.pm.bytes_fetched()
-        self.redpanda.logger.info(f"bytes fetched: {bytes_fetched}")
+        self.funes.logger.info(f"bytes fetched: {bytes_fetched}")
 
         assert bytes_fetched == bytes_produced
         assert rec_fetched == rec_produced

@@ -21,11 +21,11 @@ from rptest.utils.mode_checks import skip_debug_mode
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.clients.offline_log_viewer import OfflineLogViewer
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.tests.funes_test import FunesTest
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.services.rpk_producer import RpkProducer
 from rptest.services.metrics_check import MetricCheck
-from rptest.services.redpanda import CloudStorageType, SISettings, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, SISettings, get_cloud_storage_type
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.util import wait_for_local_storage_truncate, firewall_blocked
 from rptest.services.admin import Admin
@@ -33,23 +33,23 @@ from rptest.tests.partition_movement import PartitionMovementMixin
 from rptest.utils.si_utils import BucketView, NTP, NT, LifecycleMarkerStatus, quiesce_uploads
 
 
-def get_kvstore_topic_key_counts(redpanda):
+def get_kvstore_topic_key_counts(funes):
     """
-    Count the keys in KVStore that relate to Kafka topics: this excludes all
-    internal topic items: if no Kafka topics exist, this should be zero for
+    Count the keys in KVStore that relate to SQL topics: this excludes all
+    internal topic items: if no SQL topics exist, this should be zero for
     all nodes.
 
     :returns: dict of Node to integer
     """
 
-    viewer = OfflineLogViewer(redpanda)
+    viewer = OfflineLogViewer(funes)
 
     # Find the raft group IDs of internal topics
-    admin = Admin(redpanda)
+    admin = Admin(funes)
     internal_group_ids = set()
     for ntp in [
-        ('redpanda', 'controller', 0),
-        ('kafka_internal', 'id_allocator', 0),
+        ('funes', 'controller', 0),
+        ('sql_internal', 'id_allocator', 0),
     ]:
         namespace, topic, partition = ntp
         try:
@@ -65,7 +65,7 @@ def get_kvstore_topic_key_counts(redpanda):
             internal_group_ids.add(p['raft_group_id'])
 
     result = {}
-    for n in redpanda.nodes:
+    for n in funes.nodes:
         kvstore_data = viewer.read_kvstore(node=n)
 
         excess_keys = []
@@ -87,7 +87,7 @@ def get_kvstore_topic_key_counts(redpanda):
 
                 excess_keys.append(k)
 
-            redpanda.logger.info(
+            funes.logger.info(
                 f"{n.name}.{shard} Excess Keys {json.dumps(excess_keys,indent=2)}"
             )
 
@@ -97,19 +97,19 @@ def get_kvstore_topic_key_counts(redpanda):
     return result
 
 
-def topic_storage_purged(redpanda, topic_name):
-    storage = redpanda.storage()
+def topic_storage_purged(funes, topic_name):
+    storage = funes.storage()
     logs_removed = all(
-        map(lambda n: topic_name not in n.ns["kafka"].topics, storage.nodes))
+        map(lambda n: topic_name not in n.ns["sql"].topics, storage.nodes))
 
     if not logs_removed:
-        redpanda.logger.info(f"Files remain for topic {topic_name}:")
+        funes.logger.info(f"Files remain for topic {topic_name}:")
         for n in storage.nodes:
-            ns = n.ns["kafka"]
+            ns = n.ns["sql"]
             for topic_name, topic in ns.topics.items():
                 for p_id, p in topic.partitions.items():
                     for f in p.files:
-                        redpanda.logger.info(f"  {n.name}: {f}")
+                        funes.logger.info(f"  {n.name}: {f}")
 
         return False
 
@@ -119,17 +119,17 @@ def topic_storage_purged(redpanda, topic_name):
     # to avoid bugs that would cause kvstore to bloat through
     # topic creation/destruction cycles.
 
-    topic_key_counts = get_kvstore_topic_key_counts(redpanda)
+    topic_key_counts = get_kvstore_topic_key_counts(funes)
     if any([v > 0 for v in topic_key_counts.values()]):
-        redpanda.logger.info("Topic keys remain in KVStore")
+        funes.logger.info("Topic keys remain in KVStore")
         for node, count in topic_key_counts.items():
-            redpanda.logger.info(f"  {node}: {count}")
+            funes.logger.info(f"  {node}: {count}")
         return False
 
     return True
 
 
-class TopicDeleteTest(RedpandaTest):
+class TopicDeleteTest(FunesTest):
     """
     Verify that topic deletion cleans up storage.
     """
@@ -143,18 +143,18 @@ class TopicDeleteTest(RedpandaTest):
                                               num_brokers=3,
                                               extra_rp_conf=extra_rp_conf)
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
 
     def produce_until_partitions(self):
-        self.kafka_tools.produce(self.topic, 1024, 1024)
-        storage = self.redpanda.storage()
-        return len(list(storage.partitions("kafka", self.topic))) == 9
+        self.sql_tools.produce(self.topic, 1024, 1024)
+        storage = self.funes.storage()
+        return len(list(storage.partitions("sql", self.topic))) == 9
 
     def dump_storage_listing(self):
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             self.logger.error(f"Storage listing on {node.name}:")
             for line in node.account.ssh_capture(
-                    f"find {self.redpanda.DATA_DIR}"):
+                    f"find {self.funes.DATA_DIR}"):
                 self.logger.error(line.strip())
 
     @cluster(num_nodes=3)
@@ -169,17 +169,17 @@ class TopicDeleteTest(RedpandaTest):
         if with_restart:
             # Do a restart to encourage writes and flushes, especially to
             # the kvstore.
-            self.redpanda.restart_nodes(self.redpanda.nodes)
+            self.funes.restart_nodes(self.funes.nodes)
 
         # Sanity check the kvstore checks: there should be at least one kvstore entry
         # per partition while the topic exists.
         assert sum(get_kvstore_topic_key_counts(
-            self.redpanda).values()) >= self.topics[0].partition_count
+            self.funes).values()) >= self.topics[0].partition_count
 
-        self.kafka_tools.delete_topic(self.topic)
+        self.sql_tools.delete_topic(self.topic)
 
         try:
-            wait_until(lambda: topic_storage_purged(self.redpanda, self.topic),
+            wait_until(lambda: topic_storage_purged(self.funes, self.topic),
                        timeout_sec=30,
                        backoff_sec=2,
                        err_msg="Topic storage was not removed")
@@ -198,25 +198,25 @@ class TopicDeleteTest(RedpandaTest):
         # Sanity check the kvstore checks: there should be at least one kvstore entry
         # per partition while the topic exists.
         assert sum(get_kvstore_topic_key_counts(
-            self.redpanda).values()) >= self.topics[0].partition_count
+            self.funes).values()) >= self.topics[0].partition_count
 
-        down_node = self.redpanda.nodes[-1]
+        down_node = self.funes.nodes[-1]
         try:
             # Make topic directory immutable to prevent deleting
             down_node.account.ssh(
-                f"chattr +i {self.redpanda.DATA_DIR}/kafka/{self.topic}")
+                f"chattr +i {self.funes.DATA_DIR}/sql/{self.topic}")
 
-            self.kafka_tools.delete_topic(self.topic)
+            self.sql_tools.delete_topic(self.topic)
 
-            def topic_deleted_on_all_nodes_except_one(redpanda, down_node,
+            def topic_deleted_on_all_nodes_except_one(funes, down_node,
                                                       topic_name):
-                storage = redpanda.storage()
+                storage = funes.storage()
                 log_not_removed_on_down = topic_name in next(
                     filter(lambda x: x.name == down_node.name,
-                           storage.nodes)).ns["kafka"].topics
+                           storage.nodes)).ns["sql"].topics
                 logs_removed_on_others = all(
                     map(
-                        lambda n: topic_name not in n.ns["kafka"].topics,
+                        lambda n: topic_name not in n.ns["sql"].topics,
                         filter(lambda x: x.name != down_node.name,
                                storage.nodes)))
                 return log_not_removed_on_down and logs_removed_on_others
@@ -224,7 +224,7 @@ class TopicDeleteTest(RedpandaTest):
             try:
                 wait_until(
                     lambda: topic_deleted_on_all_nodes_except_one(
-                        self.redpanda, down_node, self.topic),
+                        self.funes, down_node, self.topic),
                     timeout_sec=30,
                     backoff_sec=2,
                     err_msg=
@@ -234,15 +234,15 @@ class TopicDeleteTest(RedpandaTest):
                 self.dump_storage_listing()
                 raise
 
-            self.redpanda.stop_node(down_node)
+            self.funes.stop_node(down_node)
         finally:
             down_node.account.ssh(
-                f"chattr -i {self.redpanda.DATA_DIR}/kafka/{self.topic}")
+                f"chattr -i {self.funes.DATA_DIR}/sql/{self.topic}")
 
-        self.redpanda.start_node(down_node)
+        self.funes.start_node(down_node)
 
         try:
-            wait_until(lambda: topic_storage_purged(self.redpanda, self.topic),
+            wait_until(lambda: topic_storage_purged(self.funes, self.topic),
                        timeout_sec=10,
                        backoff_sec=2,
                        err_msg="Topic storage was not removed")
@@ -251,7 +251,7 @@ class TopicDeleteTest(RedpandaTest):
             raise
 
 
-class TopicDeleteAfterMovementTest(RedpandaTest):
+class TopicDeleteAfterMovementTest(FunesTest):
     """
     Verify that topic deleted after partition movement.
     """
@@ -265,11 +265,11 @@ class TopicDeleteAfterMovementTest(RedpandaTest):
                              num_brokers=4,
                              extra_rp_conf=rp_conf)
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
 
     def movement_done(self, partition, assignments):
         results = []
-        for n in self.redpanda._started:
+        for n in self.funes._started:
             info = self.admin.get_partitions(self.topic, partition, node=n)
             self.logger.info(
                 f"current assignments for {self.topic}-{partition}: {info}")
@@ -300,67 +300,67 @@ class TopicDeleteAfterMovementTest(RedpandaTest):
     def topic_delete_orphan_files_after_move_test(self):
 
         # Write out 10MB per partition
-        self.kafka_tools.produce(self.topic,
+        self.sql_tools.produce(self.topic,
                                  record_size=4096,
                                  num_records=2560 * self.partition_count)
 
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
 
         # Move every partition to nodes 1,2,3
         assignments = [dict(node_id=n, core=0) for n in [1, 2, 3]]
         self.move_topic(assignments)
 
-        down_node = self.redpanda.nodes[0]
+        down_node = self.funes.nodes[0]
         try:
             # Make topic directory immutable to prevent deleting
             down_node.account.ssh(
-                f"chattr +i {self.redpanda.DATA_DIR}/kafka/{self.topic}")
+                f"chattr +i {self.funes.DATA_DIR}/sql/{self.topic}")
 
             # Move every partition from node 1 to node 4
             new_assignments = [dict(node_id=n, core=0) for n in [2, 3, 4]]
             self.move_topic(new_assignments)
 
-            def topic_exist_on_every_node(redpanda, topic_name):
-                storage = redpanda.storage()
+            def topic_exist_on_every_node(funes, topic_name):
+                storage = funes.storage()
                 exist_on_every = all(
-                    map(lambda n: topic_name in n.ns["kafka"].topics,
+                    map(lambda n: topic_name in n.ns["sql"].topics,
                         storage.nodes))
                 return exist_on_every
 
             wait_until(
-                lambda: topic_exist_on_every_node(self.redpanda, self.topic),
+                lambda: topic_exist_on_every_node(self.funes, self.topic),
                 timeout_sec=30,
                 backoff_sec=2,
                 err_msg="Topic doesn't exist on some node")
 
-            self.redpanda.stop_node(down_node)
+            self.funes.stop_node(down_node)
         finally:
             down_node.account.ssh(
-                f"chattr -i {self.redpanda.DATA_DIR}/kafka/{self.topic}")
+                f"chattr -i {self.funes.DATA_DIR}/sql/{self.topic}")
 
-        self.redpanda.start_node(down_node)
+        self.funes.start_node(down_node)
 
         def topic_deleted_on_down_node_and_exist_on_others(
-                redpanda, down_node, topic_name):
-            storage = redpanda.storage()
+                funes, down_node, topic_name):
+            storage = funes.storage()
             log_removed_on_down = topic_name not in next(
                 filter(lambda x: x.name == down_node.name,
-                       storage.nodes)).ns["kafka"].topics
+                       storage.nodes)).ns["sql"].topics
             logs_not_removed_on_others = all(
-                map(lambda n: topic_name in n.ns["kafka"].topics,
+                map(lambda n: topic_name in n.ns["sql"].topics,
                     filter(lambda x: x.name != down_node.name, storage.nodes)))
             return log_removed_on_down and logs_not_removed_on_others
 
         wait_until(
             lambda: topic_deleted_on_down_node_and_exist_on_others(
-                self.redpanda, down_node, self.topic),
+                self.funes, down_node, self.topic),
             timeout_sec=30,
             backoff_sec=2,
             err_msg=
             "Topic storage was not removed on down node or removed on other")
 
 
-class TopicDeleteCloudStorageTest(RedpandaTest):
+class TopicDeleteCloudStorageTest(FunesTest):
     partition_count = 3
     topics = (TopicSpec(partition_count=partition_count,
                         cleanup_policy=TopicSpec.CLEANUP_DELETE), )
@@ -393,10 +393,10 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
         self._s3_port = self.si_settings.cloud_storage_api_endpoint_port
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
 
     def _produce_until_spillover(self, topic_name: str, local_retention: int):
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             "cloud_storage_housekeeping_interval_ms":
             1000,
             "cloud_storage_spillover_manifest_max_segments":
@@ -405,16 +405,16 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
         # Write more than 20MiB per partition to trigger spillover
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic_name,
                                     msg_size=1024 * 512,
                                     msg_count=200)
 
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
 
         def all_partitions_spilled():
             for pid in range(0, self.partition_count):
-                ntp = NTP(ns="kafka", topic=topic_name, partition=pid)
+                ntp = NTP(ns="sql", topic=topic_name, partition=pid)
                 spillovers = view.get_spillover_metadata(ntp)
 
                 self.logger.debug(f"Found {spillovers=} for {ntp=}")
@@ -425,7 +425,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
         wait_until(all_partitions_spilled, timeout_sec=180, backoff_sec=30)
 
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             "cloud_storage_housekeeping_interval_ms":
             self.housekeeping_interval_ms
         })
@@ -440,13 +440,13 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         """
         # Set retention to 5MB
         local_retention = 5 * 1024 * 1024
-        self.kafka_tools.alter_topic_config(
+        self.sql_tools.alter_topic_config(
             topic_name, {'retention.local.target.bytes': local_retention})
 
         if not spillover:
             # Write out 10MB per partition
             KgoVerifierProducer.oneshot(self.test_context,
-                                        self.redpanda,
+                                        self.funes,
                                         topic_name,
                                         msg_size=4096,
                                         msg_count=2560 * self.partition_count)
@@ -459,7 +459,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
                 self.logger.debug(
                     f"Waiting for truncation of {topic_name}/{i} for {timeout=} seconds"
                 )
-                wait_for_local_storage_truncate(self.redpanda,
+                wait_for_local_storage_truncate(self.funes,
                                                 topic_name,
                                                 partition_idx=i,
                                                 target_bytes=local_retention,
@@ -474,7 +474,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
         # Wait for everything to be uploaded: this avoids tests potentially trying
         # to delete topics mid-uploads, which can leave orphan segments.
-        quiesce_uploads(self.redpanda, [topic_name], timeout_sec=60)
+        quiesce_uploads(self.funes, [topic_name], timeout_sec=60)
 
     @skip_debug_mode  # Rely on timely uploads during leader transfers
     @cluster(num_nodes=4,
@@ -485,11 +485,11 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         to deletion: this aims to expose bugs in the snapshot code vs the
         shutdown code.
         """
-        victim_node = self.redpanda.nodes[-1]
-        other_nodes = self.redpanda.nodes[0:2]
+        victim_node = self.funes.nodes[-1]
+        other_nodes = self.funes.nodes[0:2]
 
         self.logger.info(f"Stopping victim node {victim_node.name}")
-        self.redpanda.stop_node(victim_node)
+        self.funes.stop_node(victim_node)
 
         # Before populating the topic + waiting for eviction from local
         # disk, stop one node.  This node will later get a snapshot installed
@@ -500,7 +500,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         self._populate_topic(self.topic, nodes=other_nodes, spillover=False)
 
         self.logger.info(f"Starting victim node {victim_node.name}")
-        self.redpanda.start_node(victim_node)
+        self.funes.start_node(victim_node)
 
         # TODO wait for victim_node to see hwm catch up
         time.sleep(10)
@@ -509,8 +509,8 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         # after having installed a snapshot
         self._populate_topic(self.topic, spillover=False)
 
-        self.kafka_tools.delete_topic(self.topic)
-        wait_until(lambda: topic_storage_purged(self.redpanda, self.topic),
+        self.sql_tools.delete_topic(self.topic)
+        wait_until(lambda: topic_storage_purged(self.funes, self.topic),
                    timeout_sec=30,
                    backoff_sec=1)
 
@@ -524,10 +524,10 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
     @matrix(cloud_storage_type=get_cloud_storage_type())
     def drop_lifecycle_marker_test(self, cloud_storage_type):
         self._populate_topic(self.topic)
-        with firewall_blocked(self.redpanda.nodes, self._s3_port):
-            self.kafka_tools.delete_topic(self.topic)
+        with firewall_blocked(self.funes.nodes, self._s3_port):
+            self.sql_tools.delete_topic(self.topic)
 
-            admin = Admin(self.redpanda)
+            admin = Admin(self.funes)
             controller_markers = admin.get_cloud_storage_lifecycle_markers(
             )['markers']
             assert len(controller_markers) == 1
@@ -549,7 +549,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
             # can never process the marker properly.
             #
             # Use the controller node for the API access, to ensure read-after-write consistency
-            controller_node = self.redpanda.controller()
+            controller_node = self.funes.controller()
             admin.delete_cloud_storage_lifecycle_marker(marker['topic'],
                                                         marker['revision_id'],
                                                         node=controller_node)
@@ -562,7 +562,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
                 :return: True if our marker deletion has propagated to all non-controller nodes
                 """
                 nodes = [
-                    n for n in self.redpanda.nodes if n != controller_node
+                    n for n in self.funes.nodes if n != controller_node
                 ]
                 return all(
                     len(
@@ -571,20 +571,20 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
             # Ensure the marker deletion has propagated to all nodes (we don't know
             # which node would actually have been doing the scrubbing for our topic)
-            self.redpanda.wait_until(update_propagated,
+            self.funes.wait_until(update_propagated,
                                      timeout_sec=10,
                                      backoff_sec=0.5)
 
             # At this point, although we have deleted the controller
-            # lifecycle marker, it is possible that Redpanda is still
+            # lifecycle marker, it is possible that Funes is still
             # in the middle of trying to delete the topic because it is
             # inside a purger run.
             #
             # To avoid leaving storage in a non-deterministic state,
-            # restart redpanda before unblocking the firewall, so that we
+            # restart funes before unblocking the firewall, so that we
             # don't end up maybe-sometimes partially deleting upon
             # unblocking the firewall.
-            self.redpanda.restart_nodes(self.redpanda.nodes)
+            self.funes.restart_nodes(self.funes.nodes)
 
     @skip_debug_mode  # Rely on timely uploads during leader transfers
     @cluster(
@@ -604,25 +604,25 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         # Empirically, this test has been prone to races between the finalize
         # stage of remote partition and the scrubber. Set a generous grace period
         # to avoid these natural races.
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             "cloud_storage_topic_purge_grace_period_ms":
             5000,
         })
 
         self._populate_topic(self.topic)
         keys_before = set(
-            o.key for o in self.redpanda.cloud_storage_client.list_objects(
+            o.key for o in self.funes.cloud_storage_client.list_objects(
                 self.si_settings.cloud_storage_bucket, topic=self.topic))
         assert len(keys_before) > 0
 
-        with firewall_blocked(self.redpanda.nodes, self._s3_port):
-            self.kafka_tools.delete_topic(self.topic)
+        with firewall_blocked(self.funes.nodes, self._s3_port):
+            self.sql_tools.delete_topic(self.topic)
 
             # From user's point of view, deletion succeeds
-            assert self.topic not in self.kafka_tools.list_topics()
+            assert self.topic not in self.sql_tools.list_topics()
 
             # Local storage deletion should proceed even if remote can't
-            wait_until(lambda: topic_storage_purged(self.redpanda, self.topic),
+            wait_until(lambda: topic_storage_purged(self.funes, self.topic),
                        timeout_sec=30,
                        backoff_sec=1)
 
@@ -632,7 +632,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
             # Confirm our firewall block is really working, nothing was deleted
             keys_after = set(
-                o.key for o in self.redpanda.cloud_storage_client.list_objects(
+                o.key for o in self.funes.cloud_storage_client.list_objects(
                     self.si_settings.cloud_storage_bucket))
             assert len(keys_after) >= len(keys_before)
 
@@ -640,19 +640,19 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         # to execute partition deletion, it is still happily able to execute
         # other operations on unrelated topics, i.e. has not stalled applying.
         next_topic = "next_topic"
-        self.kafka_tools.create_topic(
+        self.sql_tools.create_topic(
             TopicSpec(name=next_topic,
                       partition_count=self.partition_count,
                       cleanup_policy=TopicSpec.CLEANUP_DELETE))
         self._populate_topic(next_topic, spillover=False)
 
         after_keys = set(
-            o.key for o in self.redpanda.cloud_storage_client.list_objects(
+            o.key for o in self.funes.cloud_storage_client.list_objects(
                 self.si_settings.cloud_storage_bucket, topic=next_topic))
         assert len(after_keys) > 0
 
-        self.kafka_tools.delete_topic(next_topic)
-        wait_until(lambda: topic_storage_purged(self.redpanda, next_topic),
+        self.sql_tools.delete_topic(next_topic)
+        wait_until(lambda: topic_storage_purged(self.funes, next_topic),
                    timeout_sec=35,
                    backoff_sec=1)
 
@@ -693,7 +693,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
                     "Some blobs are still in the container"
                     f"but deletion is progressing: history={sizes}")
 
-            self.redpanda.si_settings.set_expected_damage({
+            self.funes.si_settings.set_expected_damage({
                 "unknown_keys", "missing_segments", "ntpr_no_manifest",
                 "ntr_no_topic_manifest", "archive_manifests_outside_manifest"
             })
@@ -726,8 +726,8 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         has a status != `status`
         """
         def has_purged_marker():
-            view = BucketView(self.redpanda)
-            marker = view.get_lifecycle_marker(NT('kafka', topic_name))
+            view = BucketView(self.funes)
+            marker = view.get_lifecycle_marker(NT('sql', topic_name))
 
             # The JSON value is an integer, use the underlying value of the Python enum
             return marker['status'] == status.value
@@ -739,7 +739,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
             # topic table status update (when the purger RPCs to the controller to
             # ask it to drop the life cycle marker.
             def get_topics_with_markers():
-                admin = Admin(self.redpanda)
+                admin = Admin(self.funes)
                 markers = admin.get_cloud_storage_lifecycle_markers(
                 )['markers']
                 self.logger.info(f"markers: {markers}")
@@ -753,9 +753,9 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         """
         throw if the lifecycle marker for the topic exists
         """
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
         try:
-            marker = view.get_lifecycle_marker(NT('kafka', topic_name))
+            marker = view.get_lifecycle_marker(NT('sql', topic_name))
         except:
             # FIXME: very broad exception catching because cloud storage clients
             # may use diverse exceptions for missing objects
@@ -773,20 +773,20 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         if disable_delete:
             # Set remote.delete=False before deleting: objects in
             # S3 should not be removed.
-            self.kafka_tools.alter_topic_config(
-                self.topic, {'redpanda.remote.delete': 'false'})
+            self.sql_tools.alter_topic_config(
+                self.topic, {'funes.remote.delete': 'false'})
 
         self._populate_topic(self.topic)
 
         keys_before = set(
-            o.key for o in self.redpanda.cloud_storage_client.list_objects(
+            o.key for o in self.funes.cloud_storage_client.list_objects(
                 self.si_settings.cloud_storage_bucket))
 
         # Delete topic
-        self.kafka_tools.delete_topic(self.topic)
+        self.sql_tools.delete_topic(self.topic)
 
         # Local storage should be purged
-        wait_until(lambda: topic_storage_purged(self.redpanda, self.topic),
+        wait_until(lambda: topic_storage_purged(self.funes, self.topic),
                    timeout_sec=30,
                    backoff_sec=1)
 
@@ -797,7 +797,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
             # delay.
             time.sleep(10)
             keys_after = set(
-                o.key for o in self.redpanda.cloud_storage_client.list_objects(
+                o.key for o in self.funes.cloud_storage_client.list_objects(
                     self.si_settings.cloud_storage_bucket))
             objects_deleted = keys_before - keys_after
             self.logger.debug(
@@ -821,7 +821,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
     def partition_movement_test(self, cloud_storage_type):
         """
         The unwary programmer might do S3 deletion from the
-        remove_persistent_state function in Redpanda, but
+        remove_persistent_state function in Funes, but
         they must not!  This function is also used in the case
         when we move a partition and clean up after ourselves.
 
@@ -829,13 +829,13 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         data but _not_ cloud data.
         """
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         self._populate_topic(self.topic, spillover=False)
 
         # We do not check that literally no keys are deleted, because adjacent segment
         # compaction may delete segments (which are replaced by merged segments) at any time.
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
         size_before = sum(
             bucket_view.cloud_log_size_for_ntp(self.topic, i).total(
                 no_archive=True) for i in range(0, self.partition_count))
@@ -846,8 +846,8 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
 
         nodes_before = get_nodes(admin.get_partitions(self.topic, 0))
         replacement_node = next(
-            iter((set([self.redpanda.idx(n)
-                       for n in self.redpanda.nodes]) - set(nodes_before))))
+            iter((set([self.funes.idx(n)
+                       for n in self.funes.nodes]) - set(nodes_before))))
         nodes_after = nodes_before[1:] + [
             replacement_node,
         ]
@@ -877,7 +877,7 @@ class TopicDeleteCloudStorageTest(RedpandaTest):
         # data segments during generic test teardown checks.
 
 
-class TopicDeleteStressTest(RedpandaTest):
+class TopicDeleteStressTest(FunesTest):
     """
     The purpose of this test is to execute topic deletion during compaction process.
 
@@ -885,7 +885,7 @@ class TopicDeleteStressTest(RedpandaTest):
         1. Start to produce messaes
         2. Produce until compaction starting
         3. Delete topic
-        4. Verify that all data for kafka namespace will be deleted
+        4. Verify that all data for sql namespace will be deleted
     """
     def __init__(self, test_context):
         extra_rp_conf = dict(
@@ -908,14 +908,14 @@ class TopicDeleteStressTest(RedpandaTest):
             topic_name = spec.name
             self.client().create_topic(spec)
 
-            producer = RpkProducer(self.test_context, self.redpanda,
+            producer = RpkProducer(self.test_context, self.funes,
                                    topic_name, 1024, 100000)
             producer.start()
 
             metrics = [
-                MetricCheck(self.logger, self.redpanda, n,
+                MetricCheck(self.logger, self.funes, n,
                             'vectorized_storage_log_compacted_segment_total',
-                            {}, sum) for n in self.redpanda.nodes
+                            {}, sum) for n in self.funes.nodes
             ]
 
             def check_compaction():
@@ -942,17 +942,17 @@ class TopicDeleteStressTest(RedpandaTest):
 
             try:
                 wait_until(
-                    lambda: topic_storage_purged(self.redpanda, topic_name),
+                    lambda: topic_storage_purged(self.funes, topic_name),
                     timeout_sec=60,
                     backoff_sec=2,
                     err_msg="Topic storage was not removed")
 
             except:
                 # On errors, dump listing of the storage location
-                for node in self.redpanda.nodes:
+                for node in self.funes.nodes:
                     self.logger.error(f"Storage listing on {node.name}:")
                     for line in node.account.ssh_capture(
-                            f"find {self.redpanda.DATA_DIR}"):
+                            f"find {self.funes.DATA_DIR}"):
                         self.logger.error(line.strip())
 
                 raise

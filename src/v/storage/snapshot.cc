@@ -125,7 +125,7 @@ ss::future<> snapshot_manager::remove_snapshot(ss::sstring target) {
             if (e.code() == std::errc::no_such_file_or_directory) {
                 // This can happen if an STM tries to remove the same
                 // snapshot twice in parallel, e.g. in issue
-                // https://github.com/redpanda-data/redpanda/issues/9091
+                // https://github.com/redpanda-data/funes/issues/9091
                 vlog(
                   stlog.error,
                   "Raced removing snapshot {} (file not found)",

@@ -26,7 +26,7 @@ func getValidTunerParams() *factory.TunerParams {
 		CPUMask:       "00000000000000000000000000000001",
 		RebootAllowed: true,
 		Disks:         []string{"dev1"},
-		Directories:   []string{"/var/lib/redpanda"},
+		Directories:   []string{"/var/lib/funes"},
 		Nics:          []string{"eth0"},
 	}
 }
@@ -52,7 +52,7 @@ func TestMergeTunerParamsConfig(t *testing.T) {
 			expected: func() *factory.TunerParams {
 				params := getValidTunerParams()
 				params.Directories = []string{
-					config.DevDefault().Redpanda.Directory,
+					config.DevDefault().Funes.Directory,
 				}
 				return params
 			},

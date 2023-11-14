@@ -23,12 +23,12 @@ import (
 )
 
 func main() {
-	redpanda.OnRecordWritten(identityTransform)
+	funes.OnRecordWritten(identityTransform)
 }
 
 var allocated bytes.Buffer
 
-func identityTransform(e redpanda.WriteEvent) ([]redpanda.Record, error) {
+func identityTransform(e funes.WriteEvent) ([]funes.Record, error) {
 	key := string(e.Record().Key)
 	switch key {
 	case "poison":
@@ -43,11 +43,11 @@ func identityTransform(e redpanda.WriteEvent) ([]redpanda.Record, error) {
 		allocated.Grow(int(amt))
 		return nil, nil
 	case "zero":
-		return []redpanda.Record{}, nil
+		return []funes.Record{}, nil
 	case "mirror":
-		return []redpanda.Record{e.Record()}, nil
+		return []funes.Record{e.Record()}, nil
 	case "double":
-		return []redpanda.Record{
+		return []funes.Record{
 			e.Record(),
 			e.Record(),
 		}, nil

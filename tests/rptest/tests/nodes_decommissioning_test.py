@@ -12,17 +12,17 @@ import random
 import time
 
 import requests
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from time import sleep
 from rptest.clients.default import DefaultClient
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda_installer import RedpandaInstaller
+from rptest.services.funes_installer import FunesInstaller
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 
 from rptest.utils.mode_checks import skip_debug_mode
 from rptest.util import wait_for_recovery_throttle_rate
 from rptest.clients.rpk import RpkTool
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
@@ -30,7 +30,7 @@ from ducktape.mark import matrix
 from rptest.clients.types import TopicSpec
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.services.admin import Admin
-from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST, RESTART_LOG_ALLOW_LIST, RedpandaService, make_redpanda_service, SISettings
+from rptest.services.funes import CHAOS_LOG_ALLOW_LIST, RESTART_LOG_ALLOW_LIST, FunesService, make_funes_service, SISettings
 from rptest.utils.node_operations import NodeDecommissionWaiter
 
 
@@ -47,13 +47,13 @@ class NodesDecommissioningTest(PreallocNodesTest):
                              node_prealloc_count=1)
 
     def setup(self):
-        # defer starting redpanda to test body
+        # defer starting funes to test body
         pass
 
     @property
     def admin(self):
         # retry on timeout and service unavailable
-        return Admin(self.redpanda, retry_codes=[503, 504])
+        return Admin(self.funes, retry_codes=[503, 504])
 
     def _create_topics(self, replication_factors=[1, 3]):
         """
@@ -85,7 +85,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
         return len(reconfigurations) == 0
 
     def _partition_to_move(self, predicate):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         for tp in rpk.list_topics():
             desc = rpk.describe_topic(tp)
@@ -96,8 +96,8 @@ class NodesDecommissioningTest(PreallocNodesTest):
     def _not_decommissioned_node(self, *args):
         decom_node_ids = args
         return [
-            n for n in self.redpanda.started_nodes()
-            if self.redpanda.node_id(n) not in decom_node_ids
+            n for n in self.funes.started_nodes()
+            if self.funes.node_id(n) not in decom_node_ids
         ][0]
 
     def _node_removed(self, removed_id, node_to_query):
@@ -148,15 +148,15 @@ class NodesDecommissioningTest(PreallocNodesTest):
             upsert={"raft_learner_recovery_rate": new_rate})
         self.logger.debug(
             f"setting recovery rate to {new_rate} result: {patch_result}")
-        wait_for_recovery_throttle_rate(redpanda=self.redpanda,
+        wait_for_recovery_throttle_rate(funes=self.funes,
                                         new_rate=new_rate)
 
     # after node was removed the state should be consistent on all other not removed nodes
     def _check_state_consistent(self, decommissioned_id):
 
         not_decommissioned = [
-            n for n in self.redpanda.started_nodes()
-            if self.redpanda.node_id(n) != decommissioned_id
+            n for n in self.funes.started_nodes()
+            if self.funes.node_id(n) != decommissioned_id
         ]
 
         def _state_consistent():
@@ -186,7 +186,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
     def _wait_for_node_removed(self, decommissioned_id):
 
-        waiter = NodeDecommissionWaiter(self.redpanda,
+        waiter = NodeDecommissionWaiter(self.funes,
                                         decommissioned_id,
                                         self.logger,
                                         progress_timeout=60)
@@ -199,8 +199,8 @@ class NodesDecommissioningTest(PreallocNodesTest):
             try:
 
                 results = []
-                for n in self.redpanda.nodes:
-                    if self.redpanda.node_id(n) == node_id:
+                for n in self.funes.nodes:
+                    if self.funes.node_id(n) == node_id:
                         continue
 
                     brokers = self.admin.get_brokers(node=n)
@@ -226,7 +226,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
         def recommissioned():
             try:
                 results = []
-                for n in self.redpanda.started_nodes():
+                for n in self.funes.started_nodes():
                     brokers = self.admin.get_brokers(node=n)
                     for b in brokers:
                         if b['node_id'] == node_id:
@@ -262,7 +262,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
         )
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self._topic,
             self.msg_size,
             self.msg_count,
@@ -278,7 +278,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
     def start_consumer(self):
         self.consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self._topic,
             self.msg_size,
             readers=1,
@@ -305,11 +305,11 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
         assert self.consumer.consumer_status.validator.invalid_reads == 0, f"Invalid reads in topic: {self._topic}, invalid reads count: {self.consumer.consumer_status.validator.invalid_reads}"
 
-    def start_redpanda(self, new_bootstrap=True):
+    def start_funes(self, new_bootstrap=True):
         if new_bootstrap:
-            self.redpanda.set_seed_servers(self.redpanda.nodes)
+            self.funes.set_seed_servers(self.funes.nodes)
 
-        self.redpanda.start(auto_assign_node_id=new_bootstrap,
+        self.funes.start(auto_assign_node_id=new_bootstrap,
                             omit_seeds_on_idx_one=not new_bootstrap)
 
     @cluster(
@@ -319,8 +319,8 @@ class NodesDecommissioningTest(PreallocNodesTest):
         log_allow_list=RESTART_LOG_ALLOW_LIST)
     @matrix(delete_topic=[True, False], tick_interval=[5000, 3600000])
     def test_decommissioning_working_node(self, delete_topic, tick_interval):
-        self.start_redpanda()
-        self.redpanda.set_cluster_config({
+        self.start_funes()
+        self.funes.set_cluster_config({
             'partition_autobalancing_tick_interval_ms':
             tick_interval,
             'partition_autobalancing_concurrent_moves':
@@ -331,20 +331,20 @@ class NodesDecommissioningTest(PreallocNodesTest):
         self.start_producer()
         self.start_consumer()
 
-        to_decommission = random.choice(self.redpanda.nodes)
-        to_decommission_id = self.redpanda.node_id(to_decommission)
+        to_decommission = random.choice(self.funes.nodes)
+        to_decommission_id = self.funes.node_id(to_decommission)
         self.logger.info(f"decommissioning node: {to_decommission_id}", )
         self._decommission(to_decommission_id)
         if delete_topic:
             self.client().delete_topic(self._topic)
         self._wait_for_node_removed(to_decommission_id)
 
-        # Stop the decommissioned node, because redpanda internally does not
+        # Stop the decommissioned node, because funes internally does not
         # fence it, it is the responsibility of external orchestrator to
         # stop the node they intend to remove.
-        # This can be removed when we change redpanda to prevent decommissioned nodes
-        # from responding to client Kafka requests.
-        self.redpanda.stop_node(to_decommission)
+        # This can be removed when we change funes to prevent decommissioned nodes
+        # from responding to client SQL requests.
+        self.funes.stop_node(to_decommission)
 
         if not delete_topic:
             self.verify()
@@ -352,15 +352,15 @@ class NodesDecommissioningTest(PreallocNodesTest):
     @cluster(num_nodes=6, log_allow_list=CHAOS_LOG_ALLOW_LIST)
     def test_decommissioning_crashed_node(self):
 
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics(replication_factors=[3])
 
         self.start_producer()
         self.start_consumer()
 
-        to_decommission = self.redpanda.nodes[1]
-        node_id = self.redpanda.node_id(to_decommission)
-        self.redpanda.stop_node(node=to_decommission)
+        to_decommission = self.funes.nodes[1]
+        node_id = self.funes.node_id(to_decommission)
+        self.funes.stop_node(node=to_decommission)
         self.logger.info(f"decommissioning node: {node_id}", )
         self._decommission(node_id)
 
@@ -374,7 +374,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
         # connections with it
         log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_decommissioning_cancel_ongoing_movements(self):
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics()
 
         self.start_producer()
@@ -418,13 +418,13 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
         self._wait_for_node_removed(to_decommission)
         # stop decommissioned node
-        self.redpanda.stop_node(self.redpanda.get_node_by_id(to_decommission))
+        self.funes.stop_node(self.funes.get_node_by_id(to_decommission))
 
         self.verify()
 
     @cluster(num_nodes=6, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_recommissioning_node(self):
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics()
 
         self.start_producer()
@@ -457,7 +457,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
     @cluster(num_nodes=6, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_recommissioning_node_finishes(self):
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics()
 
         self.start_producer()
@@ -496,7 +496,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
     @cluster(num_nodes=6, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_recommissioning_do_not_stop_all_moves_node(self):
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics()
 
         self.start_producer()
@@ -551,7 +551,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
     @cluster(num_nodes=6, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_recommissioning_one_of_decommissioned_nodes(self):
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics()
 
         self.start_producer()
@@ -604,9 +604,9 @@ class NodesDecommissioningTest(PreallocNodesTest):
     def test_decommissioning_rebalancing_node(self, shutdown_decommissioned):
 
         # start 4 nodes
-        self.redpanda.start(nodes=self.redpanda.nodes[0:4])
-        self._client = DefaultClient(self.redpanda)
-        self._rpk_client = RpkTool(self.redpanda)
+        self.funes.start(nodes=self.funes.nodes[0:4])
+        self._client = DefaultClient(self.funes)
+        self._rpk_client = RpkTool(self.funes)
 
         topic = TopicSpec(partition_count=64, replication_factor=3)
 
@@ -617,15 +617,15 @@ class NodesDecommissioningTest(PreallocNodesTest):
         self.start_consumer()
 
         # throttle recovery
-        self.redpanda.clean_node(self.redpanda.nodes[-1],
+        self.funes.clean_node(self.funes.nodes[-1],
                                  preserve_current_install=True)
-        self.redpanda.start_node(self.redpanda.nodes[-1])
+        self.funes.start_node(self.funes.nodes[-1])
         self._set_recovery_rate(10)
 
         # wait for rebalancing to start
-        to_decommission = self.redpanda.nodes[-1]
-        to_decommission_id = self.redpanda.node_id(to_decommission)
-        first_node = self.redpanda.nodes[0]
+        to_decommission = self.funes.nodes[-1]
+        to_decommission_id = self.funes.node_id(to_decommission)
+        first_node = self.funes.nodes[0]
         wait_until(lambda: self._partitions_moving(node=first_node),
                    timeout_sec=15,
                    backoff_sec=1)
@@ -635,7 +635,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
         # stop the node that is being decommissioned
         if shutdown_decommissioned:
-            self.redpanda.stop_node(to_decommission)
+            self.funes.stop_node(to_decommission)
 
         # shut the broker down
         self._set_recovery_rate(2 << 30)
@@ -649,14 +649,14 @@ class NodesDecommissioningTest(PreallocNodesTest):
     def test_decommissioning_finishes_after_manual_cancellation(
             self, delete_topic):
 
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics(replication_factors=[3])
 
         self.start_producer()
         self.start_consumer()
 
-        to_decommission = random.choice(self.redpanda.nodes)
-        node_id = self.redpanda.node_id(to_decommission)
+        to_decommission = random.choice(self.funes.nodes)
+        node_id = self.funes.node_id(to_decommission)
 
         # throttle recovery
         self._set_recovery_rate(100)
@@ -686,19 +686,19 @@ class NodesDecommissioningTest(PreallocNodesTest):
     @parametrize(node_is_alive=False)
     def test_flipping_decommission_recommission(self, node_is_alive):
 
-        self.start_redpanda()
+        self.start_funes()
         self._create_topics(replication_factors=[3])
 
         self.start_producer()
         self.start_consumer()
 
-        to_decommission = random.choice(self.redpanda.nodes)
-        node_id = self.redpanda.node_id(to_decommission)
+        to_decommission = random.choice(self.funes.nodes)
+        node_id = self.funes.node_id(to_decommission)
 
         survivor_node = self._not_decommissioned_node(node_id)
 
         if not node_is_alive:
-            self.redpanda.stop_node(to_decommission)
+            self.funes.stop_node(to_decommission)
 
         self._set_recovery_rate(1)
         for i in range(1, 10):
@@ -726,10 +726,10 @@ class NodesDecommissioningTest(PreallocNodesTest):
         self.verify()
 
     def _replicas_per_node(self):
-        kafkacat = KafkaCat(self.redpanda)
+        sqlcat = SQLCat(self.funes)
         node_replicas = {}
-        md = kafkacat.metadata()
-        self.redpanda.logger.debug(f"metadata: {md}")
+        md = sqlcat.metadata()
+        self.funes.logger.debug(f"metadata: {md}")
         for topic in md['topics']:
             for p in topic['partitions']:
                 for r in p['replicas']:
@@ -744,26 +744,26 @@ class NodesDecommissioningTest(PreallocNodesTest):
     @cluster(num_nodes=6, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_multiple_decommissions(self):
         self._extra_node_conf = {"empty_seed_starts_cluster": False}
-        self.start_redpanda()
+        self.start_funes()
         total_partitions = self._create_topics()
 
         self.start_producer()
         self.start_consumer()
 
         def node_by_id(node_id):
-            for n in self.redpanda.nodes:
-                if self.redpanda.node_id(n) == node_id:
+            for n in self.funes.nodes:
+                if self.funes.node_id(n) == node_id:
                     return n
             return None
 
         iteration_count = 2
 
-        self.redpanda.set_expected_controller_records(
-            10 * iteration_count * len(self.redpanda.nodes) * total_partitions)
+        self.funes.set_expected_controller_records(
+            10 * iteration_count * len(self.funes.nodes) * total_partitions)
 
         for i in range(0, iteration_count):
-            for b in self.redpanda.nodes:
-                id = self.redpanda.node_id(b, force_refresh=True)
+            for b in self.funes.nodes:
+                id = self.funes.node_id(b, force_refresh=True)
                 self.logger.info(f"decommissioning node: {id}, iteration: {i}")
 
                 decom_node = node_by_id(id)
@@ -771,21 +771,21 @@ class NodesDecommissioningTest(PreallocNodesTest):
                 self._wait_for_node_removed(id)
 
                 def has_partitions():
-                    id = self.redpanda.node_id(node=decom_node,
+                    id = self.funes.node_id(node=decom_node,
                                                force_refresh=True)
                     per_node = self._replicas_per_node()
                     self.logger.info(f'replicas per node: {per_node}')
                     return id in per_node and per_node[id] > 0
 
-                self.redpanda.stop_node(node=decom_node)
-                self.redpanda.clean_node(node=decom_node, preserve_logs=True)
-                self.redpanda.start_node(node=decom_node,
+                self.funes.stop_node(node=decom_node)
+                self.funes.clean_node(node=decom_node, preserve_logs=True)
+                self.funes.start_node(node=decom_node,
                                          auto_assign_node_id=True,
                                          omit_seeds_on_idx_one=False)
 
                 wait_until(has_partitions, 180, 2)
 
-        self.redpanda.restart_nodes(self.redpanda.nodes,
+        self.funes.restart_nodes(self.funes.nodes,
                                     auto_assign_node_id=True,
                                     omit_seeds_on_idx_one=False)
 
@@ -795,11 +795,11 @@ class NodesDecommissioningTest(PreallocNodesTest):
     @parametrize(new_bootstrap=True)
     @parametrize(new_bootstrap=False)
     def test_node_is_not_allowed_to_join_after_restart(self, new_bootstrap):
-        self.start_redpanda(new_bootstrap=new_bootstrap)
+        self.start_funes(new_bootstrap=new_bootstrap)
         self._create_topics()
 
-        to_decommission = self.redpanda.nodes[-1]
-        to_decommission_id = self.redpanda.node_id(to_decommission)
+        to_decommission = self.funes.nodes[-1]
+        to_decommission_id = self.funes.node_id(to_decommission)
         self.logger.info(f"decommissioning node: {to_decommission_id}")
         self._decommission(to_decommission_id)
         self._wait_for_node_removed(to_decommission_id)
@@ -807,8 +807,8 @@ class NodesDecommissioningTest(PreallocNodesTest):
         # restart decommissioned node without cleaning up the data directory,
         # the node should not be allowed to join the cluster
         # back as it was decommissioned
-        self.redpanda.stop_node(to_decommission)
-        self.redpanda.start_node(to_decommission,
+        self.funes.stop_node(to_decommission)
+        self.funes.start_node(to_decommission,
                                  auto_assign_node_id=new_bootstrap,
                                  omit_seeds_on_idx_one=not new_bootstrap,
                                  skip_readiness_check=True)
@@ -818,7 +818,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
             # allow fail as `grep` return 1 when no entries matches
             # the ssh access shouldn't be a problem as only few lines are transferred
             logs = to_decommission.account.ssh_output(
-                f'tail -n 200 {RedpandaService.STDOUT_STDERR_CAPTURE} | grep members_manager | grep WARN',
+                f'tail -n 200 {FunesService.STDOUT_STDERR_CAPTURE} | grep members_manager | grep WARN',
                 allow_fail=True).decode()
 
             # check if there are at least 3 failed join attempts
@@ -828,15 +828,15 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
         wait_until(tried_to_join, 20, 1)
 
-        assert len(self.admin.get_brokers(node=self.redpanda.nodes[0])) == 4
-        self.redpanda.stop_node(to_decommission)
+        assert len(self.admin.get_brokers(node=self.funes.nodes[0])) == 4
+        self.funes.stop_node(to_decommission)
         # clean node and restart it, it should join the cluster
-        self.redpanda.clean_node(to_decommission, preserve_logs=True)
-        self.redpanda.start_node(to_decommission,
+        self.funes.clean_node(to_decommission, preserve_logs=True)
+        self.funes.start_node(to_decommission,
                                  omit_seeds_on_idx_one=not new_bootstrap,
                                  auto_assign_node_id=new_bootstrap)
 
-        assert len(self.admin.get_brokers(node=self.redpanda.nodes[0])) == 5
+        assert len(self.admin.get_brokers(node=self.funes.nodes[0])) == 5
 
     @cluster(
         num_nodes=6,
@@ -844,11 +844,11 @@ class NodesDecommissioningTest(PreallocNodesTest):
         # connections with it
         log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_decommissioning_and_upgrade(self):
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
         # upgrade from previous to current version
         versions = [
             self.installer.highest_from_prior_feature_version(
-                RedpandaInstaller.HEAD), RedpandaInstaller.HEAD
+                FunesInstaller.HEAD), FunesInstaller.HEAD
         ]
         to_decommission = None
         to_decommission_id = None
@@ -860,20 +860,20 @@ class NodesDecommissioningTest(PreallocNodesTest):
                 self.start_producer()
                 self.start_consumer()
                 # decommission node
-                to_decommission = self.redpanda.nodes[-1]
-                to_decommission_id = self.redpanda.node_id(to_decommission)
+                to_decommission = self.funes.nodes[-1]
+                to_decommission_id = self.funes.node_id(to_decommission)
                 self.logger.info(f"decommissioning node: {to_decommission_id}")
                 self._decommission(to_decommission_id)
 
                 self._wait_for_node_removed(to_decommission_id)
-                self.redpanda.stop_node(to_decommission)
-                self.redpanda.clean_node(to_decommission,
+                self.funes.stop_node(to_decommission)
+                self.funes.clean_node(to_decommission,
                                          preserve_logs=True,
                                          preserve_current_install=True)
-                self.redpanda.start_node(to_decommission,
+                self.funes.start_node(to_decommission,
                                          auto_assign_node_id=True)
                 # refresh node ids for rolling restarter
-                self.redpanda.node_id(to_decommission, force_refresh=True)
+                self.funes.node_id(to_decommission, force_refresh=True)
 
             # check that the nodes reported from configuration status and
             # brokers endpoint is consistent
@@ -881,7 +881,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
             self._check_state_consistent(to_decommission_id)
 
 
-class NodeDecommissionFailureReportingTest(RedpandaTest):
+class NodeDecommissionFailureReportingTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args,
@@ -897,22 +897,22 @@ class NodeDecommissionFailureReportingTest(RedpandaTest):
         """Checks allocation failures for replicas on decommission nodes is reported correctly."""
 
         # Start all but one node
-        all_but_one = self.redpanda.nodes[:-1]
-        self.redpanda.set_seed_servers(all_but_one)
-        self.redpanda.start(nodes=all_but_one,
+        all_but_one = self.funes.nodes[:-1]
+        self.funes.set_seed_servers(all_but_one)
+        self.funes.start(nodes=all_but_one,
                             auto_assign_node_id=True,
                             omit_seeds_on_idx_one=False)
 
-        assert len(self.redpanda.started_nodes()) == 3, len(
-            self.redpanda.started_nodes())
+        assert len(self.funes.started_nodes()) == 3, len(
+            self.funes.started_nodes())
 
         spec = TopicSpec(partition_count=10, replication_factor=3)
         self.client().create_topic(spec)
 
-        admin = self.redpanda._admin
+        admin = self.funes._admin
 
-        to_decommission = self.redpanda.nodes[-2]
-        to_decommission_id = self.redpanda.node_id(to_decommission)
+        to_decommission = self.funes.nodes[-2]
+        to_decommission_id = self.funes.node_id(to_decommission)
 
         partitions_json = admin.get_partitions(topic=spec.name,
                                                node=to_decommission)
@@ -928,7 +928,7 @@ class NodeDecommissionFailureReportingTest(RedpandaTest):
                 try:
                     results = []
                     for n in all_but_one:
-                        if self.redpanda.node_id(n) == node_id:
+                        if self.funes.node_id(n) == node_id:
                             continue
                         brokers = admin.get_brokers(node=n)
                         for b in brokers:
@@ -962,7 +962,7 @@ class NodeDecommissionFailureReportingTest(RedpandaTest):
                 return failed_partitions == alloc_failures
 
             def check_all_nodes():
-                return all(wait(n) for n in self.redpanda.started_nodes())
+                return all(wait(n) for n in self.funes.started_nodes())
 
             self.logger.debug(
                 f"Waiting for allocation failures: {failed_partitions}")
@@ -977,17 +977,17 @@ class NodeDecommissionFailureReportingTest(RedpandaTest):
         wait_for_allocation_failures(failed_partitions=partitions)
 
         # Start the last node, unblocks decommission
-        self.redpanda.start(nodes=[self.redpanda.nodes[-1]],
+        self.funes.start(nodes=[self.funes.nodes[-1]],
                             auto_assign_node_id=True,
                             omit_seeds_on_idx_one=False)
-        waiter = NodeDecommissionWaiter(self.redpanda,
+        waiter = NodeDecommissionWaiter(self.funes,
                                         to_decommission_id,
                                         self.logger,
                                         progress_timeout=60)
         waiter.wait_for_removal()
 
 
-class NodeDecommissionSpaceManagementTest(RedpandaTest):
+class NodeDecommissionSpaceManagementTest(FunesTest):
     segment_upload_interval_sec = 5
     manifest_upload_interval_sec = 3
     retention_local_trim_interval_ms = 5_000
@@ -996,16 +996,16 @@ class NodeDecommissionSpaceManagementTest(RedpandaTest):
         super().__init__(test_context, num_brokers=4, *args, **kwargs)
 
     def setUp(self):
-        # defer redpanda startup to the test
+        # defer funes startup to the test
         pass
 
-    def _kafka_usage(self):
+    def _sql_usage(self):
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=len(self.redpanda.nodes)) as executor:
+                max_workers=len(self.funes.nodes)) as executor:
             return list(
                 executor.map(
-                    lambda n: self.redpanda.data_dir_usage("kafka", n),
-                    self.redpanda.nodes))
+                    lambda n: self.funes.data_dir_usage("sql", n),
+                    self.funes.nodes))
 
     @skip_debug_mode
     @cluster(num_nodes=5)
@@ -1026,18 +1026,18 @@ class NodeDecommissionSpaceManagementTest(RedpandaTest):
 
         target_size = log_segment_size * (
             segments_per_partition * partition_count * replication_factor //
-            len(self.redpanda.nodes))
+            len(self.funes.nodes))
 
         # write a lot more data into the system than the target size to make
         # sure that we are definitely exercising target size enforcement.
         data_size = 2 * target_size * len(
-            self.redpanda.nodes) // replication_factor
+            self.funes.nodes) // replication_factor
 
         msg_size = 16384
         msg_count = data_size // msg_size
         topic_name = "test_topic"
 
-        # configure and start redpanda
+        # configure and start funes
         extra_rp_conf = {
             'cloud_storage_segment_max_upload_interval_sec':
             self.segment_upload_interval_sec,
@@ -1065,24 +1065,24 @@ class NodeDecommissionSpaceManagementTest(RedpandaTest):
         si_settings = SISettings(test_context=self.test_context,
                                  log_segment_size=log_segment_size,
                                  retention_local_strict=False)
-        self.redpanda.set_extra_rp_conf(extra_rp_conf)
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start()
+        self.funes.set_extra_rp_conf(extra_rp_conf)
+        self.funes.set_si_settings(si_settings)
+        self.funes.start()
 
         # Sanity check test parameters against the nodes we are running on
         disk_space_required = data_size
-        assert self.redpanda.get_node_disk_free(
+        assert self.funes.get_node_disk_free(
         ) >= disk_space_required, f"Need at least {disk_space_required} bytes space"
 
         # create the target topic
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic_name,
                          partitions=partition_count,
                          replicas=replication_factor)
 
         # setup and start the background producer
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        topic_name,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -1102,12 +1102,12 @@ class NodeDecommissionSpaceManagementTest(RedpandaTest):
         self.logger.info(
             f"Produced {hmb([data_size])} in {produce_duration} seconds")
 
-        totals = self._kafka_usage()
+        totals = self._sql_usage()
         self.logger.info(f"totals: {hmb(totals)}")
 
-        to_decommission_id = self.redpanda.node_id(self.redpanda.nodes[3])
-        Admin(self.redpanda).decommission_broker(to_decommission_id)
-        waiter = NodeDecommissionWaiter(self.redpanda,
+        to_decommission_id = self.funes.node_id(self.funes.nodes[3])
+        Admin(self.funes).decommission_broker(to_decommission_id)
+        waiter = NodeDecommissionWaiter(self.funes,
                                         to_decommission_id,
                                         self.logger,
                                         progress_timeout=60)

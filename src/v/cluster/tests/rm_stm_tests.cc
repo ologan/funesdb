@@ -765,7 +765,7 @@ cluster::tx_snapshot make_tx_snapshot_v5(cluster::producer_state_manager& mgr) {
       tests::random_producer_state, 50, mgr);
     fragmented_vector<cluster::producer_state_snapshot> snapshots;
     for (auto producer : producers) {
-        snapshots.push_back(producer->snapshot(kafka::offset{0}));
+        snapshots.push_back(producer->snapshot(sql::offset{0}));
     }
     cluster::tx_snapshot snap;
     snap.offset = model::random_offset();
@@ -815,7 +815,7 @@ FIXTURE_TEST(test_snapshot_v3_v4_v5_equivalence, rm_stm_test_fixture) {
                                   raft::consistency_level::quorum_ack))
                               .get0();
             BOOST_REQUIRE((bool)offset_r);
-            wait_for_kafka_offset_apply(offset_r.value().last_offset).get0();
+            wait_for_sql_offset_apply(offset_r.value().last_offset).get0();
         }
     }
     BOOST_REQUIRE_EQUAL(producers().size(), num_producers);

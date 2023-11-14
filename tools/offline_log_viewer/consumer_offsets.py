@@ -25,16 +25,16 @@ def decode_member_proto(rdr):
 def decode_member(rdr):
     ret = {}
     ret['v'] = rdr.read_int16()
-    ret['member_id'] = rdr.read_kafka_string()
-    ret['instance_id'] = rdr.read_kafka_optional_string()
-    ret['client_id'] = rdr.read_kafka_string()
-    ret['client_host'] = rdr.read_kafka_string()
+    ret['member_id'] = rdr.read_sql_string()
+    ret['instance_id'] = rdr.read_sql_optional_string()
+    ret['client_id'] = rdr.read_sql_string()
+    ret['client_host'] = rdr.read_sql_string()
     ret['rebalance_timeout'] = rdr.read_int32()
     ret['session_timeout'] = rdr.read_int32()
     ret['subscription'] = base64.b64encode(
-        rdr.read_kafka_bytes()).decode('utf-8')
+        rdr.read_sql_bytes()).decode('utf-8')
     ret['assignment'] = base64.b64encode(
-        rdr.read_kafka_bytes()).decode('utf-8')
+        rdr.read_sql_bytes()).decode('utf-8')
 
     return ret
 
@@ -42,10 +42,10 @@ def decode_member(rdr):
 def decode_metadata(rdr):
     ret = {}
     ret['version'] = rdr.read_int16()
-    ret['protocol_type'] = rdr.read_kafka_string()
+    ret['protocol_type'] = rdr.read_sql_string()
     ret['generation_id'] = rdr.read_int32()
-    ret['protocol_name'] = rdr.read_kafka_optional_string()
-    ret['leader'] = rdr.read_kafka_optional_string()
+    ret['protocol_name'] = rdr.read_sql_optional_string()
+    ret['leader'] = rdr.read_sql_optional_string()
     ret['state_timestamp'] = rdr.read_int64()
     ret['member_state'] = rdr.read_vector(decode_member)
     return ret
@@ -55,9 +55,9 @@ def decode_key(key_rdr):
     ret = {}
     v = key_rdr.read_int16()
     ret['type'] = decode_key_type(v)
-    ret['group_id'] = key_rdr.read_kafka_string()
+    ret['group_id'] = key_rdr.read_sql_string()
     if ret['type'] == 'offset_commit':
-        ret['topic'] = key_rdr.read_kafka_string()
+        ret['topic'] = key_rdr.read_sql_string()
         ret['partition'] = key_rdr.read_int32()
 
     return ret
@@ -70,7 +70,7 @@ def decode_offset_commit(v_rdr):
     if ret['version'] >= 3:
         ret['leader_epoch'] = v_rdr.read_int32()
 
-    ret['committed_metadata'] = v_rdr.read_kafka_string()
+    ret['committed_metadata'] = v_rdr.read_sql_string()
     ret['commit_timestamp'] = v_rdr.read_int64()
     if ret['version'] == 1:
         ret['expiry_timestamp'] = v_rdr.read_int64()

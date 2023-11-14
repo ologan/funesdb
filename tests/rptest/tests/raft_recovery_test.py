@@ -13,14 +13,14 @@ from rptest.util import wait_until, wait_until_result
 from rptest.utils.mode_checks import skip_debug_mode
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from ducktape.cluster.cluster import ClusterNode
 from ducktape.mark import matrix
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
-from rptest.services.redpanda_installer import RedpandaInstaller
+from rptest.services.funes_installer import FunesInstaller
 
 
 def _high_watermarks(rpk: RpkTool, topic: str):
@@ -30,7 +30,7 @@ def _high_watermarks(rpk: RpkTool, topic: str):
         if any(o is None for o in hwms):
             return False
 
-        rpk._redpanda.logger.debug(f"topic '{topic}' high watermarks: {hwms}")
+        rpk._funes.logger.debug(f"topic '{topic}' high watermarks: {hwms}")
         return True, hwms
 
     return wait_until_result(func,
@@ -53,7 +53,7 @@ def _await_progress_in_all_partitions(rpk: RpkTool, topic: str):
                err_msg="failed to wait for progress in all partitions")
 
 
-class RaftRecoveryUpgradeTest(RedpandaTest):
+class RaftRecoveryUpgradeTest(FunesTest):
     def setUp(self):
         pass
 
@@ -67,13 +67,13 @@ class RaftRecoveryUpgradeTest(RedpandaTest):
         Verify that recovery works both ways during upgrade
         """
 
-        installer = self.redpanda._installer
+        installer = self.funes._installer
         prev_version = installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
+            FunesInstaller.HEAD)
         self.logger.info(f"will test against prev version {prev_version}")
 
-        installer.install(self.redpanda.nodes, prev_version)
-        self.redpanda.start()
+        installer.install(self.funes.nodes, prev_version)
+        self.funes.start()
 
         topic = "mytopic"
         partition_count = 32
@@ -83,16 +83,16 @@ class RaftRecoveryUpgradeTest(RedpandaTest):
                       retention_bytes=8 * 1024 * 1024,
                       segment_bytes=1024 * 1024))
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def wait_for_recovery_finished():
             _await_progress_in_all_partitions(rpk, topic)
-            self._wait_for_underreplicated(self.redpanda.nodes, 0)
+            self._wait_for_underreplicated(self.funes.nodes, 0)
             self.logger.info(f"recovery finished")
 
         producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic,
             msg_size=1024,
             # some large number to get produce load till the end of test
@@ -103,42 +103,42 @@ class RaftRecoveryUpgradeTest(RedpandaTest):
         _await_progress_in_all_partitions(rpk, topic)
 
         # upgrade node 3 but don't start it yet, wait for replication lag to accumulate
-        node3 = self.redpanda.nodes[2]
-        self.redpanda.stop_node(node3)
-        installer.install([node3], RedpandaInstaller.HEAD)
+        node3 = self.funes.nodes[2]
+        self.funes.stop_node(node3)
+        installer.install([node3], FunesInstaller.HEAD)
         self.logger.info(f"stopped node {node3.name}")
-        self._wait_for_underreplicated(self.redpanda.nodes[0:2],
+        self._wait_for_underreplicated(self.funes.nodes[0:2],
                                        partition_count)
 
         # start node3 and check that it can recover from old nodes
-        self.redpanda.start_node(node3)
+        self.funes.start_node(node3)
         self.logger.info(f"started node {node3.name}")
         wait_for_recovery_finished()
 
         # upgrade and restart node 2 and wait for the cluster to stabilize
-        node2 = self.redpanda.nodes[1]
-        self.redpanda.stop_node(node2)
-        installer.install([node2], RedpandaInstaller.HEAD)
-        self.redpanda.start_node(node2)
+        node2 = self.funes.nodes[1]
+        self.funes.stop_node(node2)
+        installer.install([node2], FunesInstaller.HEAD)
+        self.funes.start_node(node2)
         self.logger.info(f"upgraded node {node2.name}")
         wait_for_recovery_finished()
 
         # stop node 1 and wait for the replication lag to accumulate
-        node1 = self.redpanda.nodes[0]
-        self.redpanda.stop_node(node1)
+        node1 = self.funes.nodes[0]
+        self.funes.stop_node(node1)
         self.logger.info(f"stopped node {node1.name}")
         _await_progress_in_all_partitions(rpk, topic)
-        self._wait_for_underreplicated(self.redpanda.nodes[1:3],
+        self._wait_for_underreplicated(self.funes.nodes[1:3],
                                        partition_count)
 
         # start node 1 and check that it can recover from upgraded nodes
-        self.redpanda.start_node(node1)
+        self.funes.start_node(node1)
         self.logger.info(f"started node {node1.name}")
         wait_for_recovery_finished()
 
     def _wait_for_underreplicated(self, nodes: [ClusterNode], target: int):
         def ready():
-            count = self.redpanda.metric_sum(
+            count = self.funes.metric_sum(
                 'vectorized_cluster_partition_under_replicated_replicas',
                 nodes=nodes)
             self.logger.info(f"under-replicated partitions count: {count}")
@@ -154,7 +154,7 @@ class RaftRecoveryUpgradeTest(RedpandaTest):
             err_msg=f"couldn't reach under-replicated count target: {target}")
 
 
-class RaftRecoveryTest(RedpandaTest):
+class RaftRecoveryTest(FunesTest):
     topics = [TopicSpec(
         partition_count=128,
         replication_factor=3,
@@ -180,7 +180,7 @@ class RaftRecoveryTest(RedpandaTest):
         # Artificially low limits to slow down recovery enough that we
         # can watch the partitions trickle through
         shard_concurrency = 4
-        self.redpanda.set_extra_rp_conf({
+        self.funes.set_extra_rp_conf({
             'raft_recovery_concurrency_per_shard':
             shard_concurrency,
             'raft_max_recovery_memory':
@@ -191,10 +191,10 @@ class RaftRecoveryTest(RedpandaTest):
             False,
         })
 
-        cpu_count = self.redpanda.get_node_cpu_count()
+        cpu_count = self.funes.get_node_cpu_count()
         node_concurrency = cpu_count * shard_concurrency
 
-        self.redpanda.start()
+        self.funes.start()
 
         topic = "mytopic"
         partition_count = 64 * cpu_count
@@ -212,7 +212,7 @@ class RaftRecoveryTest(RedpandaTest):
 
         producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic,
             msg_size=self.msg_size,
             # some large number to get produce load till the end of test
@@ -221,12 +221,12 @@ class RaftRecoveryTest(RedpandaTest):
         producer.start()
 
         # Arbitrary choice of node to be restarted
-        victim_node = self.redpanda.nodes[1]
+        victim_node = self.funes.nodes[1]
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         _await_progress_in_all_partitions(rpk, topic)
-        self.redpanda.stop_node(victim_node)
+        self.funes.stop_node(victim_node)
 
         # Wait for recovery lag to accumulate.
         recovery_msgs_target = recovery_data_target // self.msg_size
@@ -251,9 +251,9 @@ class RaftRecoveryTest(RedpandaTest):
             # detect when to exit recovery.
             producer.stop_node(producer.nodes[0])
 
-        self.redpanda.start_node(victim_node)
+        self.funes.start_node(victim_node)
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         # We will wait for various conditions, but continously want to validate
         # general invariants such as that the concurrent recovery count
@@ -280,7 +280,7 @@ class RaftRecoveryTest(RedpandaTest):
 
             # if recovery status says that we are done, additionally check metrics
 
-            count = self.redpanda.metric_sum(
+            count = self.funes.metric_sum(
                 'vectorized_cluster_partition_under_replicated_replicas')
             self.logger.info(f"under-replicated partitions count: {count}")
 

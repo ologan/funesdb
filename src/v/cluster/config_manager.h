@@ -29,7 +29,7 @@ namespace cluster {
 
 /// This state machine receives updates to the global cluster config,
 /// and uses them to update the per-shard configuration objects
-/// that are consumed by other services within redpanda.
+/// that are consumed by other services within funes.
 class config_manager final {
     static constexpr auto accepted_commands = make_commands_list<
       cluster_config_delta_cmd,

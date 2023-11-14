@@ -1,5 +1,5 @@
 """
-A script that computes all the files (and optionally their sizes) in the data directory of redpanda.
+A script that computes all the files (and optionally their sizes) in the data directory of funes.
 
 Useful in tests if you want to know what files exist on a node or if they are a specific size.
 """
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compute')
     parser.add_argument('--data-dir',
                         type=str,
-                        help='The redpanda data dir',
+                        help='The funes data dir',
                         required=True)
     parser.add_argument('--sizes',
                         action="store_true",

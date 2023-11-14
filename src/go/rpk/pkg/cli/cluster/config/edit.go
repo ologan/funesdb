@@ -30,9 +30,9 @@ func newEditCommand(fs afero.Fs, p *config.Params, all *bool) *cobra.Command {
 
 This command opens a text editor to modify the cluster's configuration.
 
-Cluster properties are redpanda settings which apply to all nodes in
+Cluster properties are funes settings which apply to all nodes in
 the cluster.  These are separate to node properties, which are set with
-'rpk redpanda config'.
+'rpk funes config'.
 
 Modified values are written back when the file is saved and the editor
 is closed.  Properties which are deleted are reset to their default

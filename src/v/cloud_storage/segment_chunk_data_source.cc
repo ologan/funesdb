@@ -2,11 +2,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/segment_chunk_data_source.h"
@@ -18,15 +18,15 @@ namespace cloud_storage {
 chunk_data_source_impl::chunk_data_source_impl(
   segment_chunks& chunks,
   remote_segment& segment,
-  kafka::offset start,
-  kafka::offset end,
+  sql::offset start,
+  sql::offset end,
   int64_t begin_stream_at,
   ss::file_input_stream_options stream_options,
   std::optional<uint16_t> prefetch_override)
   : _chunks(chunks)
   , _segment(segment)
-  , _first_chunk_start(_segment.get_chunk_start_for_kafka_offset(start))
-  , _last_chunk_start(_segment.get_chunk_start_for_kafka_offset(end))
+  , _first_chunk_start(_segment.get_chunk_start_for_sql_offset(start))
+  , _last_chunk_start(_segment.get_chunk_start_for_sql_offset(end))
   , _begin_stream_at{begin_stream_at - _first_chunk_start}
   , _current_chunk_start(_first_chunk_start)
   , _stream_options(std::move(stream_options))

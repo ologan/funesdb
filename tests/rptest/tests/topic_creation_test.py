@@ -17,19 +17,19 @@ from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkException, RpkTool
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from rptest.services.producer_swarm import ProducerSwarm
-from rptest.services.redpanda import ResourceSettings, SISettings, CloudStorageType, get_cloud_storage_type
-from rptest.services.redpanda_installer import RedpandaInstaller
+from rptest.services.funes import ResourceSettings, SISettings, CloudStorageType, get_cloud_storage_type
+from rptest.services.funes_installer import FunesInstaller
 from rptest.services.rpk_producer import RpkProducer
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.util import wait_for_local_storage_truncate, expect_exception
 from rptest.clients.kcl import KCL
 
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix, parametrize
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.offline_log_viewer import OfflineLogViewer
 
 
@@ -39,7 +39,7 @@ class Workload():
     IDEMPOTENT = 'IDEMPOTENT'
 
 
-class TopicRecreateTest(RedpandaTest):
+class TopicRecreateTest(FunesTest):
     def __init__(self, test_context):
         super(TopicRecreateTest,
               self).__init__(test_context=test_context,
@@ -59,7 +59,7 @@ class TopicRecreateTest(RedpandaTest):
         '''
         Test that we are able to recreate topic multiple times
         '''
-        self._client = DefaultClient(self.redpanda)
+        self._client = DefaultClient(self.funes)
 
         # scaling parameters
         partition_count = 30
@@ -82,7 +82,7 @@ class TopicRecreateTest(RedpandaTest):
             assert False
 
         swarm = ProducerSwarm(self.test_context,
-                              self.redpanda,
+                              self.funes,
                               spec.name,
                               producer_count,
                               10000000000,
@@ -90,7 +90,7 @@ class TopicRecreateTest(RedpandaTest):
                               properties=producer_properties)
         swarm.start()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def topic_is_healthy():
             partitions = rpk.describe_topic(spec.name)
@@ -112,7 +112,7 @@ class TopicRecreateTest(RedpandaTest):
         swarm.wait()
 
 
-class TopicAutocreateTest(RedpandaTest):
+class TopicAutocreateTest(FunesTest):
     """
     Verify that autocreation works, and that the settings of an autocreated
     topic match those for a topic created by hand with rpk.
@@ -124,9 +124,9 @@ class TopicAutocreateTest(RedpandaTest):
             extra_rp_conf={'auto_create_topics_enabled': False},
             si_settings=SISettings(test_context))
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
 
     @cluster(num_nodes=1)
     def topic_autocreate_test(self):
@@ -135,29 +135,29 @@ class TopicAutocreateTest(RedpandaTest):
 
         # With autocreation disabled, producing to a nonexistent topic should not work.
         try:
-            # Use rpk rather than kafka CLI because rpk errors out promptly
+            # Use rpk rather than sql CLI because rpk errors out promptly
             self.rpk.produce(auto_topic, "foo", "bar")
         except Exception:
             # The write failed, and shouldn't have created a topic
-            assert auto_topic not in self.kafka_tools.list_topics()
+            assert auto_topic not in self.sql_tools.list_topics()
         else:
             assert False, "Producing to a nonexistent topic should fail"
 
         # Enable autocreation
-        self.redpanda.set_cluster_config({'auto_create_topics_enabled': True})
+        self.funes.set_cluster_config({'auto_create_topics_enabled': True})
 
         # Auto create topic
-        assert auto_topic not in self.kafka_tools.list_topics()
-        self.kafka_tools.produce(auto_topic, 1, 4096)
-        assert auto_topic in self.kafka_tools.list_topics()
-        auto_topic_spec = self.kafka_tools.describe_topic(auto_topic)
+        assert auto_topic not in self.sql_tools.list_topics()
+        self.sql_tools.produce(auto_topic, 1, 4096)
+        assert auto_topic in self.sql_tools.list_topics()
+        auto_topic_spec = self.sql_tools.describe_topic(auto_topic)
         assert auto_topic_spec.retention_ms is None
         assert auto_topic_spec.retention_bytes is None
         assert auto_topic_spec.cleanup_policy is not None
 
         # Create topic by hand, compare its properties to the autocreated one
         self.rpk.create_topic(manual_topic)
-        manual_topic_spec = self.kafka_tools.describe_topic(auto_topic)
+        manual_topic_spec = self.sql_tools.describe_topic(auto_topic)
         assert manual_topic_spec.retention_ms == auto_topic_spec.retention_ms
         assert manual_topic_spec.retention_bytes == auto_topic_spec.retention_bytes
         assert manual_topic_spec.cleanup_policy == auto_topic_spec.cleanup_policy
@@ -201,12 +201,12 @@ def topic_name():
         random.choice(string.ascii_lowercase) for _ in range(16))
 
 
-class CreateTopicsTest(RedpandaTest):
+class CreateTopicsTest(FunesTest):
 
     #TODO: add shadow indexing properties:
     #
-    # 'redpanda.remote.write': lambda: random.choice(['true', 'false']),
-    # 'redpanda.remote.read':    lambda: random.choice(['true', 'false'])
+    # 'funes.remote.write': lambda: random.choice(['true', 'false']),
+    # 'funes.remote.read':    lambda: random.choice(['true', 'false'])
     _topic_properties = {
         'compression.type':
         lambda: random.choice(["producer", "zstd"]),
@@ -222,7 +222,7 @@ class CreateTopicsTest(RedpandaTest):
         lambda: random.randint(-1, 10000000),
         'max.message.bytes':
         lambda: random.randint(1024 * 1024, 10 * 1024 * 1024),
-        'redpanda.remote.delete':
+        'funes.remote.delete':
         lambda: "true" if random.randint(0, 1) else "false",
         'segment.ms':
         lambda: random.choice([-1, random.randint(10000, 10000000)]),
@@ -241,7 +241,7 @@ class CreateTopicsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_create_topic_with_single_configuration_property(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         for p, generator in CreateTopicsTest._topic_properties.items():
             name = topic_name()
@@ -258,7 +258,7 @@ class CreateTopicsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_no_log_bloat_when_recreating_existing_topics(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic = "test"
         rpk.create_topic(topic=topic)
 
@@ -272,8 +272,8 @@ class CreateTopicsTest(RedpandaTest):
 
         def create_topic_commands():
             cmds = []
-            for node in self.redpanda.started_nodes():
-                log_viewer = OfflineLogViewer(self.redpanda)
+            for node in self.funes.started_nodes():
+                log_viewer = OfflineLogViewer(self.funes)
                 records = log_viewer.read_controller(node=node)
 
                 def is_create_topic_cmd(r):
@@ -281,20 +281,20 @@ class CreateTopicsTest(RedpandaTest):
                         r["data"]["type"] == 0
 
                 create_topic_cmds = list(filter(is_create_topic_cmd, records))
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"Node {node.account.hostname}, controller records: {records}"
                 )
                 cmds.append(len(create_topic_cmds) == 1)
             return all(cmds)
 
-        self.redpanda.wait_until(
+        self.funes.wait_until(
             create_topic_commands,
             timeout_sec=30,
             backoff_sec=3,
             err_msg="Timed out waiting for single create_topic command")
 
 
-class CreateSITopicsTest(RedpandaTest):
+class CreateSITopicsTest(FunesTest):
     def __init__(self, test_context):
         super(CreateSITopicsTest,
               self).__init__(test_context=test_context,
@@ -309,7 +309,7 @@ class CreateSITopicsTest(RedpandaTest):
 
     @cluster(num_nodes=1)
     def test_shadow_indexing_mode(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         cluster_remote_read = [True, False]
         cluster_remote_write = [True, False]
@@ -324,15 +324,15 @@ class CreateSITopicsTest(RedpandaTest):
             self.logger.info(
                 f"Test case: cloud_storage_enable_remote_read={c_read}, "
                 f"cloud_storage_enable_remote_write={c_write}, "
-                f"redpanda.remote.read={t_read}, "
-                f"redpanda.remote.write={t_write}")
+                f"funes.remote.read={t_read}, "
+                f"funes.remote.write={t_write}")
 
             expected_read = t_read if t_read is not None \
                             else c_read
             expected_write = t_write if t_write is not None \
                              else c_write
 
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 {
                     "cloud_storage_enable_remote_read": c_read,
                     "cloud_storage_enable_remote_write": c_write
@@ -341,9 +341,9 @@ class CreateSITopicsTest(RedpandaTest):
 
             config = {}
             if t_read is not None:
-                config["redpanda.remote.read"] = self._from_bool(t_read)
+                config["funes.remote.read"] = self._from_bool(t_read)
             if t_write is not None:
-                config["redpanda.remote.write"] = self._from_bool(t_write)
+                config["funes.remote.write"] = self._from_bool(t_write)
 
             topic = topic_name()
             rpk.create_topic(topic=topic,
@@ -353,15 +353,15 @@ class CreateSITopicsTest(RedpandaTest):
 
             ret = rpk.describe_topic_configs(topic=topic)
 
-            read = self._to_bool(ret["redpanda.remote.read"][0])
-            write = self._to_bool(ret["redpanda.remote.write"][0])
+            read = self._to_bool(ret["funes.remote.read"][0])
+            write = self._to_bool(ret["funes.remote.write"][0])
             assert read == expected_read, f"{read} != {expected_read}"
             assert write == expected_write, f"{write} != {expected_write}"
 
     @cluster(num_nodes=1)
     def test_shadow_indexing_mode_persistence(self):
-        rpk = RpkTool(self.redpanda)
-        self.redpanda.set_cluster_config(
+        rpk = RpkTool(self.funes)
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_enable_remote_read": True,
                 "cloud_storage_enable_remote_write": True
@@ -374,11 +374,11 @@ class CreateSITopicsTest(RedpandaTest):
         rpk.create_topic(topic=explicit_si_topic,
                          partitions=1,
                          replicas=1,
-                         config={"redpanda.remote.write": "false"})
+                         config={"funes.remote.write": "false"})
 
         # Changing the defaults after creating a topic should not change
         # the configuration of the already-created topic
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 "cloud_storage_enable_remote_read": False,
                 "cloud_storage_enable_remote_write": True
@@ -393,37 +393,37 @@ class CreateSITopicsTest(RedpandaTest):
         # and the values should _not_ have been changed by the intervening
         # change to those defaults.  Properties which still match the current
         # default will be reported as DEFAULT, even though they are sticky,
-        # per issue https://github.com/redpanda-data/redpanda/issues/7451
-        assert default_si_configs["redpanda.remote.read"] == (
+        # per issue https://github.com/redpanda-data/funes/issues/7451
+        assert default_si_configs["funes.remote.read"] == (
             "true", "DYNAMIC_TOPIC_CONFIG")
-        assert default_si_configs["redpanda.remote.write"] == (
+        assert default_si_configs["funes.remote.write"] == (
             "true", "DEFAULT_CONFIG")
 
         # This topic was created with explicit properties that differed
         # from the defaults.  Both properties differ from the present
         # defaults so will be reported as DYNAMIC
-        assert explicit_si_configs["redpanda.remote.read"] == (
+        assert explicit_si_configs["funes.remote.read"] == (
             "true", "DYNAMIC_TOPIC_CONFIG")
-        assert explicit_si_configs["redpanda.remote.write"] == (
+        assert explicit_si_configs["funes.remote.write"] == (
             "false", "DYNAMIC_TOPIC_CONFIG")
 
     @cluster(num_nodes=1)
     def topic_alter_config_test(self):
         """
-        Intentionally use the legacy (deprecated in Kafka 2.3.0) AlterConfig
+        Intentionally use the legacy (deprecated in SQL 2.3.0) AlterConfig
         admin RPC, to check it works with our custom topic properties
         """
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic = topic_name()
         rpk.create_topic(topic=topic, partitions=1, replicas=1)
 
-        # Older KCL has support for the legacy AlterConfig RPC: latest rpk and kafka CLI do not.
-        kcl = KCL(self.redpanda)
+        # Older KCL has support for the legacy AlterConfig RPC: latest rpk and sql CLI do not.
+        kcl = KCL(self.funes)
 
         examples = {
-            'redpanda.remote.delete': 'true',
-            'redpanda.remote.write': 'true',
-            'redpanda.remote.read': 'true',
+            'funes.remote.delete': 'true',
+            'funes.remote.write': 'true',
+            'funes.remote.read': 'true',
             'retention.local.target.bytes': '123456',
             'retention.local.target.ms': '123456',
             'initial.retention.local.target.bytes': '123456',
@@ -449,19 +449,19 @@ class CreateSITopicsTest(RedpandaTest):
 
         # As a control, confirm that if we did pass an invalid property, we would have got an error
         with expect_exception(RuntimeError, lambda e: "invalid" in str(e)):
-            kcl.alter_topic_config({"redpanda.invalid.property": 'true'},
+            kcl.alter_topic_config({"funes.invalid.property": 'true'},
                                    incremental=False,
                                    topic=topic)
 
 
-# When quickly recreating topics after deleting them, redpanda's topic
+# When quickly recreating topics after deleting them, funes's topic
 # dir creation can trip up over the topic dir deletion.  This is not
 # harmful because creation is retried, but it does generate a log error.
-# See https://github.com/redpanda-data/redpanda/issues/5768
+# See https://github.com/redpanda-data/funes/issues/5768
 RECREATE_LOG_ALLOW_LIST = ["mkdir failed: No such file or directory"]
 
 
-class RecreateTopicMetadataTest(RedpandaTest):
+class RecreateTopicMetadataTest(FunesTest):
     def __init__(self, test_context):
 
         super(RecreateTopicMetadataTest, self).__init__(
@@ -483,9 +483,9 @@ class RecreateTopicMetadataTest(RedpandaTest):
 
         topic = 'tp-test'
         partition_count = 5
-        rpk = RpkTool(self.redpanda)
-        kcat = KafkaCat(self.redpanda)
-        admin = Admin(self.redpanda)
+        rpk = RpkTool(self.funes)
+        kcat = SQLCat(self.funes)
+        admin = Admin(self.funes)
         # create topic with replication factor of 3
         rpk.create_topic(topic='tp-test',
                          partitions=partition_count,
@@ -503,14 +503,14 @@ class RecreateTopicMetadataTest(RedpandaTest):
                 replicas = set(p.replicas)
                 replicas.remove(p.leader)
                 target = random.choice(list(replicas))
-                admin.partition_transfer_leadership("kafka", topic, p.id,
+                admin.partition_transfer_leadership("sql", topic, p.id,
                                                     target)
                 wait_until(lambda: wait_for_leader(p.id, target),
                            timeout_sec=30,
                            backoff_sec=1)
             msg_cnt = 100
             producer = RpkProducer(self.test_context,
-                                   self.redpanda,
+                                   self.funes,
                                    topic,
                                    16384,
                                    msg_cnt,
@@ -534,10 +534,10 @@ class RecreateTopicMetadataTest(RedpandaTest):
             # validate leadership information on each node
             for p in range(0, partition_count):
                 leaders = set()
-                for n in self.redpanda.nodes:
+                for n in self.funes.nodes:
                     admin_partition = admin.get_partitions(topic=topic,
                                                            partition=p,
-                                                           namespace="kafka",
+                                                           namespace="sql",
                                                            node=n)
                     self.logger.info(
                         f"node: {n.account.hostname} partition: {admin_partition}"
@@ -552,7 +552,7 @@ class RecreateTopicMetadataTest(RedpandaTest):
         wait_until(metadata_consistent, 45, backoff_sec=2)
 
 
-class CreateTopicUpgradeTest(RedpandaTest):
+class CreateTopicUpgradeTest(FunesTest):
     def __init__(self, test_context):
         si_settings = SISettings(test_context,
                                  cloud_storage_enable_remote_write=False,
@@ -562,10 +562,10 @@ class CreateTopicUpgradeTest(RedpandaTest):
         super(CreateTopicUpgradeTest, self).__init__(test_context=test_context,
                                                      num_brokers=3,
                                                      si_settings=si_settings)
-        self.installer = self.redpanda._installer
-        self.rpk = RpkTool(self.redpanda)
+        self.installer = self.funes._installer
+        self.rpk = RpkTool(self.funes)
 
-    # This test starts the Redpanda service inline (see 'install_and_start') at the beginning
+    # This test starts the Funes service inline (see 'install_and_start') at the beginning
     # of the test body. By default, in the Azure CDT env, the service startup
     # logic attempts to set the azure specific cluster configs.
     # However, these did not exist prior to v23.1 and the test would fail
@@ -575,10 +575,10 @@ class CreateTopicUpgradeTest(RedpandaTest):
 
     def install_and_start(self):
         self.installer.install(
-            self.redpanda.nodes,
+            self.funes.nodes,
             (22, 2),
         )
-        self.redpanda.start()
+        self.funes.start()
 
     def _populate_tiered_storage_topic(self, topic_name, local_retention):
         # Write 3x the local retention, then wait for local storage to be
@@ -589,7 +589,7 @@ class CreateTopicUpgradeTest(RedpandaTest):
         for _ in range(0, max(msg_count, 4)):
             self.rpk.produce(topic_name, "key", "b" * msg_size)
 
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         topic=topic_name,
                                         target_bytes=local_retention)
 
@@ -599,72 +599,72 @@ class CreateTopicUpgradeTest(RedpandaTest):
     def test_cloud_storage_sticky_enablement_v22_2_to_v22_3(
             self, cloud_storage_type):
         """
-        In Redpanda 22.3, the cluster defaults for cloud storage change
+        In Funes 22.3, the cluster defaults for cloud storage change
         from being applied at runtime to being sticky at creation time,
         or at upgrade time.
         """
         self.install_and_start()
 
         # Switch on tiered storage using cluster properties, not topic properties
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 'cloud_storage_enable_remote_read': True,
                 'cloud_storage_enable_remote_write': True
             },
-            # This shouldn't require a restart, but it does in Redpanda < 22.3
+            # This shouldn't require a restart, but it does in Funes < 22.3
             True)
 
         topic = "test-topic"
         self.rpk.create_topic(topic)
         described = self.rpk.describe_topic_configs(topic)
-        assert described['redpanda.remote.write'] == ('true', 'DEFAULT_CONFIG')
-        assert described['redpanda.remote.read'] == ('true', 'DEFAULT_CONFIG')
+        assert described['funes.remote.write'] == ('true', 'DEFAULT_CONFIG')
+        assert described['funes.remote.read'] == ('true', 'DEFAULT_CONFIG')
 
-        # Upgrade to Redpanda latest
-        self.installer.install(self.redpanda.nodes, (22, 3))
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        # Upgrade to Funes latest
+        self.installer.install(self.funes.nodes, (22, 3))
+        self.funes.restart_nodes(self.funes.nodes)
 
         # Wait for properties migration to run
-        self.redpanda.await_feature("cloud_retention",
+        self.funes.await_feature("cloud_retention",
                                     active=True,
                                     timeout_sec=30)
 
         self.logger.info(
-            f"Config status after upgrade: {self.redpanda._admin.get_cluster_config_status()}"
+            f"Config status after upgrade: {self.funes._admin.get_cluster_config_status()}"
         )
 
         # Properties should still be set, but migrated to topic-level
         described = self.rpk.describe_topic_configs(topic)
-        assert described['redpanda.remote.write'] == ('true', 'DEFAULT_CONFIG')
-        assert described['redpanda.remote.read'] == ('true', 'DEFAULT_CONFIG')
+        assert described['funes.remote.write'] == ('true', 'DEFAULT_CONFIG')
+        assert described['funes.remote.read'] == ('true', 'DEFAULT_CONFIG')
 
         # A new topic picks up these properties too
         self.rpk.create_topic("created-after-enabled")
         described = self.rpk.describe_topic_configs("created-after-enabled")
-        assert described['redpanda.remote.write'] == ('true', 'DEFAULT_CONFIG')
-        assert described['redpanda.remote.read'] == ('true', 'DEFAULT_CONFIG')
+        assert described['funes.remote.write'] == ('true', 'DEFAULT_CONFIG')
+        assert described['funes.remote.read'] == ('true', 'DEFAULT_CONFIG')
 
         # Switching off cluster defaults shoudln't affect existing topic
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {
                 'cloud_storage_enable_remote_read': False,
                 'cloud_storage_enable_remote_write': False
             }, False)
         described = self.rpk.describe_topic_configs(topic)
-        assert described['redpanda.remote.write'] == ('true',
+        assert described['funes.remote.write'] == ('true',
                                                       'DYNAMIC_TOPIC_CONFIG')
-        assert described['redpanda.remote.read'] == ('true',
+        assert described['funes.remote.read'] == ('true',
                                                      'DYNAMIC_TOPIC_CONFIG')
 
         # A newly created topic should have tiered storage switched off
         self.rpk.create_topic("created-after-disabled")
         described = self.rpk.describe_topic_configs("created-after-disabled")
-        assert described['redpanda.remote.write'] == ('false',
+        assert described['funes.remote.write'] == ('false',
                                                       'DEFAULT_CONFIG')
-        assert described['redpanda.remote.read'] == ('false', 'DEFAULT_CONFIG')
+        assert described['funes.remote.read'] == ('false', 'DEFAULT_CONFIG')
 
         # Nothing in this test guarantees that partition manifests will be uploaded.
-        self.redpanda.si_settings.set_expected_damage({"ntpr_no_manifest"})
+        self.funes.si_settings.set_expected_damage({"ntpr_no_manifest"})
 
     @cluster(num_nodes=3)
     @matrix(cloud_storage_type=get_cloud_storage_type(
@@ -681,8 +681,8 @@ class CreateTopicUpgradeTest(RedpandaTest):
             "test-si-topic-with-retention",
             config={
                 "retention.bytes": str(local_retention),
-                "redpanda.remote.write": "true",
-                "redpanda.remote.read": "true",
+                "funes.remote.write": "true",
+                "funes.remote.read": "true",
                 # Small segment.bytes so that we can readily
                 # get data into S3 by writing small amounts.
                 "segment.bytes": 1000000
@@ -696,19 +696,19 @@ class CreateTopicUpgradeTest(RedpandaTest):
         # This topic is like "test-si-topic-with-retention", but instead
         # of settings its properties at creation time, set them via
         # alter messages: these follow a different code path in
-        # kafka and controller, and are serialized using different structures
+        # sql and controller, and are serialized using different structures
         # than the structures used in topic creation.
         self.rpk.create_topic("test-si-topic-with-retention-altered")
         self.rpk.alter_topic_config("test-si-topic-with-retention-altered",
                                     "retention.bytes", 10000)
         self.rpk.alter_topic_config("test-si-topic-with-retention-altered",
-                                    "redpanda.remote.write", "true")
+                                    "funes.remote.write", "true")
 
         # Check our alter operations applied properly
-        # (see https://github.com/redpanda-data/redpanda/issues/6772)
+        # (see https://github.com/redpanda-data/funes/issues/6772)
         after_alter = self.rpk.describe_topic_configs(
             "test-si-topic-with-retention-altered")
-        assert after_alter['redpanda.remote.write'][0] == 'true'
+        assert after_alter['funes.remote.write'][0] == 'true'
         assert after_alter['retention.bytes'][0] == '10000'
 
         # TODO: this test currently exercises 22.2 (serde) encoding to
@@ -718,14 +718,14 @@ class CreateTopicUpgradeTest(RedpandaTest):
         # in the controller log.
 
         self.installer.install(
-            self.redpanda.nodes,
+            self.funes.nodes,
             (22, 3),
         )
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # Wait for any migration steps to complete
-        self.redpanda.await_feature("cloud_retention",
+        self.funes.await_feature("cloud_retention",
                                     active=True,
                                     timeout_sec=30)
 
@@ -756,14 +756,14 @@ class CreateTopicUpgradeTest(RedpandaTest):
         # be disabled.
         for conf in (si_configs, si_altered_configs):
             self.logger.debug(f"Checking config: {conf}")
-            assert conf['redpanda.remote.write'][0] == 'true'
+            assert conf['funes.remote.write'][0] == 'true'
             assert conf["retention.bytes"][0] == "-1"
             assert conf["retention.ms"][0] == "-1"
 
             assert conf["retention.local.target.bytes"] == (
                 "10000", "DYNAMIC_TOPIC_CONFIG")
             assert conf["retention.local.target.ms"][1] == "DEFAULT_CONFIG"
-            assert conf["redpanda.remote.delete"][0] == "false"
+            assert conf["funes.remote.delete"][0] == "false"
 
         # After upgrade, newly created topics should have remote.delete
         # enabled by default, and interpret assignments to retention properties
@@ -781,12 +781,12 @@ class CreateTopicUpgradeTest(RedpandaTest):
                 "segment.bytes": segment_bytes
             }
             if enable_si:
-                create_config['redpanda.remote.write'] = 'true'
-                create_config['redpanda.remote.read'] = 'true'
+                create_config['funes.remote.write'] = 'true'
+                create_config['funes.remote.read'] = 'true'
 
             self.rpk.create_topic(new_topic_name, config=create_config)
             new_config = self.rpk.describe_topic_configs(new_topic_name)
-            assert new_config["redpanda.remote.delete"][0] == "true"
+            assert new_config["funes.remote.delete"][0] == "true"
             assert new_config["retention.bytes"] == (str(retention_bytes),
                                                      "DYNAMIC_TOPIC_CONFIG")
             assert new_config["retention.ms"][1] == "DEFAULT_CONFIG"
@@ -795,12 +795,12 @@ class CreateTopicUpgradeTest(RedpandaTest):
             assert new_config["retention.local.target.bytes"] == (
                 str(local_retention), "DYNAMIC_TOPIC_CONFIG")
             if enable_si:
-                assert new_config['redpanda.remote.write'][0] == "true"
-                assert new_config['redpanda.remote.read'][0] == "true"
+                assert new_config['funes.remote.write'][0] == "true"
+                assert new_config['funes.remote.read'][0] == "true"
 
             # The remote.delete property is applied irrespective of whether
             # the topic is initially tiered storage enabled.
-            assert new_config['redpanda.remote.delete'][0] == "true"
+            assert new_config['funes.remote.delete'][0] == "true"
 
             if enable_si:
                 self._populate_tiered_storage_topic(new_topic_name,
@@ -810,7 +810,7 @@ class CreateTopicUpgradeTest(RedpandaTest):
         # in S3 when the topic is deleted
         self._delete_tiered_storage_topic("test-topic-post-upgrade-si", True)
 
-        # Ensure that the `redpanda.remote.delete==false` configuration is
+        # Ensure that the `funes.remote.delete==false` configuration is
         # really taking effect, by deleting a legacy topic and ensuring data is
         # left behind in S3
         self._delete_tiered_storage_topic("test-si-topic-with-retention",
@@ -865,7 +865,7 @@ class CreateTopicUpgradeTest(RedpandaTest):
         """
         self.install_and_start()
 
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"cloud_storage_enable_remote_write": "true"}, expect_restart=True)
 
         self.rpk.create_topic("test-topic-with-remote-write",
@@ -874,22 +874,22 @@ class CreateTopicUpgradeTest(RedpandaTest):
         self.rpk.create_topic("test-topic-without-remote-write",
                               config={
                                   "retention.bytes": 10000,
-                                  "redpanda.remote.write": "false"
+                                  "funes.remote.write": "false"
                               })
 
         self.installer.install(
-            self.redpanda.nodes,
+            self.funes.nodes,
             (22, 3),
         )
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # Wait for any migration steps to complete
-        self.redpanda.await_feature('cloud_retention',
+        self.funes.await_feature('cloud_retention',
                                     active=True,
                                     timeout_sec=30)
 
-        # Because legacy Redpanda treated cloud_storage_enable_remote_write as
+        # Because legacy Funes treated cloud_storage_enable_remote_write as
         # an override to the topic property (even if the topic remote.write was explicitly
         # set to false), our two topics should end up with identical config: both
         # with SI enabled and with their retention settings transposed.
@@ -906,4 +906,4 @@ class CreateTopicUpgradeTest(RedpandaTest):
 
         # The ntp manifest may not have been uploaded yet, but that's fine
         # since this test focuses on the topic config change.
-        self.redpanda.si_settings.set_expected_damage({"ntpr_no_manifest"})
+        self.funes.si_settings.set_expected_damage({"ntpr_no_manifest"})

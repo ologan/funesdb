@@ -22,14 +22,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ $GITHUB_REF_NAME == 'dev' ]]; then
-            PREVIOUS_TAG_NAME=$(gh -R "$GITHUB_REPOSITORY_OWNER/redpanda" release list --exclude-drafts -L 1 | tail -1 | cut -f1)
+            PREVIOUS_TAG_NAME=$(gh -R "$GITHUB_REPOSITORY_OWNER/funes" release list --exclude-drafts -L 1 | tail -1 | cut -f1)
             YEAR_VER=$(echo "$PREVIOUS_TAG_NAME" | cut -d. -f1)
             FEATURE_VER=$(echo "$PREVIOUS_TAG_NAME" | cut -d. -f2)
             TAG_NAME="$YEAR_VER.$((FEATURE_VER+1)).1"
           else
             # e.g. GITHUB_REF_NAME=v22.3.x
             SEARCH_PATTERN=${GITHUB_REF_NAME::-1}
-            PREVIOUS_TAG_NAME=$(gh -R "$GITHUB_REPOSITORY_OWNER/redpanda" release list --exclude-drafts | grep "$SEARCH_PATTERN" | head -1 | cut -f1)
+            PREVIOUS_TAG_NAME=$(gh -R "$GITHUB_REPOSITORY_OWNER/funes" release list --exclude-drafts | grep "$SEARCH_PATTERN" | head -1 | cut -f1)
             YEAR_VER=$(echo "$PREVIOUS_TAG_NAME" | cut -d. -f1)
             FEATURE_VER=$(echo "$PREVIOUS_TAG_NAME" | cut -d. -f2)
             PATCH_VER=$(echo "$PREVIOUS_TAG_NAME" | cut -d. -f3)

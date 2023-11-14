@@ -19,7 +19,7 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -30,9 +30,9 @@ import (
 func newLogdirsCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logdirs",
-		Short: "Describe log directories on Redpanda brokers",
+		Short: "Describe log directories on Funes brokers",
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	cmd.AddCommand(
 		newLogdirsDescribeCommand(fs, p),
 	)
@@ -50,22 +50,22 @@ func newLogdirsDescribeCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "describe",
-		Short: "Describe log directories on Redpanda brokers",
-		Long: `Describe log directories on Redpanda brokers.
+		Short: "Describe log directories on Funes brokers",
+		Long: `Describe log directories on Funes brokers.
 
 This command prints information about log directories on brokers, particularly,
 the base directory that topics and partitions are located in, and the size of
 data that has been written to the partitions. The size you see may not exactly
-match the size on disk as reported by du: Redpanda allocates files in chunks.
+match the size on disk as reported by du: Funes allocates files in chunks.
 The chunks will show up in du, while the actual bytes so far written to the
 file will show up in this command.
 
-The directory returned is the root directory for partitions. Within Redpanda,
+The directory returned is the root directory for partitions. Within Funes,
 the partition data lives underneath the the returned root directory in
 
-    kafka/{topic}/{partition}_{revision}/
+    sql/{topic}/{partition}_{revision}/
 
-where revision is a Redpanda internal concept.
+where revision is a Funes internal concept.
 `,
 
 		Args: cobra.ExactArgs(0),
@@ -73,8 +73,8 @@ where revision is a Redpanda internal concept.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			var s kadm.TopicsSet

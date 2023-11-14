@@ -21,7 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// clusterConfigN represents a redpanda configuration.
+// clusterConfigN represents a funes configuration.
 type clusterConfigN map[string]yaml.Node
 
 // A custom unmarshal is needed because go-yaml parse "YYYY-MM-DD" as a full
@@ -44,11 +44,11 @@ func (c *clusterConfigN) UnmarshalYAML(n *yaml.Node) error {
 func newLintCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "lint",
-		Short: "Remove any deprecated content from redpanda.yaml",
-		Long: `Remove any deprecated content from redpanda.yaml.
+		Short: "Remove any deprecated content from funes.yaml",
+		Long: `Remove any deprecated content from funes.yaml.
 
-Deprecated content includes properties which were set via redpanda.yaml
-in earlier versions of redpanda, but are now managed via Redpanda's
+Deprecated content includes properties which were set via funes.yaml
+in earlier versions of funes, but are now managed via Funes's
 central configuration store (and via 'rpk cluster config edit').
 `,
 		Run: func(cmd *cobra.Command, propertyNames []string) {
@@ -63,7 +63,7 @@ central configuration store (and via 'rpk cluster config edit').
 			schema, err := client.ClusterConfigSchema(cmd.Context())
 			out.MaybeDie(err, "unable to query config schema: %v", err)
 
-			configFile := cfg.VirtualRedpandaYaml().FileLocation()
+			configFile := cfg.VirtualFunesYaml().FileLocation()
 			configIn, err := afero.ReadFile(fs, configFile)
 			out.MaybeDie(err, "unable to read config file %q: %v", configFile, err)
 
@@ -77,7 +77,7 @@ central configuration store (and via 'rpk cluster config edit').
 			var cleanedProperties []string
 
 			for key, node := range inputDoc {
-				if key == "redpanda" {
+				if key == "funes" {
 					var cleanedContent []*yaml.Node
 					for i := 0; i < len(node.Content); i += 2 {
 						keyNode := node.Content[i]

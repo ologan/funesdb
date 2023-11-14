@@ -7,8 +7,8 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, RedpandaService
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST, FunesService
 from rptest.services.cluster import cluster
 from rptest.services.admin import Admin
 from rptest.clients.types import TopicSpec
@@ -20,7 +20,7 @@ ERASE_ERROR_MSG = "Inconsistency detected between KVStore last_applied"
 ERASE_LOG_ALLOW_LIST = RESTART_LOG_ALLOW_LIST + [ERASE_ERROR_MSG]
 
 
-class ControllerEraseTest(RedpandaTest):
+class ControllerEraseTest(FunesTest):
     @cluster(num_nodes=3, log_allow_list=ERASE_LOG_ALLOW_LIST)
     @parametrize(partial=True)
     @parametrize(partial=False)
@@ -30,18 +30,18 @@ class ControllerEraseTest(RedpandaTest):
         removes the controller log data from a node, but does not wipe
         the entire data directory for the node.
 
-        In issue https://github.com/redpanda-data/redpanda/issues/4950
+        In issue https://github.com/redpanda-data/funes/issues/4950
         this fails because the node's kvstore points to a higher last_applied
         offset than exists in the local log, blocking startup: this is a regression
         test for that behaviour.
 
-        In general Redpanda doesn't handle on-disk corruption (such as selectively
+        In general Funes doesn't handle on-disk corruption (such as selectively
         deleting segments) gracefully, but in the particular case of wiping
         the whole controller log, or a contiguous suffix region of the log,
         we can gracefully let raft fill in the gaps.
         """
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         # Do a bunch of metadata operations to put something in the controller log
         transfers_leadership_count = 4
@@ -51,16 +51,16 @@ class ControllerEraseTest(RedpandaTest):
                 self.client().create_topic(spec)
 
             # Move a leader to roll a segment
-            leader_node = self.redpanda.controller()
-            next_leader = ((self.redpanda.idx(leader_node) + 1) % 3) + 1
-            admin.partition_transfer_leadership('redpanda', 'controller', 0,
+            leader_node = self.funes.controller()
+            next_leader = ((self.funes.idx(leader_node) + 1) % 3) + 1
+            admin.partition_transfer_leadership('funes', 'controller', 0,
                                                 next_leader)
 
         # Stop the node we will intentionally damage
-        victim_node = self.redpanda.nodes[1]
+        victim_node = self.funes.nodes[1]
 
         def controller_elected():
-            ctrl = self.redpanda.controller()
+            ctrl = self.funes.controller()
             return (ctrl is not None, ctrl)
 
         bystander_node = wait_until_result(controller_elected,
@@ -68,8 +68,8 @@ class ControllerEraseTest(RedpandaTest):
                                            backoff_sec=1)
 
         def wait_all_segments():
-            storage = self.redpanda.node_storage(victim_node)
-            segments = storage.ns['redpanda'].topics['controller'].partitions[
+            storage = self.funes.node_storage(victim_node)
+            segments = storage.ns['funes'].topics['controller'].partitions[
                 "0_0"].segments.keys()
             # We expect that segments count for controller should be transfers_leadership_count + 1.
             # Because each transfer creates one segment + initial leadership after restart creates first segment
@@ -99,14 +99,14 @@ class ControllerEraseTest(RedpandaTest):
             err_msg=
             f"Victim node did not apply {bystander_node_dirty_offset} offset")
 
-        self.redpanda.stop_node(victim_node)
+        self.funes.stop_node(victim_node)
 
         # Erase controller log on the victim node
-        controller_path = f"{RedpandaService.PERSISTENT_ROOT}/data/redpanda/controller/0_0"
+        controller_path = f"{FunesService.PERSISTENT_ROOT}/data/funes/controller/0_0"
         if partial:
             # Partial deletion: remove the latest controller log segment
-            storage = self.redpanda.node_storage(victim_node)
-            segments = storage.ns['redpanda'].topics['controller'].partitions[
+            storage = self.funes.node_storage(victim_node)
+            segments = storage.ns['funes'].topics['controller'].partitions[
                 "0_0"].segments.keys()
             assert len(segments) == transfers_leadership_count + 1
             segments = sorted(list(segments))
@@ -118,12 +118,12 @@ class ControllerEraseTest(RedpandaTest):
         victim_node.account.remove(victim_path)
 
         # Node should come up cleanly
-        self.redpanda.start_node(victim_node)
+        self.funes.start_node(victim_node)
 
         # Node should have logged a complaint during startup
-        assert self.redpanda.search_log_node(victim_node,
+        assert self.funes.search_log_node(victim_node,
                                              ERASE_ERROR_MSG) is True
 
         # Control: undamaged node should not have logged the complaint
-        assert self.redpanda.search_log_node(bystander_node,
+        assert self.funes.search_log_node(bystander_node,
                                              ERASE_ERROR_MSG) is False

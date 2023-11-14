@@ -12,7 +12,7 @@ from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
 import ducktape.errors
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.util import expect_exception
@@ -21,11 +21,11 @@ import time
 import random
 
 
-class RpkToolTest(RedpandaTest):
+class RpkToolTest(FunesTest):
     def __init__(self, ctx):
         super(RpkToolTest, self).__init__(test_context=ctx)
         self._ctx = ctx
-        self._rpk = RpkTool(self.redpanda)
+        self._rpk = RpkTool(self.funes)
 
     @cluster(num_nodes=3)
     def test_create_topic(self):
@@ -69,7 +69,7 @@ class RpkToolTest(RedpandaTest):
         self._rpk.create_topic(topic)
         self._rpk.produce(topic, key, message, headers)
 
-        c = RpkConsumer(self._ctx, self.redpanda, topic)
+        c = RpkConsumer(self._ctx, self.funes, topic)
         c.start()
 
         def cond():
@@ -97,7 +97,7 @@ class RpkToolTest(RedpandaTest):
 
         self._rpk.create_topic(topic)
 
-        c = RpkConsumer(self._ctx, self.redpanda, topic, group='group')
+        c = RpkConsumer(self._ctx, self.funes, topic, group='group')
         c.start()
 
         def cond():
@@ -127,7 +127,7 @@ class RpkToolTest(RedpandaTest):
 
         self._rpk.create_topic(topic)
 
-        c = RpkConsumer(self._ctx, self.redpanda, topic, offset='newest')
+        c = RpkConsumer(self._ctx, self.funes, topic, offset='newest')
         c.start()
 
         def cond():
@@ -161,7 +161,7 @@ class RpkToolTest(RedpandaTest):
         for k in msgs:
             self._rpk.produce(topic, k, msgs[k])
 
-        c = RpkConsumer(self._ctx, self.redpanda, topic)
+        c = RpkConsumer(self._ctx, self.funes, topic)
         c.start()
 
         def cond():
@@ -203,7 +203,7 @@ class RpkToolTest(RedpandaTest):
 
         # Consume from the beginning
         c = RpkConsumer(self._ctx,
-                        self.redpanda,
+                        self.funes,
                         topic,
                         offset='oldest',
                         partitions=[part])
@@ -227,7 +227,7 @@ class RpkToolTest(RedpandaTest):
         retries = 10
         prev_msg_count = len(c.messages)
         while retries > 0:
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"Message count {len(c.messages)} retries {retries}")
             if cond():
                 self._rpk.delete_topic(topic)

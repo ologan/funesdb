@@ -59,7 +59,7 @@ struct cluster_bootstrap_info_reply;
 //    request to the controller leader
 // 5. Once added to the cluster, open endpoints for user traffic
 //
-// These steps are implemented here, in redpanda/application.cc, and in
+// These steps are implemented here, in funes/application.cc, and in
 // cluster/members_manager.cc
 //
 // TODO: reconcile the RPC dispatch logic here with that in members_manager.

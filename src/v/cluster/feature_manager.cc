@@ -19,7 +19,7 @@
 #include "config/configuration.h"
 #include "features/feature_table.h"
 #include "model/timeout_clock.h"
-#include "pandaproxy/schema_registry/schema_id_validation.h"
+#include "funesproxy/schema_registry/schema_id_validation.h"
 #include "raft/group_manager.h"
 
 #include <absl/algorithm/container.h>
@@ -186,7 +186,7 @@ ss::future<> feature_manager::stop() {
 ss::future<> feature_manager::maybe_log_license_check_info() {
     auto license_check_retry = std::chrono::seconds(60 * 5);
     auto interval_override = std::getenv(
-      "__REDPANDA_LICENSE_CHECK_INTERVAL_SEC");
+      "__FUNES_LICENSE_CHECK_INTERVAL_SEC");
     if (interval_override != nullptr) {
         try {
             license_check_retry = std::min(
@@ -212,7 +212,7 @@ ss::future<> feature_manager::maybe_log_license_check_info() {
         };
         auto has_schma_id_validation = [&cfg]() {
             return cfg.enable_schema_id_validation()
-                   != pandaproxy::schema_registry::schema_id_validation_mode::
+                   != funesproxy::schema_registry::schema_id_validation_mode::
                      none;
         };
         if (
@@ -224,8 +224,8 @@ ss::future<> feature_manager::maybe_log_license_check_info() {
             if (!license || license->is_expired()) {
                 vlog(
                   clusterlog.warn,
-                  "Looks like you’ve enabled a Redpanda Enterprise feature(s) "
-                  "without a valid license. Please enter an active Redpanda "
+                  "Looks like you’ve enabled a Funes Enterprise feature(s) "
+                  "without a valid license. Please enter an active Funes "
                   "license key (e.g. rpk cluster license set <key>). If you "
                   "don’t have one, please request a new/trial license at "
                   "https://redpanda.com/license-request");
@@ -257,7 +257,7 @@ ss::future<> feature_manager::maybe_update_feature_table() {
 
     try {
         // Even if we didn't advance our logical version, we might have some
-        // features to activate due to policy changes across different redpanda
+        // features to activate due to policy changes across different funes
         // binaries with the same logical version
         co_await do_maybe_activate_features();
     } catch (...) {
@@ -523,7 +523,7 @@ feature_manager::update_license(security::license&& license) {
 
     auto cmd = cluster::feature_update_license_update_cmd(
       cluster::feature_update_license_update_cmd_data{
-        .redpanda_license = license},
+        .funes_license = license},
       0 // unused
     );
     auto err = co_await replicate_and_wait(_stm, _as, std::move(cmd), timeout);

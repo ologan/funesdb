@@ -30,12 +30,12 @@ commonName              = Test TLS CA
 stateOrProvinceName     = NY
 countryName             = US
 emailAddress            = hi@vectorized.io
-organizationName        = Redpanda
-organizationalUnitName  = Redpanda Test
+organizationName        = Funes
+organizationalUnitName  = Funes Test
 
 [ distinguished_name ]
-organizationName = Redpanda
-commonName       = Redpanda Test CA
+organizationName = Funes
+commonName       = Funes Test CA
 
 [ extensions ]
 keyUsage         = critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign
@@ -60,7 +60,7 @@ extendedKeyUsage = clientAuth
 # Culled from https://pki-tutorial.readthedocs.io/en/latest/simple/index.html
 
 _root_ca_config_tmpl = """
-# Redpanda Root CA
+# Funes Root CA
 
 # The [default] section contains global constants that can be referred to from
 # the entire configuration file. It may also hold settings pertaining to more
@@ -87,8 +87,8 @@ req_extensions          = ca_reqext             # Desired extensions
 [ ca_dn ]
 0.domainComponent       = "org"
 1.domainComponent       = "simple"
-organizationName        = "Redpanda"
-organizationalUnitName  = "Redpanda Root CA"
+organizationName        = "Funes"
+organizationalUnitName  = "Funes Root CA"
 commonName              = "{name}"
 
 [ ca_reqext ]
@@ -127,7 +127,7 @@ crl_extensions          = crl_ext               # CRL extensions
 # under what circumstances certification should be denied.
 
 [ match_pol ]
-organizationName        = match                 # Must match 'Redpanda'
+organizationName        = match                 # Must match 'Funes'
 commonName              = supplied              # Must be present
 
 # Certificate extensions define what types of certificates the CA is able to
@@ -153,7 +153,7 @@ authorityKeyIdentifier  = keyid:always
 """
 
 _signing_ca_config_tmpl = """
-# Redpanda Signing CA
+# Funes Signing CA
 
 # The [default] section contains global constants that can be referred to from
 # the entire configuration file. It may also hold settings pertaining to more
@@ -178,8 +178,8 @@ distinguished_name      = ca_dn                 # DN section
 req_extensions          = ca_reqext             # Desired extensions
 
 [ ca_dn ]
-organizationName        = "Redpanda"
-organizationalUnitName  = "Redpanda Signing CA"
+organizationName        = "Funes"
+organizationalUnitName  = "Funes Signing CA"
 commonName              = "{name}"
 
 [ ca_reqext ]
@@ -218,7 +218,7 @@ crl_extensions          = crl_ext               # CRL extensions
 # under what circumstances certification should be denied.
 
 [ match_pol ]
-organizationName        = match                 # Must match 'Redpanda'
+organizationName        = match                 # Must match 'Funes'
 commonName              = supplied              # Must be present
 
 # Certificate extensions define what types of certificates the CA is able to
@@ -252,7 +252,7 @@ distinguished_name = distinguished_name
 req_extensions = extensions
 
 [ distinguished_name ]
-organizationName = Redpanda
+organizationName = Funes
 {common_name}
 
 [ extensions ]
@@ -279,7 +279,7 @@ distinguished_name      = server_dn             # DN template
 req_extensions          = server_reqext         # Desired extensions
 
 [ server_dn ]
-organizationName = Redpanda
+organizationName = Funes
 {common_name}
 
 [ server_reqext ]
@@ -405,7 +405,7 @@ class TLSCertManager:
 
 
 # TODO(oren): Might want to add the ability to generate CRLs, though
-# I'm not sure there's an easy  way to transmit those to redpanda
+# I'm not sure there's an easy  way to transmit those to funes
 # without also causing other verification steps to fail.
 class TLSChainCACertManager(TLSCertManager):
     """

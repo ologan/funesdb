@@ -20,8 +20,8 @@ import (
 func newStatusCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Get configuration status of redpanda nodes.",
-		Long: `Get configuration status of redpanda nodes.
+		Short: "Get configuration status of funes nodes.",
+		Long: `Get configuration status of funes nodes.
 
 For each node, indicate whether a restart is required for settings to
 take effect, and any settings that the node has identified as invalid

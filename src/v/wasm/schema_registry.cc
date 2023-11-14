@@ -11,8 +11,8 @@
 
 #include "wasm/schema_registry.h"
 
-#include "pandaproxy/schema_registry/seq_writer.h"
-#include "pandaproxy/schema_registry/sharded_store.h"
+#include "funesproxy/schema_registry/seq_writer.h"
+#include "funesproxy/schema_registry/sharded_store.h"
 
 #include <seastar/core/sharded.hh>
 
@@ -23,7 +23,7 @@ namespace wasm {
 
 namespace {
 
-namespace ppsr = pandaproxy::schema_registry;
+namespace ppsr = funesproxy::schema_registry;
 
 class schema_registry_impl : public schema_registry {
 public:

@@ -7,10 +7,10 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierSeqConsumer, KgoVerifierRandomConsumer
-from rptest.services.redpanda import SISettings, MetricsEndpoint, ResourceSettings
+from rptest.services.funes import SISettings, MetricsEndpoint, ResourceSettings
 from rptest.services.admin import Admin
 from rptest.clients.rpk import RpkTool
 from rptest.utils.si_utils import quiesce_uploads
@@ -28,7 +28,7 @@ class LimitMode(str, Enum):
     both = 'both'
 
 
-class TieredStorageCacheStressTest(RedpandaTest):
+class TieredStorageCacheStressTest(FunesTest):
     segment_upload_interval = 30
     manifest_upload_interval = 10
 
@@ -49,7 +49,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
             'cloud_storage_manifest_max_upload_interval_sec':
             self.manifest_upload_interval,
         }
-        self.redpanda.set_extra_rp_conf(extra_rp_conf)
+        self.funes.set_extra_rp_conf(extra_rp_conf)
 
         # We will run with artificially constrained memory, to minimize use of
         # the batch cache and ensure that tiered storage reads are not using
@@ -57,41 +57,41 @@ class TieredStorageCacheStressTest(RedpandaTest):
         # requirements (2GB per core).  Use a small core count so that if we're
         # running on a system with plenty of cores, we don't spread out the
         # partitions such that each core has lots of slack memory.
-        self.redpanda.set_resource_settings(
+        self.funes.set_resource_settings(
             ResourceSettings(memory_mb=4096, num_cpus=2))
 
-        # defer redpanda startup to the test
+        # defer funes startup to the test
         pass
 
     def _validate_node_storage(self, node, limit_mode: LimitMode,
                                size_limit: Optional[int],
                                max_objects: Optional[int]):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         self.logger.info(
             f"Validating node {node.name} cache vs limits {size_limit}/{max_objects}"
         )
 
-        # Read logical space usage according to Redpanda
+        # Read logical space usage according to Funes
         usage = admin.get_local_storage_usage(node)
         self.logger.info(f"Checking cache usage on {node.name}: {usage}")
 
         # Read physical space usage according to the operating system
-        node_storage = self.redpanda.node_storage(node)
+        node_storage = self.funes.node_storage(node)
         self.logger.info(
             f"Checked physical cache usage on {node.name}: {node_storage.cache}"
         )
 
-        # Read HWM stats from Redpanda, in case we transiently violated cache size
-        metrics = self.redpanda.metrics(
+        # Read HWM stats from Funes, in case we transiently violated cache size
+        metrics = self.funes.metrics(
             node, metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
         hwm_size = None
         hwm_objects = None
         for family in metrics:
             for sample in family.samples:
-                if sample.name == "redpanda_cloud_storage_cache_space_hwm_size_bytes":
+                if sample.name == "funes_cloud_storage_cache_space_hwm_size_bytes":
                     hwm_size = int(sample.value)
-                elif sample.name == "redpanda_cloud_storage_cache_space_hwm_files":
+                elif sample.name == "funes_cloud_storage_cache_space_hwm_files":
                     hwm_objects = int(sample.value)
                 #else:
                 #    self.logger.debug(sample.name)
@@ -125,7 +125,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
     def _create_topic(self, topic_name: str, partition_count: int,
                       local_retention: int):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic_name,
                          partitions=partition_count,
                          replicas=3,
@@ -139,7 +139,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
         t1 = time.time()
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic_name,
                                     msg_size=msg_size,
                                     msg_count=data_size // msg_size,
@@ -152,7 +152,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
         )
 
         quiesce_uploads(
-            self.redpanda, [topic_name],
+            self.funes, [topic_name],
             self.manifest_upload_interval + self.segment_upload_interval + 30)
 
     @cluster(num_nodes=4, log_allow_list=S3_ERROR_LOGS)
@@ -167,7 +167,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
         chunk_size = min(16 * 1024 * 1024, log_segment_size)
 
-        if self.redpanda.dedicated_nodes:
+        if self.funes.dedicated_nodes:
             partition_count = 128
 
             # Lowball expectation of bandwidth that should work reliably on
@@ -198,10 +198,10 @@ class TieredStorageCacheStressTest(RedpandaTest):
         max_objects = (size_limit //
                        log_segment_size) * 2 + size_limit // chunk_size
 
-        if partition_count >= len(self.redpanda.nodes):
+        if partition_count >= len(self.funes.nodes):
             # If we have multiple partitions then we are spreading load across multiple
             # nodes, and each node should need a proportionally smaller cache
-            size_limit = size_limit // len(self.redpanda.nodes)
+            size_limit = size_limit // len(self.funes.nodes)
 
         si_settings = SISettings(test_context=self.test_context,
                                  log_segment_size=log_segment_size)
@@ -213,7 +213,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
             si_settings.cloud_storage_cache_size = 2**64 - 1
             si_settings.cloud_storage_cache_max_objects = int(max_objects)
         elif limit_mode == LimitMode.both:
-            # This is the normal way of configuring Redpanda, with
+            # This is the normal way of configuring Funes, with
             # safety limits on both data and metadata
             si_settings.cloud_storage_cache_size = int(size_limit)
             si_settings.cloud_storage_cache_max_objects = int(max_objects)
@@ -230,8 +230,8 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
         msg_count = data_size // msg_size
 
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start()
+        self.funes.set_si_settings(si_settings)
+        self.funes.start()
 
         # Minimal local retention, to send traffic to remote
         # storage.
@@ -243,7 +243,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
         # Sanity check test parameters against the nodes we are running on
         disk_space_required = size_limit + data_size
-        assert self.redpanda.get_node_disk_free(
+        assert self.funes.get_node_disk_free(
         ) >= disk_space_required, f"Need at least {disk_space_required} bytes space"
 
         # Write out the data.  We will write + read in separate phases in order
@@ -258,7 +258,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
         self.logger.info(
             f"Consuming, expected duration {expect_duration:.2f}s")
         consumer = KgoVerifierSeqConsumer.oneshot(self.test_context,
-                                                  self.redpanda,
+                                                  self.funes,
                                                   topic_name,
                                                   loop=False,
                                                   timeout_sec=expect_duration *
@@ -278,8 +278,8 @@ class TieredStorageCacheStressTest(RedpandaTest):
         assert consume_rate > expect_bandwidth / 2
 
         # Validate that the cache end state is within configured limit
-        nodes_cache_used = self.redpanda.for_nodes(
-            self.redpanda.nodes, lambda n: self._validate_node_storage(
+        nodes_cache_used = self.funes.for_nodes(
+            self.funes.nodes, lambda n: self._validate_node_storage(
                 n, limit_mode, size_limit, max_objects))
 
         # At least one node should have _something_ in its cache, or something is wrong with our test
@@ -321,8 +321,8 @@ class TieredStorageCacheStressTest(RedpandaTest):
         si_settings = SISettings(test_context=self.test_context,
                                  log_segment_size=segment_size,
                                  cloud_storage_cache_size=cache_size)
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start()
+        self.funes.set_si_settings(si_settings)
+        self.funes.start()
 
         # Inject data
         # Minimal local retention, to send traffic to remote storage.
@@ -345,7 +345,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
         t1 = time.time()
         KgoVerifierRandomConsumer.oneshot(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             msg_size=msg_size,
             rand_read_msgs=consume_messages_per_worker,
@@ -355,7 +355,7 @@ class TieredStorageCacheStressTest(RedpandaTest):
         self.logger.info(
             f"Random consume finished  in {random_consume_duration} seconds")
 
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             self._validate_node_storage(node,
                                         LimitMode.bytes,
                                         cache_size,
@@ -370,12 +370,12 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
         # Clean manually, so that later we can start(clean_nodes=False) to preserve
         # our injected garbage files.
-        for n in self.redpanda.nodes:
-            self.redpanda.clean_node(n)
+        for n in self.funes.nodes:
+            self.funes.clean_node(n)
 
         # Pre-populate caches with files.
         prefill_count = 100
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             node.account.ssh(cache_prefill_command.format(prefill_count))
 
         cache_object_limit = prefill_count // 2
@@ -388,14 +388,14 @@ class TieredStorageCacheStressTest(RedpandaTest):
             cloud_storage_cache_size=SISettings.cache_size_for_throughput(
                 expect_bandwidth))
 
-        # Bring up redpanda
+        # Bring up funes
 
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start(clean_nodes=False)
+        self.funes.set_si_settings(si_settings)
+        self.funes.start(clean_nodes=False)
 
         # Cache startup should have registered the garbage objects in stats
-        admin = Admin(self.redpanda)
-        for node in self.redpanda.nodes:
+        admin = Admin(self.funes)
+        for node in self.funes.nodes:
             usage = admin.get_local_storage_usage(node)
             assert usage[
                 'cloud_storage_cache_objects'] >= prefill_count, f"Node {node.name} has unexpectedly few objects {usage['cloud_storage_cache_objects']} < {prefill_count}"
@@ -407,16 +407,16 @@ class TieredStorageCacheStressTest(RedpandaTest):
 
         # Try to do some reads
         KgoVerifierRandomConsumer.oneshot(self.test_context,
-                                          self.redpanda,
+                                          self.funes,
                                           topic_name,
                                           msg_size=msg_size,
                                           rand_read_msgs=4,
                                           parallel=4,
                                           timeout_sec=30)
 
-        admin = Admin(self.redpanda)
-        leader_node = self.redpanda.get_node_by_id(
-            admin.get_partition_leader(namespace="kafka",
+        admin = Admin(self.funes)
+        leader_node = self.funes.get_node_by_id(
+            admin.get_partition_leader(namespace="sql",
                                        topic=topic_name,
                                        partition=0))
 
@@ -435,13 +435,13 @@ class TieredStorageCacheStressTest(RedpandaTest):
         This test is a reproducer for issues where the cache needs trimming but there
         are no data objects present to cue the fast trim process to delete indices etc,
         and we must fall back to exhaustive trim, such as:
-        https://github.com/redpanda-data/redpanda/issues/11835
+        https://github.com/redpanda-data/funes/issues/11835
         """
 
         self.run_test_with_cache_prefilled(
-            f"mkdir -p {self.redpanda.cache_dir} ; "
+            f"mkdir -p {self.funes.cache_dir} ; "
             "for n in `seq 1 {}`; do "
-            f"dd if=/dev/urandom bs=1k count=4 of={self.redpanda.cache_dir}/garbage_$n.bin ; done"
+            f"dd if=/dev/urandom bs=1k count=4 of={self.funes.cache_dir}/garbage_$n.bin ; done"
         )
 
     @cluster(num_nodes=4, log_allow_list=S3_ERROR_LOGS)
@@ -451,8 +451,8 @@ class TieredStorageCacheStressTest(RedpandaTest):
         trimming still works.
         """
         self.run_test_with_cache_prefilled(
-            f"mkdir -pv {self.redpanda.cache_dir}; "
+            f"mkdir -pv {self.funes.cache_dir}; "
             "for n in `seq 1 {}`; do "
-            f"touch {self.redpanda.cache_dir}/garbage_$n.index && "
-            f"touch {self.redpanda.cache_dir}/garbage_$n.tx; "
+            f"touch {self.funes.cache_dir}/garbage_$n.index && "
+            f"touch {self.funes.cache_dir}/garbage_$n.tx; "
             "done")

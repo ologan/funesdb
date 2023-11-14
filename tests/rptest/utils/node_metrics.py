@@ -1,7 +1,7 @@
 from math import floor
 
 from ducktape.utils.util import wait_until
-from rptest.services.redpanda import RedpandaService, MetricsEndpoint
+from rptest.services.funes import FunesService, MetricsEndpoint
 
 
 def all_greater_than_zero(l1: list[float]):
@@ -10,11 +10,11 @@ def all_greater_than_zero(l1: list[float]):
 
 class NodeMetrics:
     """ Convenience class for grabbing per-node metrics, like disk space. """
-    def __init__(self, redpanda: RedpandaService):
-        self.redpanda = redpanda
+    def __init__(self, funes: FunesService):
+        self.funes = funes
 
     def _get_metrics_vals(self, name_substr: str) -> list[float]:
-        family = self.redpanda.metrics_sample(
+        family = self.funes.metrics_sample(
             sample_pattern=name_substr,
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
         assert family

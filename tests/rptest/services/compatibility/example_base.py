@@ -12,9 +12,9 @@ class ExampleBase:
     """
     The base class for example
     """
-    def __init__(self, redpanda):
-        # Instance of redpanda
-        self._redpanda = redpanda
+    def __init__(self, funes):
+        # Instance of funes
+        self._funes = funes
 
         # The result of the internal condiiton.
         # The internal condition is defined in the children.

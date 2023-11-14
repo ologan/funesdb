@@ -10,7 +10,7 @@
  */
 #pragma once
 #include "config/property.h"
-#include "kafka/types.h"
+#include "sql/types.h"
 #include "model/fundamental.h"
 #include "seastarx.h"
 #include "security/acl.h"

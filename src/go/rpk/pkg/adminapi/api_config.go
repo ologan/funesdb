@@ -18,7 +18,7 @@ import (
 	"strings"
 )
 
-// Config represents a Redpanda configuration. There are many keys returned, so
+// Config represents a Funes configuration. There are many keys returned, so
 // the raw response is just unmarshalled into an interface.
 type Config map[string]interface{}
 
@@ -47,7 +47,7 @@ func (a *AdminAPI) Config(ctx context.Context, includeDefaults bool) (Config, er
 // if the client has multiple URLs configured.
 //
 // Expiry configures how long the log level override will persist. If zero,
-// Redpanda will persist the override until it shuts down.
+// Funes will persist the override until it shuts down.
 func (a *AdminAPI) SetLogLevel(ctx context.Context, name, level string, expirySeconds int) error {
 	if expirySeconds < 0 {
 		return fmt.Errorf("invalid negative expiry of %ds", expirySeconds)

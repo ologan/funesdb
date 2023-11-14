@@ -16,17 +16,17 @@ logger = logging.getLogger('rp')
 
 # https://docs.python.org/3.8/library/struct.html#format-strings
 #
-# redpanda header prefix:
+# funes header prefix:
 #   - little endian encoded
 #   - batch size, base offset, type crc
 #
-# note that the crc that is stored is the crc reported by kafka which happens to
+# note that the crc that is stored is the crc reported by sql which happens to
 # be computed over the big endian encoding of the same data. thus to verify the
 # crc we need to rebuild part of the header in big endian before adding to crc.
 HDR_FMT_RP_PREFIX_NO_CRC = "iqbI"
 HDR_FMT_RP_PREFIX = "<I" + HDR_FMT_RP_PREFIX_NO_CRC
 
-# below the crc redpanda and kafka have the same layout
+# below the crc funes and sql have the same layout
 #   - little endian encoded
 #   - attributes ... record_count
 HDR_FMT_CRC = "hiqqqhii"

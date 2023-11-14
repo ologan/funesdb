@@ -16,11 +16,11 @@ class HelmTool:
     Wrapper around helm.
     """
     def __init__(self,
-                 redpanda,
-                 release='redpanda',
-                 chart='redpanda/redpanda',
-                 namespace='redpanda'):
-        self._redpanda = redpanda
+                 funes,
+                 release='funes',
+                 chart='funes/funes',
+                 namespace='funes'):
+        self._funes = funes
         self._release = release
         self._chart = chart
         self._namespace = namespace
@@ -29,7 +29,7 @@ class HelmTool:
         cmd = [
             'helm', 'install', self._release, self._chart, '--namespace',
             self._namespace, '--create-namespace', '--set',
-            'external.domain=customredpandadomain.local', '--set',
+            'external.domain=customfunesdomain.local', '--set',
             'statefulset.initContainers.setDataDirOwnership.enabled=true',
             '--wait'
         ]
@@ -37,7 +37,7 @@ class HelmTool:
             subprocess.check_output(cmd)
         except subprocess.CalledProcessError as e:
             # log but ignore for now
-            self._redpanda.logger.info("helm error {}: {}".format(
+            self._funes.logger.info("helm error {}: {}".format(
                 e.returncode, e.output))
 
     def uninstall(self):
@@ -49,12 +49,12 @@ class HelmTool:
             subprocess.check_output(cmd)
         except subprocess.CalledProcessError as e:
             # log but ignore for now
-            self._redpanda.logger.info("helm error {}: {}".format(
+            self._funes.logger.info("helm error {}: {}".format(
                 e.returncode, e.output))
 
     def upgrade_config_cluster(self, values: dict = {}, timeout: int = 300):
         """
-        Changes the redpanda cluster config settings in 'values',
+        Changes the funes cluster config settings in 'values',
         but leaves other values alone. Default timeout for helm is 5 minutes.
         """
 
@@ -68,5 +68,5 @@ class HelmTool:
             subprocess.check_output(cmd)
         except subprocess.CalledProcessError as e:
             # log but ignore for now
-            self._redpanda.logger.info("helm error {}: {}".format(
+            self._funes.logger.info("helm error {}: {}".format(
                 e.returncode, e.output))

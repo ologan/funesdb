@@ -77,7 +77,7 @@ public:
     std::error_code
     create_topic(std::string_view name, topic_config config = {}) {
         topic_configuration topic_cfg(
-          model::kafka_namespace,
+          model::sql_namespace,
           model::topic(name),
           config.partition_count,
           /*replication_factor=*/1);
@@ -102,14 +102,14 @@ public:
         std::vector<model::topic_namespace> outputs;
         outputs.reserve(config.sinks.size());
         for (const ss::sstring& topic : config.sinks) {
-            outputs.emplace_back(model::kafka_namespace, model::topic(topic));
+            outputs.emplace_back(model::sql_namespace, model::topic(topic));
         }
         transform_update_cmd cmd{
           0,
           meta{
             .name = name(config.name),
             .input_topic = model::topic_namespace(
-              model::kafka_namespace, model::topic(config.src)),
+              model::sql_namespace, model::topic(config.src)),
             .output_topics = outputs,
             .environment = config.env,
             .uuid = uuid_t::create(),
@@ -237,7 +237,7 @@ TEST_F(PluginValidationTest, InvalidEnvironment) {
             << "environment: " << env;
       };
     expect_invalid_env({
-      {"REDPANDA_FOO", "bar"},
+      {"FUNES_FOO", "bar"},
     });
     expect_invalid_env({
       // invalid UTF8

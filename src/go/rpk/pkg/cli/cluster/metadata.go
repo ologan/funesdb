@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -39,7 +39,7 @@ func newMetadataCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short:   "Request broker metadata",
 		Long: `Request broker metadata.
 
-The Kafka protocol's metadata contains information about brokers, topics, and
+The SQL protocol's metadata contains information about brokers, topics, and
 the cluster as a whole.
 
 This command only runs if specific sections of metadata are requested. There
@@ -57,8 +57,8 @@ In the broker section, the controller node is suffixed with *.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			// We first evaluate whether any section was requested.
@@ -118,7 +118,7 @@ In the broker section, the controller node is suffixed with *.
 			}
 		},
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	cmd.Flags().BoolVarP(&cluster, "print-cluster", "c", false, "Print cluster section")
 	cmd.Flags().BoolVarP(&brokers, "print-brokers", "b", false, "Print brokers section")
 	cmd.Flags().BoolVarP(&topics, "print-topics", "t", false, "Print topics section (implied if any topics are specified)")

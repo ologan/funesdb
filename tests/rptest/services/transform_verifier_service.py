@@ -15,7 +15,7 @@ import typing
 from ducktape.services.service import Service
 from ducktape.tests.test import TestContext
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 from ducktape.utils.util import wait_until
 
 
@@ -149,7 +149,7 @@ class TransformVerifierService(Service):
 
     status = TransformVerifierService.oneshot(
       context=self.test_context,
-      redpanda=self.redpanda,
+      funes=self.funes,
       config=TransformVerifierProduceConfig(...),
     )
 
@@ -164,19 +164,19 @@ class TransformVerifierService(Service):
         }
     }
 
-    redpanda: RedpandaService
+    funes: FunesService
     report_port: int
     config: TransformVerifierConsumeConfig | TransformVerifierProduceConfig
     _pid: typing.Optional[int]
 
     @classmethod
-    def oneshot(cls, context: TestContext, redpanda: RedpandaService,
+    def oneshot(cls, context: TestContext, funes: FunesService,
                 config: TransformVerifierConsumeConfig
                 | TransformVerifierProduceConfig):
         """
         Common pattern to use the service
         """
-        service = cls(context, redpanda, config)
+        service = cls(context, funes, config)
         service.start()
         try:
             service.wait()
@@ -188,11 +188,11 @@ class TransformVerifierService(Service):
             service.stop()
             raise
 
-    def __init__(self, context: TestContext, redpanda: RedpandaService,
+    def __init__(self, context: TestContext, funes: FunesService,
                  config: TransformVerifierConsumeConfig
                  | TransformVerifierProduceConfig):
         super().__init__(context, num_nodes=1)
-        self.redpanda = redpanda
+        self.funes = funes
 
         # Note: using a port that happens to already be in test environment
         # firewall rules from other use cases.  If changing this, update
@@ -202,16 +202,16 @@ class TransformVerifierService(Service):
         self._pid = None
 
     def clean_node(self, node):
-        self.redpanda.logger.debug(f"{self.__class__.__name__}.clean_node")
+        self.funes.logger.debug(f"{self.__class__.__name__}.clean_node")
         node.account.kill_process(self.EXE, clean_shutdown=False)
         if node.account.exists(self.LOG_PATH):
             node.account.remove(self.LOG_PATH)
 
     def start_node(self, node):
         cmd = " ".join([
-            f"/opt/redpanda-tests/go/transform-verifier/{self.EXE}",
+            f"/opt/funes-tests/go/transform-verifier/{self.EXE}",
             self.config.serialize_cmd(),
-            f"--brokers={self.redpanda.brokers()}",
+            f"--brokers={self.funes.brokers()}",
             f"--port={self.remote_port}",
         ])
         cmd = f"nohup {cmd} >> {self.LOG_PATH} 2>&1 & echo $!"
@@ -247,7 +247,7 @@ class TransformVerifierService(Service):
         """
         Stop the process on this node
         """
-        self.redpanda.logger.info(f"{self.__class__.__name__}.stop")
+        self.funes.logger.info(f"{self.__class__.__name__}.stop")
         if self._pid is None:
             return
 

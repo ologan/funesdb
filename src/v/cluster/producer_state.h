@@ -42,7 +42,7 @@ using producer_ptr = ss::lw_shared_ptr<producer_state>;
 // right after set_value(), this is an implementation quirk, be
 // mindful of that behavior when using it. We have a test for
 // it in expiring_promise_test
-using result_promise_t = ss::shared_promise<result<kafka_result>>;
+using result_promise_t = ss::shared_promise<result<sql_result>>;
 using request_ptr = ss::lw_shared_ptr<request>;
 using seq_t = int32_t;
 
@@ -109,14 +109,14 @@ private:
 // log.
 //
 // We retain a maximum of `requests_cached_max` finished requests.
-// Kafka clients only issue requests in batches of 5, the queue is fairly small
+// SQL clients only issue requests in batches of 5, the queue is fairly small
 // at all times.
 class requests {
 public:
     result<request_ptr> try_emplace(
       seq_t first, seq_t last, model::term_id current, bool reset_sequences);
 
-    bool stm_apply(const model::batch_identity& bid, kafka::offset offset);
+    bool stm_apply(const model::batch_identity& bid, sql::offset offset);
 
     void shutdown();
 
@@ -206,11 +206,11 @@ public:
       const model::batch_identity&,
       model::term_id current_term,
       bool reset_sequences = false);
-    void update(const model::batch_identity&, kafka::offset);
+    void update(const model::batch_identity&, sql::offset);
 
     std::optional<seq_t> last_sequence_number() const;
 
-    producer_state_snapshot snapshot(kafka::offset log_start_offset) const;
+    producer_state_snapshot snapshot(sql::offset log_start_offset) const;
 
 private:
     // Register/deregister with manager.
@@ -252,7 +252,7 @@ struct producer_state_snapshot {
     struct finished_request {
         seq_t _first_sequence;
         seq_t _last_sequence;
-        kafka::offset _last_offset;
+        sql::offset _last_offset;
     };
 
     model::producer_identity _id;

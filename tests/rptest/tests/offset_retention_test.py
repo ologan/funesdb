@@ -10,26 +10,26 @@ import time
 from functools import partial
 from rptest.services.cluster import cluster
 from rptest.clients.rpk import RpkTool, RpkException
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
+from rptest.services.sql_cli_consumer import SQLCliConsumer
 from ducktape.mark import parametrize
 from rptest.services.admin import Admin
 from rptest.util import expect_exception
 from ducktape.utils.util import wait_until
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions, ver_string
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_installer import FunesInstaller, wait_for_num_versions, ver_string
 
 
-class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
+class OffsetRetentionDisabledAfterUpgrade(FunesTest):
     """
-    When upgrading to Redpanda v23 or later offset retention should be disabled
+    When upgrading to Funes v23 or later offset retention should be disabled
     by default. Offset retention did not exist pre-v23, so existing clusters
     should have to opt-in after upgrade in order to avoid suprises.
 
     When a cluster upgrades to v23 then only newly committed offsets are
     reclaimed automatically. Offsets written prior to the upgrade must be
-    manually removed using the kafka delete offset api.
+    manually removed using the sql delete offset api.
 
     Offsets committed prior to v23 that are normally non-reclaimable become
     reclaimable if they are updated following the upgrade.
@@ -55,7 +55,7 @@ class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
     def __init__(self, test_context):
         super(OffsetRetentionDisabledAfterUpgrade,
               self).__init__(test_context=test_context, num_brokers=3)
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
 
     def setUp(self):
         # handled by test case to support parameterization
@@ -66,15 +66,15 @@ class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
         1. verify starting version of cluster nodes
         2. verify expected configs of initial cluster
         """
-        self.installer.install(self.redpanda.nodes, version)
+        self.installer.install(self.funes.nodes, version)
         super(OffsetRetentionDisabledAfterUpgrade, self).setUp()
 
         # wait until all nodes are running the same version
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert ver_string(version) in unique_versions
 
         # sanity check none of feature configs should exist
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         config = admin.get_cluster_config()
         assert config.keys().isdisjoint(self.feature_config_names)
 
@@ -84,15 +84,15 @@ class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
         2. verify expected configs after upgrade
         """
         # upgrade all nodes to target version
-        self.installer.install(self.redpanda.nodes, version)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.installer.install(self.funes.nodes, version)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # wait until all nodes are running the same version
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert ver_string(initial_version) not in unique_versions
 
         # sanity check that all new feature configs exist
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         config = admin.get_cluster_config()
         assert config.keys() > self.feature_config_names
 
@@ -105,7 +105,7 @@ class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
 
     def _offset_removal_occurred(self, period, pre_upgrade,
                                  pre_legacy_support):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         group = "hey_group"
 
         def offsets_exist(include_idle):
@@ -208,7 +208,7 @@ class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
 
         # in cluster upgraded from pre-v23 retention should not be active
         self._perform_upgrade(initial_version, (23, 1))
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.cluster_config_set("group_offset_retention_sec", str(period))
         rpk.cluster_config_set("group_offset_retention_check_ms", str(1000))
         assert not self._offset_removal_occurred(period, False, True)
@@ -221,7 +221,7 @@ class OffsetRetentionDisabledAfterUpgrade(RedpandaTest):
         assert self._offset_removal_occurred(period, False, False)
 
 
-class OffsetRetentionTest(RedpandaTest):
+class OffsetRetentionTest(FunesTest):
     topics = (TopicSpec(), )
     period = 30
 
@@ -236,7 +236,7 @@ class OffsetRetentionTest(RedpandaTest):
                                  group_offset_retention_check_ms=1000,
                              ))
 
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
     @cluster(num_nodes=3)
     def test_offset_expiration(self):
@@ -264,19 +264,19 @@ class OffsetRetentionTest(RedpandaTest):
         assert not offsets_exist()
 
 
-class OffsetDeletionTest(RedpandaTest):
+class OffsetDeletionTest(FunesTest):
     topics = (TopicSpec(partition_count=3), )
     group = "hey_hey_group"
 
     def __init__(self, test_context):
         super(OffsetDeletionTest, self).__init__(test_context=test_context)
 
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
     def make_consumer(self, topic, session_timeout_ms=60000):
-        return KafkaCliConsumer(
+        return SQLCliConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic=topic,
             group=self.group,
             from_beginning=True,
@@ -387,7 +387,7 @@ class OffsetDeletionTest(RedpandaTest):
                    timeout_sec=30,
                    backoff_sec=1)
 
-        # Remove the offsets that it had been keeping in redpanda
+        # Remove the offsets that it had been keeping in funes
         def validate_output(e):
             output = e.parsed_output
             assert len(output) == 4

@@ -14,7 +14,7 @@
 #include "cluster/persisted_stm.h"
 #include "cluster/tx_gateway_frontend.h"
 #include "cluster/tx_snapshot_utils.h"
-#include "kafka/protocol/wire.h"
+#include "sql/protocol/wire.h"
 #include "metrics/metrics.h"
 #include "model/fundamental.h"
 #include "model/record.h"
@@ -151,12 +151,12 @@ fence_batch_data read_fence_batch(model::record_batch&& b) {
 static model::record_batch make_tx_control_batch(
   model::producer_identity pid, model::control_record_type crt) {
     iobuf key;
-    kafka::protocol::encoder kw(key);
+    sql::protocol::encoder kw(key);
     kw.write(model::current_control_record_version());
     kw.write(static_cast<int16_t>(crt));
 
     iobuf value;
-    kafka::protocol::encoder vw(value);
+    sql::protocol::encoder vw(value);
     vw.write(static_cast<int16_t>(0));
     vw.write(static_cast<int32_t>(0));
 
@@ -234,7 +234,7 @@ parse_control_batch(const model::record_batch& b) {
     auto r = b.copy_records();
     auto& record = *r.begin();
     auto key = record.release_key();
-    kafka::protocol::decoder key_reader(std::move(key));
+    sql::protocol::decoder key_reader(std::move(key));
     auto version = model::control_record_version(key_reader.read_int16());
     vassert(
       version == model::current_control_record_version,
@@ -856,7 +856,7 @@ ss::future<tx_errc> rm_stm::do_abort_tx(
             // improving the second case by aborting the ongoing tx before it's
             // expired.
             //
-            // If it happens to be the first case then Redpanda rejects a
+            // If it happens to be the first case then Funes rejects a
             // client's tx.
             auto expiration_it = _log_state.expiration.find(pid);
             if (expiration_it != _log_state.expiration.end()) {
@@ -934,7 +934,7 @@ ss::future<tx_errc> rm_stm::do_abort_tx(
     co_return tx_errc::none;
 }
 
-kafka_stages rm_stm::replicate_in_stages(
+sql_stages rm_stm::replicate_in_stages(
   model::batch_identity bid,
   model::record_batch_reader r,
   raft::replicate_options opts) {
@@ -953,10 +953,10 @@ kafka_stages rm_stm::replicate_in_stages(
                 enqueued->set_value();
             }
         });
-    return kafka_stages(std::move(f), std::move(replicate_finished));
+    return sql_stages(std::move(f), std::move(replicate_finished));
 }
 
-ss::future<result<kafka_result>> rm_stm::replicate(
+ss::future<result<sql_result>> rm_stm::replicate(
   model::batch_identity bid,
   model::record_batch_reader r,
   raft::replicate_options opts) {
@@ -968,7 +968,7 @@ ss::future<ss::basic_rwlock<>::holder> rm_stm::prepare_transfer_leadership() {
     co_return co_await _state_lock.hold_write_lock();
 }
 
-ss::future<result<kafka_result>> rm_stm::do_replicate(
+ss::future<result<sql_result>> rm_stm::do_replicate(
   model::batch_identity bid,
   model::record_batch_reader b,
   raft::replicate_options opts,
@@ -1025,7 +1025,7 @@ ss::future<result<rm_stm::transaction_set>> rm_stm::get_transactions() {
 
     transaction_set ans;
 
-    // When redpanda starts writing the first batch of a transaction it
+    // When funes starts writing the first batch of a transaction it
     // estimates its offset and only when the write passes it updates the offset
     // to the exact value; so for a short period of time (while tx is in the
     // initiating state) lso_bound is the offset of the last operation known at
@@ -1076,7 +1076,7 @@ rm_stm::do_mark_expired(model::producer_identity pid) {
     co_return std::error_code(co_await do_try_abort_old_tx(pid));
 }
 
-ss::future<result<kafka_result>> rm_stm::do_sync_and_transactional_replicate(
+ss::future<result<sql_result>> rm_stm::do_sync_and_transactional_replicate(
   producer_ptr producer,
   model::batch_identity bid,
   model::record_batch_reader rdr,
@@ -1113,7 +1113,7 @@ ss::future<result<kafka_result>> rm_stm::do_sync_and_transactional_replicate(
     co_return result;
 }
 
-ss::future<result<kafka_result>> rm_stm::do_transactional_replicate(
+ss::future<result<sql_result>> rm_stm::do_transactional_replicate(
   model::term_id synced_term,
   producer_ptr producer,
   model::batch_identity bid,
@@ -1147,7 +1147,7 @@ ss::future<result<kafka_result>> rm_stm::do_transactional_replicate(
 
     // For the first batch of a transaction, reset sequence tracking to handle
     // an edge case where client reuses sequence number after an aborted
-    // transaction see https://github.com/redpanda-data/redpanda/pull/5026
+    // transaction see https://github.com/redpanda-data/funes/pull/5026
     // for details
     bool reset_sequence_tracking = !_log_state.ongoing_map.contains(bid.pid);
     auto request = producer->try_emplace_request(
@@ -1200,13 +1200,13 @@ ss::future<result<kafka_result>> rm_stm::do_transactional_replicate(
         co_return tx_errc::timeout;
     }
     _mem_state.estimated.erase(bid.pid);
-    auto result = kafka_result{
+    auto result = sql_result{
       .last_offset = from_log_offset(r.value().last_offset)};
     req_ptr->set_value(result);
     co_return result;
 }
 
-ss::future<result<kafka_result>> rm_stm::transactional_replicate(
+ss::future<result<sql_result>> rm_stm::transactional_replicate(
   model::batch_identity bid, model::record_batch_reader rdr) {
     if (!check_tx_permitted()) {
         co_return errc::generic_tx_error;
@@ -1218,7 +1218,7 @@ ss::future<result<kafka_result>> rm_stm::transactional_replicate(
     });
 }
 
-ss::future<result<kafka_result>> rm_stm::do_sync_and_idempotent_replicate(
+ss::future<result<sql_result>> rm_stm::do_sync_and_idempotent_replicate(
   producer_ptr producer,
   model::batch_identity bid,
   model::record_batch_reader br,
@@ -1270,7 +1270,7 @@ ss::future<result<kafka_result>> rm_stm::do_sync_and_idempotent_replicate(
     co_return result.value();
 }
 
-ss::future<result<kafka_result>> rm_stm::do_idempotent_replicate(
+ss::future<result<sql_result>> rm_stm::do_idempotent_replicate(
   model::term_id synced_term,
   producer_ptr producer,
   model::batch_identity bid,
@@ -1278,7 +1278,7 @@ ss::future<result<kafka_result>> rm_stm::do_idempotent_replicate(
   raft::replicate_options opts,
   ss::lw_shared_ptr<available_promise<>> enqueued,
   ssx::semaphore_units& units) {
-    using ret_t = result<kafka_result>;
+    using ret_t = result<sql_result>;
     auto request = producer->try_emplace_request(bid, synced_term);
     if (!request) {
         co_return request.error();
@@ -1317,14 +1317,14 @@ ss::future<result<kafka_result>> rm_stm::do_idempotent_replicate(
         req_ptr->set_value<ret_t>(result.error());
         co_return result.error();
     }
-    // translate to kafka offset.
-    auto kafka_offset = from_log_offset(result.value().last_offset);
-    auto final_result = kafka_result{.last_offset = kafka_offset};
+    // translate to sql offset.
+    auto sql_offset = from_log_offset(result.value().last_offset);
+    auto final_result = sql_result{.last_offset = sql_offset};
     req_ptr->set_value(final_result);
     co_return final_result;
 }
 
-ss::future<result<kafka_result>> rm_stm::idempotent_replicate(
+ss::future<result<sql_result>> rm_stm::idempotent_replicate(
   model::batch_identity bid,
   model::record_batch_reader br,
   raft::replicate_options opts,
@@ -1341,11 +1341,11 @@ ss::future<result<kafka_result>> rm_stm::idempotent_replicate(
     });
 }
 
-ss::future<result<kafka_result>> rm_stm::replicate_msg(
+ss::future<result<sql_result>> rm_stm::replicate_msg(
   model::record_batch_reader br,
   raft::replicate_options opts,
   ss::lw_shared_ptr<available_promise<>> enqueued) {
-    using ret_t = result<kafka_result>;
+    using ret_t = result<sql_result>;
 
     if (!co_await sync(_sync_timeout)) {
         co_return errc::not_leader;
@@ -1361,7 +1361,7 @@ ss::future<result<kafka_result>> rm_stm::replicate_msg(
     }
     auto old_offset = r.value().last_offset;
     auto new_offset = from_log_offset(old_offset);
-    co_return ret_t(kafka_result{new_offset});
+    co_return ret_t(sql_result{new_offset});
 }
 
 model::offset rm_stm::last_stable_offset() {
@@ -1384,7 +1384,7 @@ model::offset rm_stm::last_stable_offset() {
           || last_applied < _bootstrap_committed_offset.value())) {
         // To preserve the monotonicity of LSO from a client perspective,
         // we return this unknown offset marker that is translated to
-        // an appropriate retry-able Kafka error code for clients.
+        // an appropriate retry-able SQL error code for clients.
         return model::invalid_lso;
     }
 
@@ -1617,7 +1617,7 @@ ss::future<tx_errc> rm_stm::do_try_abort_old_tx(model::producer_identity pid) {
         vlog(_ctx_log.trace, "trying to expire pid:{} tx_seq:{}", pid, tx_seq);
         // It looks like a partition is fixed now but actually partitioning
         // of the tx coordinator isn't support yet so it doesn't matter see
-        // https://github.com/redpanda-data/redpanda/issues/6137
+        // https://github.com/redpanda-data/funes/issues/6137
         // In order to support it we ned to update begin_tx to accept the id
         // and use the true partition_id here
         auto tx_data = _log_state.current_txes.find(pid);
@@ -1885,9 +1885,9 @@ ss::future<> rm_stm::reduce_aborted_list() {
 
 void rm_stm::apply_data(model::batch_identity bid, model::offset last_offset) {
     if (bid.has_idempotent()) {
-        auto kafka_offset = from_log_offset(last_offset);
+        auto sql_offset = from_log_offset(last_offset);
         auto producer = maybe_create_producer(bid.pid);
-        producer->update(bid, kafka_offset);
+        producer->update(bid, sql_offset);
     }
 
     if (bid.is_transactional) {
@@ -1919,16 +1919,16 @@ void rm_stm::apply_data(model::batch_identity bid, model::offset last_offset) {
     }
 }
 
-kafka::offset rm_stm::from_log_offset(model::offset log_offset) const {
+sql::offset rm_stm::from_log_offset(model::offset log_offset) const {
     if (log_offset > model::offset{-1}) {
-        return kafka::offset(
+        return sql::offset(
           _raft->get_offset_translator_state()->from_log_offset(log_offset));
     }
-    return kafka::offset(log_offset);
+    return sql::offset(log_offset);
 }
 
-model::offset rm_stm::to_log_offset(kafka::offset k_offset) const {
-    if (k_offset > kafka::offset{-1}) {
+model::offset rm_stm::to_log_offset(sql::offset k_offset) const {
+    if (k_offset > sql::offset{-1}) {
         return _raft->get_offset_translator_state()->to_log_offset(
           model::offset(k_offset()));
     }
@@ -2117,7 +2117,7 @@ ss::future<stm_snapshot> rm_stm::take_local_snapshot() {
 }
 
 // DO NOT coroutinize this method as it may cause issues on ARM:
-// https://github.com/redpanda-data/redpanda/issues/6768
+// https://github.com/redpanda-data/funes/issues/6768
 ss::future<stm_snapshot> rm_stm::do_take_local_snapshot(uint8_t version) {
     auto start_offset = _raft->start_offset();
     vlog(
@@ -2183,11 +2183,11 @@ ss::future<stm_snapshot> rm_stm::do_take_local_snapshot(uint8_t version) {
               });
         });
     }
-    kafka::offset start_kafka_offset = from_log_offset(start_offset);
-    return f.then([this, start_kafka_offset, version]() mutable {
+    sql::offset start_sql_offset = from_log_offset(start_offset);
+    return f.then([this, start_sql_offset, version]() mutable {
         return ss::do_with(
           iobuf{},
-          [this, start_kafka_offset, version](iobuf& tx_ss_buf) mutable {
+          [this, start_sql_offset, version](iobuf& tx_ss_buf) mutable {
               auto fut_serialize = ss::now();
               if (version == tx_snapshot_v4::version) {
                   tx_snapshot_v4 tx_ss;
@@ -2204,7 +2204,7 @@ ss::future<stm_snapshot> rm_stm::do_take_local_snapshot(uint8_t version) {
                        * to do it, however when recovering state from the
                        * snapshot removed producers will be gone.
                        */
-                      auto snapshot = state->snapshot(start_kafka_offset);
+                      auto snapshot = state->snapshot(start_sql_offset);
                       auto seq_entry
                         = deprecated_seq_entry::from_producer_state_snapshot(
                           snapshot);
@@ -2232,7 +2232,7 @@ ss::future<stm_snapshot> rm_stm::do_take_local_snapshot(uint8_t version) {
                   tx_snapshot tx_ss;
                   fill_snapshot_wo_seqs(tx_ss);
                   for (const auto& [_, state] : _producers) {
-                      auto snapshot = state->snapshot(start_kafka_offset);
+                      auto snapshot = state->snapshot(start_sql_offset);
                       if (!snapshot._finished_requests.empty()) {
                           tx_ss.producers.push_back(std::move(snapshot));
                       }

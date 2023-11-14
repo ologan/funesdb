@@ -19,7 +19,7 @@ import (
 
 func TestWriteBytes(t *testing.T) {
 	fs := afero.NewMemMapFs()
-	content := "redpanda:\nsome_field: somevalue"
+	content := "funes:\nsome_field: somevalue"
 	bs := []byte(content)
 	filepath := "/tmp/testwritebytes.yaml"
 

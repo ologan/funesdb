@@ -9,7 +9,7 @@
 
 import socket
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.rpk_producer import RpkProducer
 from rptest.services.rpk_consumer import RpkConsumer
@@ -17,10 +17,10 @@ from rptest.clients.types import TopicSpec
 from rptest.services.metrics_check import MetricCheck
 from rptest.util import expect_exception
 
-REJECTED_METRIC = "vectorized_kafka_rpc_connections_rejected_total"
+REJECTED_METRIC = "vectorized_sql_rpc_connections_rejected_total"
 
 
-class ConnectionLimitsTest(RedpandaTest):
+class ConnectionLimitsTest(FunesTest):
     topics = (TopicSpec(partition_count=1, replication_factor=1), )
 
     def __init__(self, *args, **kwargs):
@@ -28,26 +28,26 @@ class ConnectionLimitsTest(RedpandaTest):
 
     @cluster(num_nodes=4)
     def test_exceed_broker_limit(self):
-        self.redpanda.set_cluster_config({"kafka_connections_max": 6})
+        self.funes.set_cluster_config({"sql_connections_max": 6})
 
         metrics = [
-            MetricCheck(self.logger, self.redpanda, n, REJECTED_METRIC, {},
-                        sum) for n in self.redpanda.nodes
+            MetricCheck(self.logger, self.funes, n, REJECTED_METRIC, {},
+                        sum) for n in self.funes.nodes
         ]
 
         # I happen to know that an `rpk topic consume` occupies three
         # connections.  So after opening two consumers, I should find
         # that a producer cannot get in.
         consumers = [
-            RpkConsumer(self.test_context, self.redpanda, self.topic),
-            RpkConsumer(self.test_context, self.redpanda, self.topic),
+            RpkConsumer(self.test_context, self.funes, self.topic),
+            RpkConsumer(self.test_context, self.funes, self.topic),
         ]
 
         for c in consumers:
             c.start()
 
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                msg_size=16384,
                                msg_count=1,
@@ -77,15 +77,15 @@ class ConnectionLimitsTest(RedpandaTest):
         The null case where we are never exceeding the limit, but
         are repeatedly creating+destroying connections.
         """
-        self.redpanda.set_cluster_config({"kafka_connections_max": 6})
+        self.funes.set_cluster_config({"sql_connections_max": 6})
 
         metrics = [
-            MetricCheck(self.logger, self.redpanda, n, REJECTED_METRIC, {},
-                        sum) for n in self.redpanda.nodes
+            MetricCheck(self.logger, self.funes, n, REJECTED_METRIC, {},
+                        sum) for n in self.funes.nodes
         ]
 
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                msg_size=16384,
                                msg_count=1,
@@ -109,7 +109,7 @@ class ConnectionLimitsTest(RedpandaTest):
         """
         def setup_producers():
             producer_a = RpkProducer(self.test_context,
-                                     self.redpanda,
+                                     self.funes,
                                      self.topic,
                                      msg_size=16384,
                                      msg_count=1,
@@ -118,7 +118,7 @@ class ConnectionLimitsTest(RedpandaTest):
             producer_a_addr = socket.gethostbyname(producer_a.nodes[0].name)
 
             producer_b = RpkProducer(self.test_context,
-                                     self.redpanda,
+                                     self.funes,
                                      self.topic,
                                      msg_size=16384,
                                      msg_count=1,
@@ -134,8 +134,8 @@ class ConnectionLimitsTest(RedpandaTest):
         self.logger.info(
             f"producer_a: {producer_a_addr}, producer_b: {producer_b_addr}")
 
-        self.redpanda.set_cluster_config(
-            {"kafka_connections_max_overrides": [
+        self.funes.set_cluster_config(
+            {"sql_connections_max_overrides": [
                 f"{producer_a_addr}:0",
             ]})
 
@@ -156,8 +156,8 @@ class ConnectionLimitsTest(RedpandaTest):
         producer_b.wait()
         producer_b.free()
 
-        self.redpanda.set_cluster_config(
-            {"kafka_connections_max_overrides": []})
+        self.funes.set_cluster_config(
+            {"sql_connections_max_overrides": []})
 
         producer_a, producer_a_addr, producer_b, producer_b_addr = setup_producers(
         )

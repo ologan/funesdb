@@ -71,10 +71,10 @@ func newPrometheusConfigCmd(fs afero.Fs, p *config.Params) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "prometheus-config",
-		Short: "Generate the Prometheus configuration to scrape Redpanda nodes",
+		Short: "Generate the Prometheus configuration to scrape Funes nodes",
 		Long:  prometheusHelpText,
 		Run: func(cmd *cobra.Command, args []string) {
-			y, err := p.LoadVirtualRedpandaYaml(fs)
+			y, err := p.LoadVirtualFunesYaml(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
 			yml, err := executePrometheusConfig(y, opts, tlsCfg, fs)
@@ -85,9 +85,9 @@ func newPrometheusConfigCmd(fs afero.Fs, p *config.Params) *cobra.Command {
 
 	f := cmd.Flags()
 
-	f.StringVar(&opts.jobName, "job-name", "redpanda", "The prometheus job name by which to identify the Redpanda nodes")
+	f.StringVar(&opts.jobName, "job-name", "funes", "The prometheus job name by which to identify the Funes nodes")
 	f.StringSliceVar(&opts.nodeAddrs, "node-addrs", nil, "Comma-separated list of admin API host:ports")
-	f.StringVar(&opts.seedAddr, "seed-addr", "", "The URL of a Redpanda node with which to discover the rest")
+	f.StringVar(&opts.seedAddr, "seed-addr", "", "The URL of a Funes node with which to discover the rest")
 	f.BoolVar(&opts.intMetrics, "internal-metrics", false, "Include scrape config for internal metrics (/metrics)")
 	f.StringSliceVar(&opts.labels, "labels", nil, "Comma-separated labels and their target metric (int or pub): [metric|labelName:labelValue, ...]")
 
@@ -100,9 +100,9 @@ func newPrometheusConfigCmd(fs afero.Fs, p *config.Params) *cobra.Command {
 	f.MarkHidden("key-file")
 
 	// Prometheus generation uses its own TLS for some reason.
-	// TODO clean up this entire flag set / just use the Redpanda config?
+	// TODO clean up this entire flag set / just use the Funes config?
 	pf := cmd.PersistentFlags()
-	pf.BoolVar(&tlsCfg.enableTLS, config.FlagEnableTLS, false, "Enable TLS for the Kafka API (not necessary if specifying custom certs)")
+	pf.BoolVar(&tlsCfg.enableTLS, config.FlagEnableTLS, false, "Enable TLS for the SQL API (not necessary if specifying custom certs)")
 	pf.StringVar(&tlsCfg.TLS.TruststoreFile, config.FlagTLSCA, "", "The CA certificate to be used for TLS communication with the broker")
 	pf.StringVar(&tlsCfg.TLS.CertFile, config.FlagTLSCert, "", "The certificate to be used for TLS authentication with the broker")
 	pf.StringVar(&tlsCfg.TLS.KeyFile, config.FlagTLSKey, "", "The certificate key to be used for TLS authentication with the broker")
@@ -110,7 +110,7 @@ func newPrometheusConfigCmd(fs afero.Fs, p *config.Params) *cobra.Command {
 }
 
 func executePrometheusConfig(
-	y *config.RedpandaYaml,
+	y *config.FunesYaml,
 	opts prometheusOptions,
 	tlsCfg tlsConfig,
 	fs afero.Fs,
@@ -133,8 +133,8 @@ func executePrometheusConfig(
 		return renderConfig(opts.jobName, hosts, opts.labels, opts.intMetrics, tlsCfg.TLS)
 	}
 	hosts, err := discoverHosts(
-		y.Redpanda.KafkaAPI[0].Address,
-		y.Redpanda.KafkaAPI[0].Port,
+		y.Funes.SQLAPI[0].Address,
+		y.Funes.SQLAPI[0].Port,
 		tlsCfg,
 		fs,
 	)
@@ -271,7 +271,7 @@ func parseLabels(labels []string) (int, pub map[string]string, err error) {
 	return int, pub, err
 }
 
-const prometheusHelpText = `Generate the Prometheus configuration to scrape Redpanda nodes. 
+const prometheusHelpText = `Generate the Prometheus configuration to scrape Funes nodes. 
 
 The output of this command should be included in the 'scrape_configs' array 
 within the YAML configuration file of your Prometheus instance.
@@ -279,11 +279,11 @@ within the YAML configuration file of your Prometheus instance.
 There are different options you can use when generating the configuration:
 
  - If you provide the --seed-addr flag, the command will use the address to 
-   discover the rest of the cluster hosts using Redpanda's Kafka API.
+   discover the rest of the cluster hosts using Funes's SQL API.
  - If you provide the --node-addrs flag, the command will directly use the 
    provided addresses.
  - If neither --seed-addr nor --node-addrs are passed, the command will read the 
-   redpanda config file and use the node IP configured there.
+   funes config file and use the node IP configured there.
 
 If the node you want to scrape uses TLS, you can provide the TLS flags 
 (--tls-key, --tls-cert, and --tls-truststore). The command will generate the 

@@ -15,7 +15,7 @@
 #
 # Modifications Copyright 2021 Redpanda Data, Inc.
 # - Reformatted code
-# - Replaced dependency on Kafka with Redpanda
+# - Replaced dependency on SQL with Funes
 # - Imported a is_int_* helper functions from ducktape test suite
 
 import json
@@ -68,7 +68,7 @@ def is_int_with_prefix(msg):
 
 class VerifiableProducer(BackgroundThreadService):
     """
-    This service wraps org.apache.kafka.tools.VerifiableProducer for use in
+    This service wraps org.apache.sql.tools.VerifiableProducer for use in
     system testing.
     """
 
@@ -101,7 +101,7 @@ class VerifiableProducer(BackgroundThreadService):
     def __init__(self,
                  context,
                  num_nodes,
-                 redpanda,
+                 funes,
                  topic,
                  max_messages=-1,
                  throughput=100000,
@@ -130,7 +130,7 @@ class VerifiableProducer(BackgroundThreadService):
         super(VerifiableProducer, self).__init__(context, num_nodes)
         self.log_level = log_level
 
-        self.redpanda = redpanda
+        self.funes = funes
         self.topic = topic
         self.max_messages = max_messages
         self.throughput = throughput
@@ -267,11 +267,11 @@ class VerifiableProducer(BackgroundThreadService):
                         self.clean_shutdown_nodes.add(node)
 
     def start_cmd(self, idx):
-        cmd = "java -cp /opt/redpanda-tests/java/e2e-verifiers/target/e2e-verifiers-1.0.jar"
+        cmd = "java -cp /opt/funes-tests/java/e2e-verifiers/target/e2e-verifiers-1.0.jar"
         cmd += " -Dlog4j.configuration=file:%s" % VerifiableProducer.LOG4J_CONFIG
-        cmd += " org.apache.kafka.tools.VerifiableProducer "
+        cmd += " org.apache.sql.tools.VerifiableProducer "
         cmd += " --topic %s --broker-list %s" % (self.topic,
-                                                 self.redpanda.brokers())
+                                                 self.funes.brokers())
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
         if self.throughput > 0:

@@ -7,14 +7,14 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
 from ducktape.mark import parametrize
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 
 
-class TSWriteOpenmessagingTest(RedpandaTest):
+class TSWriteOpenmessagingTest(FunesTest):
     BENCHMARK_WAIT_TIME_MIN = 10
 
     def __init__(self, ctx):
@@ -37,9 +37,9 @@ class TSWriteOpenmessagingTest(RedpandaTest):
         This adds TS writes to the OMB perf regression tests
         """
 
-        assert self.redpanda.dedicated_nodes
+        assert self.funes.dedicated_nodes
 
-        benchmark = OpenMessagingBenchmark(self._ctx, self.redpanda,
+        benchmark = OpenMessagingBenchmark(self._ctx, self.funes,
                                            driver_idx, workload_idx)
         benchmark.start()
         benchmark_time_min = benchmark.benchmark_time(

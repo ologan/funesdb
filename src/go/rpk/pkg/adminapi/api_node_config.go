@@ -19,7 +19,7 @@ type NodeConfig struct {
 	// TODO: add the rest of the fields
 }
 
-// RawNodeConfig represents a Redpanda configuration. There are many keys
+// RawNodeConfig represents a Funes configuration. There are many keys
 // returned, so the raw response is just unmarshalled into an interface.
 type RawNodeConfig map[string]interface{}
 

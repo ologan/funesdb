@@ -21,8 +21,8 @@ from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.clients.default import DefaultClient
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST, PREV_VERSION_LOG_ALLOW_LIST, SISettings
-from rptest.services.redpanda_installer import RedpandaInstaller
+from rptest.services.funes import CHAOS_LOG_ALLOW_LIST, PREV_VERSION_LOG_ALLOW_LIST, SISettings
+from rptest.services.funes_installer import FunesInstaller
 from rptest.utils.mode_checks import cleanup_on_early_exit, skip_debug_mode
 from rptest.utils.node_operations import FailureInjectorBackgroundThread, NodeOpsExecutor, generate_random_workload
 
@@ -68,7 +68,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
             topics.append(spec)
 
         for spec in topics:
-            DefaultClient(self.redpanda).create_topic(spec)
+            DefaultClient(self.funes).create_topic(spec)
 
     def tearDown(self):
         if self.admin_fuzz is not None:
@@ -80,11 +80,11 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         """
         Hook for `skip_debug_mode` decorator
         """
-        if self.redpanda:
-            self.redpanda.set_skip_if_no_redpanda_log(True)
+        if self.funes:
+            self.funes.set_skip_if_no_funes_log(True)
 
     def setUp(self):
-        # defer starting redpanda to test body
+        # defer starting funes to test body
         pass
 
     def _setup_test_scale(self, num_to_upgrade):
@@ -92,7 +92,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         self.producer_timeout = 180
         self.consumer_timeout = 180
 
-        if self.redpanda.dedicated_nodes:
+        if self.funes.dedicated_nodes:
             # scale test setup
             self.max_partitions = 32
             self.producer_throughput = 20000
@@ -115,7 +115,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         # Tip off the end-of-test controller log validation that we will
         # create a large number of records, scaling with partition count
         # and operation count.
-        self.redpanda.set_expected_controller_records(
+        self.funes.set_expected_controller_records(
             self.max_partitions * self.node_operations * 10)
 
         self.consumers_count = int(self.max_partitions / 4)
@@ -125,7 +125,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
             f"running test with: [message_size {self.msg_size},  total_bytes: {self.total_data}, message_count: {self.msg_count}, rate_limit: {self.rate_limit}, cluster_operations: {self.node_operations}]"
         )
 
-    def _start_redpanda(self, number_nodes_to_upgrade, with_tiered_storage):
+    def _start_funes(self, number_nodes_to_upgrade, with_tiered_storage):
 
         if with_tiered_storage:
             si_settings = SISettings(self.test_context,
@@ -135,26 +135,26 @@ class RandomNodeOperationsTest(PreallocNodesTest):
             # since this test is deleting topics we must tolerate missing manifests
             si_settings.set_expected_damage(
                 {"ntr_no_topic_manifest", "ntpr_no_manifest"})
-            self.redpanda.set_si_settings(si_settings)
+            self.funes.set_si_settings(si_settings)
 
-        self.redpanda.set_seed_servers(self.redpanda.nodes)
+        self.funes.set_seed_servers(self.funes.nodes)
         if number_nodes_to_upgrade > 0:
-            installer = self.redpanda._installer
+            installer = self.funes._installer
             installer.install(
-                self.redpanda.nodes,
+                self.funes.nodes,
                 installer.highest_from_prior_feature_version(
-                    RedpandaInstaller.HEAD))
-            self.redpanda.start()
-            installer.install(self.redpanda.nodes[:number_nodes_to_upgrade],
-                              RedpandaInstaller.HEAD)
-            self.redpanda.restart_nodes(
-                self.redpanda.nodes[:number_nodes_to_upgrade])
+                    FunesInstaller.HEAD))
+            self.funes.start()
+            installer.install(self.funes.nodes[:number_nodes_to_upgrade],
+                              FunesInstaller.HEAD)
+            self.funes.restart_nodes(
+                self.funes.nodes[:number_nodes_to_upgrade])
         else:
-            self.redpanda.start(auto_assign_node_id=True,
+            self.funes.start(auto_assign_node_id=True,
                                 omit_seeds_on_idx_one=False)
 
     def _alter_local_topic_retention_bytes(self, topic, retention_bytes):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def alter_and_verify():
             try:
@@ -176,7 +176,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
                      test_context,
                      logger,
                      topic_name,
-                     redpanda,
+                     funes,
                      nodes,
                      msg_size,
                      rate_limit_bps,
@@ -187,7 +187,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
             self.test_context = test_context
             self.logger = logger
             self.topic = topic_name
-            self.redpanda = redpanda
+            self.funes = funes
             self.nodes = nodes
             self.msg_size = msg_size
             self.rate_limit_bps = rate_limit_bps
@@ -199,7 +199,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         def _start_producer(self):
             self.producer = KgoVerifierProducer(
                 self.test_context,
-                self.redpanda,
+                self.funes,
                 self.topic,
                 self.msg_size,
                 self.msg_count,
@@ -217,7 +217,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
 
             self.consumer = KgoVerifierConsumerGroupConsumer(
                 self.test_context,
-                self.redpanda,
+                self.funes,
                 self.topic,
                 self.msg_size,
                 readers=self.consumer_count,
@@ -277,10 +277,10 @@ class RandomNodeOperationsTest(PreallocNodesTest):
             cleanup_on_early_exit(self)
             return
 
-        # start redpanda process
-        self._start_redpanda(num_to_upgrade,
+        # start funes process
+        self._start_funes(num_to_upgrade,
                              with_tiered_storage=with_tiered_storage)
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"controller_snapshot_max_age_sec": 1})
 
         # create some initial topics
@@ -289,9 +289,9 @@ class RandomNodeOperationsTest(PreallocNodesTest):
                                   replication_factor=3,
                                   cleanup_policy=TopicSpec.CLEANUP_DELETE,
                                   segment_bytes=default_segment_size,
-                                  redpanda_remote_read=with_tiered_storage,
-                                  redpanda_remote_write=with_tiered_storage)
-        DefaultClient(self.redpanda).create_topic(regular_topic)
+                                  funes_remote_read=with_tiered_storage,
+                                  funes_remote_write=with_tiered_storage)
+        DefaultClient(self.funes).create_topic(regular_topic)
 
         if with_tiered_storage:
             # change local retention policy to make some local segments will be deleted during the test
@@ -302,7 +302,7 @@ class RandomNodeOperationsTest(PreallocNodesTest):
             test_context=self.test_context,
             logger=self.logger,
             topic_name=regular_topic.name,
-            redpanda=self.redpanda,
+            funes=self.funes,
             nodes=[self.preallocated_nodes[0]],
             msg_size=self.msg_size,
             rate_limit_bps=self.rate_limit,
@@ -313,15 +313,15 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         compacted_topic = TopicSpec(partition_count=self.max_partitions,
                                     cleanup_policy=TopicSpec.CLEANUP_COMPACT,
                                     segment_bytes=default_segment_size,
-                                    redpanda_remote_read=with_tiered_storage,
-                                    redpanda_remote_write=with_tiered_storage)
-        DefaultClient(self.redpanda).create_topic(compacted_topic)
+                                    funes_remote_read=with_tiered_storage,
+                                    funes_remote_write=with_tiered_storage)
+        DefaultClient(self.funes).create_topic(compacted_topic)
 
         compacted_producer_consumer = RandomNodeOperationsTest.producer_consumer(
             test_context=self.test_context,
             logger=self.logger,
             topic_name=compacted_topic.name,
-            redpanda=self.redpanda,
+            funes=self.funes,
             nodes=[self.preallocated_nodes[1]],
             msg_size=self.msg_size,
             rate_limit_bps=self.rate_limit,
@@ -335,22 +335,22 @@ class RandomNodeOperationsTest(PreallocNodesTest):
 
         # start admin operations fuzzer, it will provide a stream of
         # admin day 2 operations executed during the test
-        self.admin_fuzz = AdminOperationsFuzzer(self.redpanda,
+        self.admin_fuzz = AdminOperationsFuzzer(self.funes,
                                                 min_replication=3,
                                                 operations_interval=3)
 
         self.admin_fuzz.start()
         self.active_node_idxs = set(
-            [self.redpanda.idx(n) for n in self.redpanda.nodes])
+            [self.funes.idx(n) for n in self.funes.nodes])
 
         fi = None
         if enable_failures:
-            fi = FailureInjectorBackgroundThread(self.redpanda, self.logger,
+            fi = FailureInjectorBackgroundThread(self.funes, self.logger,
                                                  lock)
             fi.start()
 
         # main workload loop
-        executor = NodeOpsExecutor(self.redpanda, self.logger, lock)
+        executor = NodeOpsExecutor(self.funes, self.logger, lock)
         for i, op in enumerate(
                 generate_random_workload(
                     available_nodes=self.active_node_idxs)):
@@ -370,13 +370,13 @@ class RandomNodeOperationsTest(PreallocNodesTest):
         regular_producer_consumer.verify()
         compacted_producer_consumer.verify()
         if with_tiered_storage:
-            self.redpanda.stop_and_scrub_object_storage()
+            self.funes.stop_and_scrub_object_storage()
 
         # Validate that the controller log written during the test is readable by offline log viewer
-        log_viewer = OfflineLogViewer(self.redpanda)
-        for node in self.redpanda.started_nodes():
+        log_viewer = OfflineLogViewer(self.funes)
+        for node in self.funes.started_nodes():
             # stop node before reading controller log to make sure it is stable
-            self.redpanda.stop_node(node)
+            self.funes.stop_node(node)
             controller_records = log_viewer.read_controller(node=node)
             self.logger.info(
                 f"Read {len(controller_records)} controller records from node {node.name} successfully"

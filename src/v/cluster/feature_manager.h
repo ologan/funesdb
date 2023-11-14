@@ -136,7 +136,7 @@ private:
 
     // Discover features that may now be auto-activated: usually this happens
     // when we activate a new logical version, but it may also happen if we
-    // upgraded Redpanda to a binary in the same logical version with a
+    // upgraded Funes to a binary in the same logical version with a
     // different activation policy for the feature.
     std::vector<std::reference_wrapper<const features::feature_spec>>
       auto_activate_features(cluster_version, cluster_version);

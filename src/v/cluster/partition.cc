@@ -33,22 +33,22 @@
 
 namespace {
 bool is_id_allocator_topic(model::ntp ntp) {
-    return ntp.ns == model::kafka_internal_namespace
+    return ntp.ns == model::sql_internal_namespace
            && ntp.tp.topic == model::id_allocator_topic;
 }
 
 bool is_tx_manager_topic(const model::ntp& ntp) {
-    return ntp.ns == model::kafka_internal_namespace
+    return ntp.ns == model::sql_internal_namespace
            && ntp.tp.topic == model::tx_manager_topic;
 }
 
 bool is_tx_registry_topic(const model::ntp& ntp) {
-    return ntp.ns == model::kafka_internal_namespace
+    return ntp.ns == model::sql_internal_namespace
            && ntp.tp.topic == model::tx_registry_topic;
 }
 
 bool is_transform_offsets_topic(const model::ntp& ntp) {
-    return ntp.ns == model::kafka_internal_namespace
+    return ntp.ns == model::sql_internal_namespace
            && ntp.tp.topic == model::transform_offsets_topic;
 }
 }; // namespace
@@ -88,7 +88,7 @@ partition::partition(
     if (
       config::shard_local_cfg().cloud_storage_enabled()
       && _cloud_storage_api.local_is_initialized()
-      && _raft->ntp().ns == model::kafka_namespace) {
+      && _raft->ntp().ns == model::sql_namespace) {
         if (_cloud_storage_cache.local_is_initialized()) {
             const auto& bucket_config
               = cloud_storage::configuration::get_bucket_config();
@@ -118,7 +118,7 @@ partition::~partition() {}
 
 ss::future<std::error_code> partition::prefix_truncate(
   model::offset rp_start_offset,
-  kafka::offset kafka_start_offset,
+  sql::offset sql_start_offset,
   ss::lowres_clock::time_point deadline) {
     if (!_log_eviction_stm || !_raft->log_config().is_collectable()) {
         vlog(
@@ -138,12 +138,12 @@ ss::future<std::error_code> partition::prefix_truncate(
     }
     vlog(
       clusterlog.info,
-      "Truncating {} to redpanda offset {} kafka offset {}",
+      "Truncating {} to funes offset {} sql offset {}",
       _raft->ntp(),
       rp_start_offset,
-      kafka_start_offset);
+      sql_start_offset);
     auto res = co_await _log_eviction_stm->truncate(
-      rp_start_offset, kafka_start_offset, deadline, _as);
+      rp_start_offset, sql_start_offset, deadline, _as);
     if (res.has_error()) {
         co_return res.error();
     }
@@ -193,7 +193,7 @@ cluster::cloud_storage_mode partition::get_cloud_storage_mode() const {
 
 partition_cloud_storage_status partition::get_cloud_storage_status() const {
     auto wrap_model_offset =
-      [this](model::offset o) -> std::optional<kafka::offset> {
+      [this](model::offset o) -> std::optional<sql::offset> {
         if (o == model::offset{}) {
             return std::nullopt;
         }
@@ -237,9 +237,9 @@ partition_cloud_storage_status partition::get_cloud_storage_status() const {
 
         if (manifest.size() > 0) {
             status.cloud_log_start_offset
-              = manifest.full_log_start_kafka_offset();
-            status.stm_region_start_offset = manifest.get_start_kafka_offset();
-            status.cloud_log_last_offset = manifest.get_last_kafka_offset();
+              = manifest.full_log_start_sql_offset();
+            status.stm_region_start_offset = manifest.get_start_sql_offset();
+            status.cloud_log_last_offset = manifest.get_last_sql_offset();
         }
 
         // Calculate local space usage that does not overlap with cloud space
@@ -317,7 +317,7 @@ model::offset partition::start_cloud_offset() const {
       cloud_data_available(),
       "Method can only be called if cloud data is available, ntp: {}",
       _raft->ntp());
-    return kafka::offset_cast(
+    return sql::offset_cast(
       _cloud_storage_partition->first_uploaded_offset());
 }
 
@@ -326,7 +326,7 @@ model::offset partition::next_cloud_offset() const {
       cloud_data_available(),
       "Method can only be called if cloud data is available, ntp: {}",
       _raft->ntp());
-    return kafka::offset_cast(_cloud_storage_partition->next_kafka_offset());
+    return sql::offset_cast(_cloud_storage_partition->next_sql_offset());
 }
 
 ss::future<storage::translating_reader> partition::make_cloud_reader(
@@ -339,15 +339,15 @@ ss::future<storage::translating_reader> partition::make_cloud_reader(
     return _cloud_storage_partition->make_reader(config, deadline);
 }
 
-ss::future<result<kafka_result>> partition::replicate(
+ss::future<result<sql_result>> partition::replicate(
   model::record_batch_reader&& r, raft::replicate_options opts) {
-    using ret_t = result<kafka_result>;
+    using ret_t = result<sql_result>;
     auto res = co_await _raft->replicate(std::move(r), opts);
     if (!res) {
         co_return ret_t(res.error());
     }
     co_return ret_t(
-      kafka_result{kafka::offset(get_offset_translator_state()->from_log_offset(
+      sql_result{sql::offset(get_offset_translator_state()->from_log_offset(
         res.value().last_offset)())});
 }
 
@@ -370,11 +370,11 @@ ss::shared_ptr<cluster::rm_stm> partition::rm_stm() {
     return _rm_stm;
 }
 
-kafka_stages partition::replicate_in_stages(
+sql_stages partition::replicate_in_stages(
   model::batch_identity bid,
   model::record_batch_reader&& r,
   raft::replicate_options opts) {
-    using ret_t = result<kafka_result>;
+    using ret_t = result<sql_result>;
     if (bid.is_transactional) {
         if (!_is_tx_enabled) {
             vlog(
@@ -382,7 +382,7 @@ kafka_stages partition::replicate_in_stages(
               "Can't process a transactional request to {}. Transactional "
               "processing isn't enabled.",
               _raft->ntp());
-            return kafka_stages(raft::errc::timeout);
+            return sql_stages(raft::errc::timeout);
         }
 
         if (!_rm_stm) {
@@ -390,7 +390,7 @@ kafka_stages partition::replicate_in_stages(
               clusterlog.error,
               "Topic {} doesn't support transactional processing.",
               _raft->ntp());
-            return kafka_stages(raft::errc::timeout);
+            return sql_stages(raft::errc::timeout);
         }
     }
 
@@ -401,7 +401,7 @@ kafka_stages partition::replicate_in_stages(
               "Can't process an idempotent request to {}. Idempotency isn't "
               "enabled.",
               _raft->ntp());
-            return kafka_stages(raft::errc::timeout);
+            return sql_stages(raft::errc::timeout);
         }
 
         if (!_rm_stm) {
@@ -409,7 +409,7 @@ kafka_stages partition::replicate_in_stages(
               clusterlog.error,
               "Topic {} doesn't support idempotency.",
               _raft->ntp());
-            return kafka_stages(raft::errc::timeout);
+            return sql_stages(raft::errc::timeout);
         }
     }
 
@@ -424,11 +424,11 @@ kafka_stages partition::replicate_in_stages(
               return ret_t(r.error());
           }
           auto old_offset = r.value().last_offset;
-          auto new_offset = kafka::offset(
+          auto new_offset = sql::offset(
             get_offset_translator_state()->from_log_offset(old_offset)());
-          return ret_t(kafka_result{new_offset});
+          return ret_t(sql_result{new_offset});
       });
-    return kafka_stages(
+    return sql_stages(
       std::move(res.request_enqueued), std::move(replicate_finished));
 }
 
@@ -476,7 +476,7 @@ ss::future<> partition::start(std::optional<topic_configuration> topic_cfg) {
         _raft->log()->stm_manager()->add_stm(_log_eviction_stm);
     }
     const model::topic_namespace_view tp_ns(_raft->ntp());
-    const bool is_group_ntp = tp_ns == model::kafka_consumer_offsets_nt;
+    const bool is_group_ntp = tp_ns == model::sql_consumer_offsets_nt;
     const bool has_rm_stm = (_is_tx_enabled || _is_idempotence_enabled)
                             && model::controller_ntp != _raft->ntp()
                             && !is_group_ntp;
@@ -495,7 +495,7 @@ ss::future<> partition::start(std::optional<topic_configuration> topic_cfg) {
     if (
       config::shard_local_cfg().cloud_storage_enabled()
       && _cloud_storage_api.local_is_initialized()
-      && _raft->ntp().ns == model::kafka_namespace) {
+      && _raft->ntp().ns == model::sql_namespace) {
         _archival_meta_stm = builder.create_stm<cluster::archival_metadata_stm>(
           _raft.get(),
           _cloud_storage_api.local(),
@@ -723,7 +723,7 @@ partition::local_timequery(storage::timequery_config cfg) {
             // answer with the start offset rather than the
             // pre-start-offset location where the timestamp is actually
             // found. Ref
-            // https://github.com/redpanda-data/redpanda/issues/9669
+            // https://github.com/redpanda-data/funes/issues/9669
             vlog(
               clusterlog.debug,
               "Timequery (raft) {} ts={} miss on local log "
@@ -782,7 +782,7 @@ bool partition::should_construct_archiver() {
     const auto& ntp_config = _raft->log()->config();
     return config::shard_local_cfg().cloud_storage_enabled()
            && _cloud_storage_api.local_is_initialized()
-           && _raft->ntp().ns == model::kafka_namespace
+           && _raft->ntp().ns == model::sql_namespace
            && (ntp_config.is_archival_enabled() || ntp_config.is_read_replica_mode_enabled());
 }
 
@@ -929,7 +929,7 @@ partition::get_term_last_offset(model::term_id term) const {
     if (!o) {
         return std::nullopt;
     }
-    // Kafka defines leader epoch last offset as a first offset of next
+    // SQL defines leader epoch last offset as a first offset of next
     // leader epoch
     return model::next_offset(*o);
 }
@@ -940,9 +940,9 @@ partition::get_cloud_term_last_offset(model::term_id term) const {
     if (!o) {
         co_return std::nullopt;
     }
-    // Kafka defines leader epoch last offset as a first offset of next
+    // SQL defines leader epoch last offset as a first offset of next
     // leader epoch
-    co_return model::next_offset(kafka::offset_cast(*o));
+    co_return model::next_offset(sql::offset_cast(*o));
 }
 
 ss::future<> partition::remove_persistent_state() {

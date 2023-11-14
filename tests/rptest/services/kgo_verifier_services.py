@@ -32,7 +32,7 @@ class KgoVerifierService(Service):
     """
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic,
                  msg_size,
                  custom_node,
@@ -58,7 +58,7 @@ class KgoVerifierService(Service):
             assert not self.nodes
             self.nodes = custom_node
 
-        self._redpanda = redpanda
+        self._funes = funes
         self._topic = topic
         self._msg_size = msg_size
         self._pid = None
@@ -69,9 +69,9 @@ class KgoVerifierService(Service):
         self._password = password
         self._enable_tls = enable_tls
 
-        # if testing redpanda cloud, override with default test super user/pass
-        if hasattr(redpanda, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
-            security_config = redpanda.security_config()
+        # if testing funes cloud, override with default test super user/pass
+        if hasattr(funes, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
+            security_config = funes.security_config()
             self._username = security_config.get('sasl_plain_username', None)
             self._password = security_config.get('sasl_plain_password', None)
             self._enable_tls = security_config.get('enable_tls', False)
@@ -197,7 +197,7 @@ class KgoVerifierService(Service):
         if self._pid is None:
             return
 
-        self._redpanda.logger.info(f"{self.__class__.__name__}.stop")
+        self._funes.logger.info(f"{self.__class__.__name__}.stop")
         self.logger.debug("Killing pid %s" % {self._pid})
         try:
             node.account.signal(self._pid, signal.SIGKILL, allow_fail=False)
@@ -208,7 +208,7 @@ class KgoVerifierService(Service):
         self._release_port()
 
     def clean_node(self, node):
-        self._redpanda.logger.info(f"{self.__class__.__name__}.clean_node")
+        self._funes.logger.info(f"{self.__class__.__name__}.clean_node")
         node.account.kill_process("kgo-verifier", clean_shutdown=False)
         node.account.remove("valid_offsets*json", True)
         node.account.remove(f"/tmp/{self.__class__.__name__}*")
@@ -219,7 +219,7 @@ class KgoVerifierService(Service):
         periodically up to the given timeout.
         """
         url = self._remote_url(node, action)
-        self._redpanda.logger.info(f"{self.who_am_i()} remote call: {url}")
+        self._funes.logger.info(f"{self.who_am_i()} remote call: {url}")
         deadline = time.time() + timeout
         last_error = None
         while time.time() < deadline:
@@ -229,7 +229,7 @@ class KgoVerifierService(Service):
                 return
             except Exception as e:
                 last_error = e
-                self._redpanda.logger.warn(
+                self._funes.logger.warn(
                     f"{self.who_am_i()} remote call failed, {e}")
         if last_error:
             raise last_error
@@ -245,7 +245,7 @@ class KgoVerifierService(Service):
             try:
                 self._remote(node, "print_stack")
             except Exception as e:
-                self._redpanda.logger.warn(
+                self._funes.logger.warn(
                     f"{self.who_am_i()} failed to print stacks during wait failure: {e}"
                 )
 
@@ -276,7 +276,7 @@ class KgoVerifierService(Service):
         # Let the worker fall through to the end of its current iteration
         self.logger.debug(
             f"wait_node {self.who_am_i()}: waiting for worker to complete")
-        self._redpanda.wait_until(
+        self._funes.wait_until(
             lambda: self._status.active is False or self._status_thread.
             errored,
             timeout_sec=timeout_sec,
@@ -506,7 +506,7 @@ class ConsumerStatus:
 class KgoVerifierProducer(KgoVerifierService):
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic,
                  msg_size,
                  msg_count,
@@ -526,7 +526,7 @@ class KgoVerifierProducer(KgoVerifierService):
                  enable_tls=False,
                  msgs_per_producer_id=None):
         super(KgoVerifierProducer,
-              self).__init__(context, redpanda, topic, msg_size, custom_node,
+              self).__init__(context, funes, topic, msg_size, custom_node,
                              debug_logs, trace_logs, username, password,
                              enable_tls)
         self._msg_count = msg_count
@@ -551,7 +551,7 @@ class KgoVerifierProducer(KgoVerifierService):
 
         self.logger.debug(f"{self.who_am_i()} wait: awaiting message count")
         try:
-            self._redpanda.wait_until(lambda: self._status_thread.errored or
+            self._funes.wait_until(lambda: self._status_thread.errored or
                                       self._status.acked >= self._msg_count,
                                       timeout_sec=timeout_sec,
                                       backoff_sec=self._status_thread.INTERVAL)
@@ -563,7 +563,7 @@ class KgoVerifierProducer(KgoVerifierService):
 
         if self._status.bad_offsets != 0:
             # This either means that the test sent multiple producers' traffic to
-            # the same topic, or that Redpanda showed a buggy behavior with
+            # the same topic, or that Funes showed a buggy behavior with
             # idempotency: producer records should always land at the next offset
             # after the last record they wrote.
             raise RuntimeError(
@@ -572,7 +572,7 @@ class KgoVerifierProducer(KgoVerifierService):
         return super().wait_node(node, timeout_sec=timeout_sec)
 
     def wait_for_acks(self, count, timeout_sec, backoff_sec):
-        self._redpanda.wait_until(
+        self._funes.wait_until(
             lambda: self._status_thread.errored or self._status.acked >= count,
             timeout_sec=timeout_sec,
             backoff_sec=backoff_sec)
@@ -580,7 +580,7 @@ class KgoVerifierProducer(KgoVerifierService):
 
     def wait_for_offset_map(self):
         # Producer worker aims to checkpoint every 5 seconds, so we should see this promptly.
-        self._redpanda.wait_until(lambda: self._status_thread.errored or all(
+        self._funes.wait_until(lambda: self._status_thread.errored or all(
             node.account.exists(f"valid_offsets_{self._topic}.json")
             for node in self.nodes),
                                   timeout_sec=15,
@@ -594,7 +594,7 @@ class KgoVerifierProducer(KgoVerifierService):
         if clean:
             self.clean_node(node)
 
-        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._redpanda.brokers()} --topic {self._topic} --msg_size {self._msg_size} --produce_msgs {self._msg_count} --rand_read_msgs 0 --seq_read=0 --client-name {self.who_am_i()}"
+        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._funes.brokers()} --topic {self._topic} --msg_size {self._msg_size} --produce_msgs {self._msg_count} --rand_read_msgs 0 --seq_read=0 --client-name {self.who_am_i()}"
 
         if self._username is not None:
             cmd = cmd + f' --username {self._username}'
@@ -640,7 +640,7 @@ class KgoVerifierSeqConsumer(KgoVerifierService):
     def __init__(
             self,
             context,
-            redpanda,
+            funes,
             topic,
             msg_size=None,  # TODO: redundant, remove
             max_msgs=None,
@@ -654,7 +654,7 @@ class KgoVerifierSeqConsumer(KgoVerifierService):
             password: Optional[str] = None,
             enable_tls: Optional[bool] = False):
         super(KgoVerifierSeqConsumer,
-              self).__init__(context, redpanda, topic, msg_size, nodes,
+              self).__init__(context, funes, topic, msg_size, nodes,
                              debug_logs, trace_logs, username, password,
                              enable_tls)
         self._max_msgs = max_msgs
@@ -672,7 +672,7 @@ class KgoVerifierSeqConsumer(KgoVerifierService):
             self.clean_node(node)
 
         loop = "--loop" if self._loop else ""
-        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._redpanda.brokers()} --topic {self._topic} --produce_msgs 0 --rand_read_msgs 0 --seq_read=1 {loop} --client-name {self.who_am_i()}"
+        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._funes.brokers()} --topic {self._topic} --produce_msgs 0 --rand_read_msgs 0 --seq_read=1 {loop} --client-name {self.who_am_i()}"
         if self._username is not None:
             cmd = cmd + f' --username {self._username}'
         if self._password is not None:
@@ -722,7 +722,7 @@ class KgoVerifierSeqConsumer(KgoVerifierService):
 class KgoVerifierRandomConsumer(KgoVerifierService):
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic,
                  msg_size,
                  rand_read_msgs,
@@ -733,7 +733,7 @@ class KgoVerifierRandomConsumer(KgoVerifierService):
                  username=None,
                  password=None,
                  enable_tls=False):
-        super().__init__(context, redpanda, topic, msg_size, nodes, debug_logs,
+        super().__init__(context, funes, topic, msg_size, nodes, debug_logs,
                          trace_logs, username, password, enable_tls)
         self._rand_read_msgs = rand_read_msgs
         self._parallel = parallel
@@ -747,7 +747,7 @@ class KgoVerifierRandomConsumer(KgoVerifierService):
         if clean:
             self.clean_node(node)
 
-        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._redpanda.brokers()} --topic {self._topic} --produce_msgs 0 --rand_read_msgs {self._rand_read_msgs} --parallel {self._parallel} --seq_read=0 --loop --client-name {self.who_am_i()}"
+        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._funes.brokers()} --topic {self._topic} --produce_msgs 0 --rand_read_msgs {self._rand_read_msgs} --parallel {self._parallel} --seq_read=0 --loop --client-name {self.who_am_i()}"
         if self._username is not None:
             cmd = cmd + f' --username {self._username}'
         if self._password is not None:
@@ -764,7 +764,7 @@ class KgoVerifierRandomConsumer(KgoVerifierService):
 class KgoVerifierConsumerGroupConsumer(KgoVerifierService):
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic,
                  msg_size,
                  readers,
@@ -777,7 +777,7 @@ class KgoVerifierConsumerGroupConsumer(KgoVerifierService):
                  username=None,
                  password=None,
                  enable_tls=False):
-        super().__init__(context, redpanda, topic, msg_size, nodes, debug_logs,
+        super().__init__(context, funes, topic, msg_size, nodes, debug_logs,
                          trace_logs, username, password, enable_tls)
 
         self._readers = readers
@@ -794,7 +794,7 @@ class KgoVerifierConsumerGroupConsumer(KgoVerifierService):
         if clean:
             self.clean_node(node)
 
-        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._redpanda.brokers()} --topic {self._topic} --produce_msgs 0 --rand_read_msgs 0 --seq_read=0 --consumer_group_readers={self._readers} --client-name {self.who_am_i()}"
+        cmd = f"{TESTS_DIR}/kgo-verifier --brokers {self._funes.brokers()} --topic {self._topic} --produce_msgs 0 --rand_read_msgs 0 --seq_read=0 --consumer_group_readers={self._readers} --client-name {self.who_am_i()}"
         if self._username is not None:
             cmd = cmd + f' --username {self._username}'
         if self._password is not None:

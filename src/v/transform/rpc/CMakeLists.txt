@@ -26,7 +26,7 @@ v_cc_library(
     v::cluster
     v::model
     v::rpc
-    v::kafka
+    v::sql
     Seastar::seastar
 )
 

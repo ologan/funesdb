@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iostream.h"
@@ -90,7 +90,7 @@ cache::cache(
 }
 
 void cache::update_max_bytes() {
-    // amount of data disk reserved for non-redpanda use
+    // amount of data disk reserved for non-funes use
     const uint64_t reservation_size = _disk_size
                                       * (_disk_reservation() / 100.0);
 
@@ -203,7 +203,7 @@ ss::future<> cache::clean_up_at_start() {
     for (const auto& file_item : candidates_for_deletion) {
         auto filepath_to_remove = file_item.path;
 
-        // delete only tmp files that are left from previous RedPanda run
+        // delete only tmp files that are left from previous Funes run
         if (std::string_view(filepath_to_remove).ends_with(tmp_extension)) {
             try {
                 co_await delete_file_and_empty_parents(filepath_to_remove);

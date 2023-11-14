@@ -116,7 +116,7 @@ ss::future<> controller::wire_up() {
             config::shard_local_cfg().topic_fds_per_partition.bind(),
             config::shard_local_cfg().topic_partitions_per_shard.bind(),
             config::shard_local_cfg().topic_partitions_reserve_shard0.bind(),
-            config::shard_local_cfg().kafka_nodelete_topics.bind(),
+            config::shard_local_cfg().sql_nodelete_topics.bind(),
             config::shard_local_cfg().enable_rack_awareness.bind());
       })
       .then([this] { return _credentials.start(); })
@@ -421,7 +421,7 @@ controller::start(cluster_discovery& discovery, ss::abort_source& shard0_as) {
                             // log replay is done without hitting the disk
                             // log hwm (truncation happened), or that we were
                             // slow and controller replay will continue in
-                            // the background while the rest of redpanda
+                            // the background while the rest of funes
                             // starts up.
                         });
                   }
@@ -935,8 +935,8 @@ ss::future<> controller::validate_configuration_invariants() {
     if (invariants.core_count > current.core_count) {
         vlog(
           clusterlog.error,
-          "Detected change in number of cores dedicated to run redpanda."
-          "Decreasing redpanda core count is not allowed. Expected core "
+          "Detected change in number of cores dedicated to run funes."
+          "Decreasing funes core count is not allowed. Expected core "
           "count "
           "{}, currently have {} cores.",
           invariants.core_count,

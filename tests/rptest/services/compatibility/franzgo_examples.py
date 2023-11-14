@@ -19,10 +19,10 @@ class FranzGoBench(ExampleBase):
     The common items between helper classes
     for the franz-go bench example.
     """
-    def __init__(self, redpanda, topic, max_records, enable_sasl):
-        super(FranzGoBench, self).__init__(redpanda)
+    def __init__(self, funes, topic, max_records, enable_sasl):
+        super(FranzGoBench, self).__init__(funes)
 
-        # The kafka topic
+        # The sql topic
         self._topic = topic
 
         # Number of records produced
@@ -50,17 +50,17 @@ class FranzGoBenchProduce(FranzGoBench):
     The helper class for franz-go's bench example
     using the producer endpoint
     """
-    def __init__(self, redpanda, topic, max_records, enable_sasl):
-        super(FranzGoBenchProduce, self).__init__(redpanda, topic, max_records,
+    def __init__(self, funes, topic, max_records, enable_sasl):
+        super(FranzGoBenchProduce, self).__init__(funes, topic, max_records,
                                                   enable_sasl)
 
     # Return the command to call in the shell
     def cmd(self):
         EXAMPLE_DIR = os.path.join(TESTS_DIR, "examples/bench")
-        cmd = f"bench -brokers {self._redpanda.brokers()} -topic {self._topic} -record-bytes 1000"
+        cmd = f"bench -brokers {self._funes.brokers()} -topic {self._topic} -record-bytes 1000"
 
         if self._enable_sasl:
-            creds = self._redpanda.SUPERUSER_CREDENTIALS
+            creds = self._funes.SUPERUSER_CREDENTIALS
             cmd = cmd + f" -sasl-user {creds[0]} -sasl-pass {creds[1]} -sasl-method {creds[2]}"
 
         return os.path.join(EXAMPLE_DIR, cmd)
@@ -71,8 +71,8 @@ class FranzGoBenchConsume(FranzGoBench):
     The helper class for franz-go's bench example
     using the consumer endpoint
     """
-    def __init__(self, redpanda, topic, max_records, enable_sasl, group=None):
-        super(FranzGoBenchConsume, self).__init__(redpanda, topic, max_records,
+    def __init__(self, funes, topic, max_records, enable_sasl, group=None):
+        super(FranzGoBenchConsume, self).__init__(funes, topic, max_records,
                                                   enable_sasl)
 
         self._group = group
@@ -80,13 +80,13 @@ class FranzGoBenchConsume(FranzGoBench):
     # Return the command to call in the shell
     def cmd(self):
         EXAMPLE_DIR = os.path.join(TESTS_DIR, "examples/bench")
-        cmd = f"bench -brokers {self._redpanda.brokers()} -topic {self._topic} -record-bytes 1000 -consume"
+        cmd = f"bench -brokers {self._funes.brokers()} -topic {self._topic} -record-bytes 1000 -consume"
 
         if self._group:
             cmd = cmd + f" -group {self._group}"
 
         if self._enable_sasl:
-            creds = self._redpanda.SUPERUSER_CREDENTIALS
+            creds = self._funes.SUPERUSER_CREDENTIALS
             cmd = cmd + f" -sasl-user {creds[0]} -sasl-pass {creds[1]} -sasl-method {creds[2]}"
 
         return os.path.join(EXAMPLE_DIR, cmd)

@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/partition_manifest.h"
@@ -111,7 +111,7 @@ static bool parse_partition_and_revision(
 
 std::optional<partition_manifest_path_components>
 get_partition_manifest_path_components(const std::filesystem::path& path) {
-    // example: b0000000/meta/kafka/redpanda-test/4_2/manifest.json
+    // example: b0000000/meta/sql/funes-test/4_2/manifest.json
     enum {
         ix_prefix,
         ix_meta,
@@ -299,21 +299,21 @@ model::offset partition_manifest::get_last_offset() const {
     return _last_offset;
 }
 
-std::optional<kafka::offset> partition_manifest::get_last_kafka_offset() const {
-    const auto next_kafka_offset = get_next_kafka_offset();
-    if (!next_kafka_offset || *next_kafka_offset == kafka::offset{0}) {
+std::optional<sql::offset> partition_manifest::get_last_sql_offset() const {
+    const auto next_sql_offset = get_next_sql_offset();
+    if (!next_sql_offset || *next_sql_offset == sql::offset{0}) {
         return std::nullopt;
     }
 
-    return *next_kafka_offset - kafka::offset{1};
+    return *next_sql_offset - sql::offset{1};
 }
 
-std::optional<kafka::offset> partition_manifest::get_next_kafka_offset() const {
+std::optional<sql::offset> partition_manifest::get_next_sql_offset() const {
     auto last_seg = last_segment();
     if (!last_seg.has_value()) {
         return std::nullopt;
     }
-    return last_seg->next_kafka_offset();
+    return last_seg->next_sql_offset();
 }
 
 model::offset partition_manifest::get_insync_offset() const {
@@ -331,8 +331,8 @@ std::optional<model::offset> partition_manifest::get_start_offset() const {
     return _start_offset;
 }
 
-kafka::offset partition_manifest::get_start_kafka_offset_override() const {
-    return _start_kafka_offset_override;
+sql::offset partition_manifest::get_start_sql_offset_override() const {
+    return _start_sql_offset_override;
 }
 
 const partition_manifest::spillover_manifest_map&
@@ -340,8 +340,8 @@ partition_manifest::get_spillover_map() const {
     return _spillover_manifests;
 }
 
-std::optional<kafka::offset>
-partition_manifest::full_log_start_kafka_offset() const {
+std::optional<sql::offset>
+partition_manifest::full_log_start_sql_offset() const {
     if (_archive_start_offset != model::offset{}) {
         // The archive start offset is guaranteed to be smaller than
         // the manifest start offset.
@@ -353,32 +353,32 @@ partition_manifest::full_log_start_kafka_offset() const {
         return _archive_start_offset - _archive_start_offset_delta;
     }
 
-    return get_start_kafka_offset();
+    return get_start_sql_offset();
 }
 
-std::optional<kafka::offset>
-partition_manifest::get_start_kafka_offset() const {
+std::optional<sql::offset>
+partition_manifest::get_start_sql_offset() const {
     if (_start_offset == model::offset{}) {
         return std::nullopt;
     }
 
-    if (unlikely(!_cached_start_kafka_offset_local)) {
-        _cached_start_kafka_offset_local = compute_start_kafka_offset_local();
+    if (unlikely(!_cached_start_sql_offset_local)) {
+        _cached_start_sql_offset_local = compute_start_sql_offset_local();
     }
 
-    return _cached_start_kafka_offset_local;
+    return _cached_start_sql_offset_local;
 }
 
 void partition_manifest::set_start_offset(model::offset start_offset) {
     _start_offset = start_offset;
-    // `_cached_start_kafka_offset_local` needs to be invalidated every
+    // `_cached_start_sql_offset_local` needs to be invalidated every
     // time the start offset changes.
-    _cached_start_kafka_offset_local = std::nullopt;
+    _cached_start_sql_offset_local = std::nullopt;
 }
 
-std::optional<kafka::offset>
-partition_manifest::compute_start_kafka_offset_local() const {
-    std::optional<kafka::offset> local_start_offset;
+std::optional<sql::offset>
+partition_manifest::compute_start_sql_offset_local() const {
+    std::optional<sql::offset> local_start_offset;
     auto iter = _segments.find(_start_offset);
     if (iter != _segments.end()) {
         auto delta = iter->delta_offset;
@@ -397,19 +397,19 @@ partition_manifest::compute_start_kafka_offset_local() const {
 }
 
 partition_manifest::const_iterator
-partition_manifest::segment_containing(kafka::offset o) const {
-    vlog(cst_log.debug, "Metadata lookup using kafka offset {}", o);
+partition_manifest::segment_containing(sql::offset o) const {
+    vlog(cst_log.debug, "Metadata lookup using sql offset {}", o);
     if (_segments.empty()) {
         return end();
     }
 
-    // Kafka offset is always <= log offset.
-    // To find a segment by its kafka offset we can simply query
+    // SQL offset is always <= log offset.
+    // To find a segment by its sql offset we can simply query
     // manifest by log offset and then traverse forward until we
     // find a matching segment.
-    auto it = _segments.lower_bound(kafka::offset_cast(o));
+    auto it = _segments.lower_bound(sql::offset_cast(o));
     if (it == _segments.begin()) {
-        if (it->base_kafka_offset() > o) {
+        if (it->base_sql_offset() > o) {
             // The beginning of the manifest already has a base offset that
             // doesn't satisfy the query.
             return end();
@@ -420,27 +420,27 @@ partition_manifest::segment_containing(kafka::offset o) const {
         }
     }
 
-    // We need to find first element which has greater kafka offset than
+    // We need to find first element which has greater sql offset than
     // the target and step back. It is possible to have a segment that
     // doesn't have data batches. This scan has to skip segments like that.
     auto end_it = end();
     for (; it != end_it; ++it) {
-        if (it->base_kafka_offset() > o) {
-            // On the first segment we see with a base kafka offset higher than
+        if (it->base_sql_offset() > o) {
+            // On the first segment we see with a base sql offset higher than
             // 'o', return its previous segment.
             return _segments.prev(it);
         }
     }
 
-    // All segments had base kafka offsets lower than 'o'.
+    // All segments had base sql offsets lower than 'o'.
     auto back = _segments.prev(end_it);
     if (back->delta_offset_end != model::offset_delta{}) {
         // If 'prev' points to the last segment, it's not guaranteed that
-        // the segment contains the required kafka offset. We need an extra
+        // the segment contains the required sql offset. We need an extra
         // check using delta_offset_end. If the field is not set then we
         // will return the last segment. This is OK since delta_offset_end
         // will always be set for new segments.
-        if (back->next_kafka_offset() <= o) {
+        if (back->next_sql_offset() <= o) {
             return end_it;
         }
     }
@@ -615,9 +615,9 @@ model::offset_delta partition_manifest::get_archive_start_offset_delta() const {
     return _archive_start_offset_delta;
 }
 
-kafka::offset partition_manifest::get_archive_start_kafka_offset() const {
+sql::offset partition_manifest::get_archive_start_sql_offset() const {
     if (_archive_start_offset == model::offset{}) {
-        return kafka::offset{};
+        return sql::offset{};
     }
     return _archive_start_offset - _archive_start_offset_delta;
 }
@@ -632,10 +632,10 @@ void partition_manifest::set_archive_start_offset(
         _archive_start_offset = start_rp_offset;
         _archive_start_offset_delta = start_delta;
         auto new_so = _archive_start_offset - _archive_start_offset_delta;
-        if (new_so > _start_kafka_offset_override) {
+        if (new_so > _start_sql_offset_override) {
             // The new archive start has moved past the user-requested start
             // offset, so there's no point in tracking it further.
-            _start_kafka_offset_override = kafka::offset{};
+            _start_sql_offset_override = sql::offset{};
         }
     } else {
         vlog(
@@ -742,17 +742,17 @@ void partition_manifest::set_archive_clean_offset(
       _spillover_manifests.size());
 }
 
-bool partition_manifest::advance_start_kafka_offset(
-  kafka::offset new_start_offset) {
-    if (_start_kafka_offset_override >= new_start_offset) {
+bool partition_manifest::advance_start_sql_offset(
+  sql::offset new_start_offset) {
+    if (_start_sql_offset_override >= new_start_offset) {
         return false;
     }
-    _start_kafka_offset_override = new_start_offset;
+    _start_sql_offset_override = new_start_offset;
     vlog(
       cst_log.info,
-      "{} start kafka offset override set to {}",
+      "{} start sql offset override set to {}",
       _ntp,
-      _start_kafka_offset_override);
+      _start_sql_offset_override);
     return true;
 }
 
@@ -813,20 +813,20 @@ bool partition_manifest::advance_start_offset(model::offset new_start_offset) {
         // the case when two `truncate` commands are applied sequentially,
         // without a `cleanup_metadata` command in between to trim the list of
         // segments.
-        kafka::offset highest_removed_offset{};
+        sql::offset highest_removed_offset{};
         for (auto it = std::move(previous_head_segment); it != new_head_segment;
              ++it) {
             highest_removed_offset = std::max(
-              highest_removed_offset, it->last_kafka_offset());
+              highest_removed_offset, it->last_sql_offset());
             subtract_from_cloud_log_size(it->size_bytes);
         }
 
         // The new start offset has moved past the user-requested start offset,
         // so there's no point in tracking it further.
         if (
-          highest_removed_offset != kafka::offset{}
-          && highest_removed_offset >= _start_kafka_offset_override) {
-            _start_kafka_offset_override = kafka::offset{};
+          highest_removed_offset != sql::offset{}
+          && highest_removed_offset >= _start_sql_offset_override) {
+            _start_sql_offset_override = sql::offset{};
         }
         return true;
     }
@@ -1167,7 +1167,7 @@ partition_manifest partition_manifest::clone() const {
       _insync_offset,
       segments,
       replaced,
-      _start_kafka_offset_override,
+      _start_sql_offset_override,
       _archive_start_offset,
       _archive_start_offset_delta,
       _archive_clean_offset,
@@ -1543,8 +1543,8 @@ struct partition_manifest_handler
                 _archive_start_offset_delta = model::offset_delta(u);
             } else if (_manifest_key == "archive_clean_offset") {
                 _archive_clean_offset = model::offset(u);
-            } else if (_manifest_key == "start_kafka_offset") {
-                _start_kafka_offset = kafka::offset(u);
+            } else if (_manifest_key == "start_sql_offset") {
+                _start_sql_offset = sql::offset(u);
             } else if (_manifest_key == "archive_size_bytes") {
                 _archive_size_bytes = u;
             } else if (_manifest_key == "last_partition_scrub") {
@@ -1878,7 +1878,7 @@ struct partition_manifest_handler
     std::optional<model::offset> _archive_start_offset;
     std::optional<model::offset_delta> _archive_start_offset_delta;
     std::optional<model::offset> _archive_clean_offset;
-    std::optional<kafka::offset> _start_kafka_offset;
+    std::optional<sql::offset> _start_sql_offset;
     std::optional<size_t> _archive_size_bytes;
     std::optional<model::timestamp> _last_partition_scrub;
     std::optional<model::offset> _last_scrubbed_offset;
@@ -2100,8 +2100,8 @@ void partition_manifest::do_update(partition_manifest_handler&& handler) {
         _cloud_log_size_bytes = compute_cloud_log_size();
     }
 
-    _start_kafka_offset_override = handler._start_kafka_offset.value_or(
-      kafka::offset{});
+    _start_sql_offset_override = handler._start_sql_offset.value_or(
+      sql::offset{});
 
     _last_partition_scrub = handler._last_partition_scrub.value_or(
       model::timestamp::missing());
@@ -2235,9 +2235,9 @@ void partition_manifest::serialize_begin(
         w.Key("archive_clean_offset");
         w.Int64(_archive_clean_offset());
     }
-    if (_start_kafka_offset_override != kafka::offset{}) {
-        w.Key("start_kafka_offset");
-        w.Int64(_start_kafka_offset_override());
+    if (_start_sql_offset_override != sql::offset{}) {
+        w.Key("start_sql_offset");
+        w.Int64(_start_sql_offset_override());
     }
     if (_archive_size_bytes != 0) {
         w.Key("archive_size_bytes");
@@ -2622,7 +2622,7 @@ struct partition_manifest_serde
     model::offset _archive_start_offset;
     model::offset_delta _archive_start_offset_delta;
     model::offset _archive_clean_offset;
-    kafka::offset _start_kafka_offset;
+    sql::offset _start_sql_offset;
     size_t archive_size_bytes;
     iobuf _spillover_manifests_serialized;
     model::timestamp _last_partition_scrub;
@@ -2700,7 +2700,7 @@ void partition_manifest::from_iobuf(iobuf in) {
 
     // `_start_offset` can be modified in the above so invalidate
     // the dependent cached value.
-    _cached_start_kafka_offset_local = std::nullopt;
+    _cached_start_sql_offset_local = std::nullopt;
 }
 
 void partition_manifest::process_anomalies(
@@ -2738,10 +2738,10 @@ void partition_manifest::process_anomalies(
                       == _spillover_manifests.end();
       });
 
-    auto first_kafka_offset = full_log_start_kafka_offset();
+    auto first_sql_offset = full_log_start_sql_offset();
     auto& missing_segs = _detected_anomalies.missing_segments;
-    erase_if(missing_segs, [this, &first_kafka_offset](const auto& meta) {
-        if (meta.next_kafka_offset() <= first_kafka_offset) {
+    erase_if(missing_segs, [this, &first_sql_offset](const auto& meta) {
+        if (meta.next_sql_offset() <= first_sql_offset) {
             return true;
         }
 
@@ -2762,8 +2762,8 @@ void partition_manifest::process_anomalies(
       = _detected_anomalies.segment_metadata_anomalies;
     erase_if(
       segment_meta_anomalies,
-      [this, &first_kafka_offset](const auto& anomaly_meta) {
-          if (anomaly_meta.at.next_kafka_offset() <= first_kafka_offset) {
+      [this, &first_sql_offset](const auto& anomaly_meta) {
+          if (anomaly_meta.at.next_sql_offset() <= first_sql_offset) {
               return true;
           }
 

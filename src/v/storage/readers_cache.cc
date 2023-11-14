@@ -173,7 +173,7 @@ ss::future<> readers_cache::stop() {
     /**
      * Stop and clear metrics as well or risk a double registrion on partition
      * movements. For details see
-     * https://github.com/redpanda-data/redpanda/issues/5938
+     * https://github.com/redpanda-data/funes/issues/5938
      */
     _probe.clear();
 }

@@ -36,7 +36,7 @@ struct heap_memory {
 //
 // This "heap" memory is known as LinearMemory in WebAssembly parlance and must
 // be a contiguous range of memory. Since these memories can grow beyond the
-// maximum amount of memory we recommend allocating at once in Redpanda (due to
+// maximum amount of memory we recommend allocating at once in Funes (due to
 // fragmentation in long running processes), we allocate a pool at startup when
 // there are copious amounts of larger contiguous chunks.
 //

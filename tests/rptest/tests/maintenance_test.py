@@ -12,36 +12,36 @@ from time import sleep
 from rptest.clients.default import DefaultClient
 
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.clients.rpk import RpkTool, RpkException
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 import requests
 
 
-class MaintenanceTest(RedpandaTest):
+class MaintenanceTest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Vary partition count relative to num_cpus. This is to ensure that
         # leadership is moved back to a node that exits maintenance.
-        num_cpus = self.redpanda.get_node_cpu_count()
+        num_cpus = self.funes.get_node_cpu_count()
         self.topics = (TopicSpec(partition_count=num_cpus * 3,
                                  replication_factor=3),
                        TopicSpec(partition_count=num_cpus * 3,
                                  replication_factor=3))
-        self.admin = Admin(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
+        self.admin = Admin(self.funes)
+        self.rpk = RpkTool(self.funes)
         self._use_rpk = True
 
     def _has_leadership_role(self, node):
         """
         Returns true if node is leader for some partition, and false otherwise.
         """
-        id = self.redpanda.idx(node)
+        id = self.funes.idx(node)
         partitions = self.admin.get_partitions(node=node)
         has_leadership = False
         for p in partitions:
@@ -69,7 +69,7 @@ class MaintenanceTest(RedpandaTest):
         the same status for maintenance mode. further, check if the
         mode is returning that draining has been enabled/disabled
         """
-        node_id = self.redpanda.idx(node)
+        node_id = self.funes.idx(node)
         broker_target = self.admin.get_broker(node_id)
         broker_filtered = None
         for broker in self.admin.get_brokers():
@@ -95,7 +95,7 @@ class MaintenanceTest(RedpandaTest):
         both rpk status tooling as well as raw admin interface.
         """
         # get status for this node via rpk
-        node_id = self.redpanda.node_id(node)
+        node_id = self.funes.node_id(node)
         statuses = self.rpk.cluster_maintenance_status()
         self.logger.debug(f"finding node_id {node_id} in rpk "
                           "maintenance status: {statuses}")
@@ -182,7 +182,7 @@ class MaintenanceTest(RedpandaTest):
                    backoff_sec=10)
 
     def _verify_cluster(self, target, target_expect):
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             expect = False if node != target else target_expect
             wait_until(
                 lambda: self._verify_maintenance_status(node, expect),
@@ -214,7 +214,7 @@ class MaintenanceTest(RedpandaTest):
     @matrix(use_rpk=[True, False])
     def test_maintenance(self, use_rpk):
         self._use_rpk = use_rpk
-        target = random.choice(self.redpanda.nodes)
+        target = random.choice(self.funes.nodes)
         self._enable_maintenance(target)
         self._maintenance_disable(target)
 
@@ -222,25 +222,25 @@ class MaintenanceTest(RedpandaTest):
     @matrix(use_rpk=[True, False])
     def test_maintenance_sticky(self, use_rpk):
         self._use_rpk = use_rpk
-        nodes = random.sample(self.redpanda.nodes, len(self.redpanda.nodes))
+        nodes = random.sample(self.funes.nodes, len(self.funes.nodes))
         for node in nodes:
             self._enable_maintenance(node)
             self._verify_cluster(node, True)
 
-            self.redpanda.restart_nodes(node)
+            self.funes.restart_nodes(node)
             self._verify_cluster(node, True)
 
             self._maintenance_disable(node)
             self._verify_cluster(node, False)
 
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         self._verify_cluster(None, False)
 
     @cluster(num_nodes=3)
     @matrix(use_rpk=[True, False])
     def test_exclusive_maintenance(self, use_rpk):
         self._use_rpk = use_rpk
-        target, other = random.sample(self.redpanda.nodes, k=2)
+        target, other = random.sample(self.funes.nodes, k=2)
         assert target is not other
         self._enable_maintenance(target)
         try:
@@ -265,13 +265,13 @@ class MaintenanceTest(RedpandaTest):
         self._use_rpk = use_rpk
         single_replica_topic = TopicSpec(partition_count=18,
                                          replication_factor=1)
-        DefaultClient(self.redpanda).create_topic(single_replica_topic)
+        DefaultClient(self.funes).create_topic(single_replica_topic)
 
-        target = random.choice(self.redpanda.nodes)
+        target = random.choice(self.funes.nodes)
 
         self._enable_maintenance(target)
-        self.redpanda.restart_nodes(target)
-        rpk = RpkTool(self.redpanda)
+        self.funes.restart_nodes(target)
+        rpk = RpkTool(self.funes)
 
         def all_partitions_have_leaders():
             partitions = list(
@@ -292,15 +292,15 @@ class MaintenanceTest(RedpandaTest):
     def test_maintenance_mode_of_stopped_node(self, use_rpk):
         self._use_rpk = use_rpk
 
-        target = random.choice(self.redpanda.nodes)
-        target_id = self.redpanda.node_id(target)
+        target = random.choice(self.funes.nodes)
+        target_id = self.funes.node_id(target)
 
         self._enable_maintenance(target)
-        self.redpanda.stop_node(target)
+        self.funes.stop_node(target)
 
         def _node_is_not_alive():
             all_brokers = []
-            for n in self.redpanda.started_nodes():
+            for n in self.funes.started_nodes():
                 all_brokers += self.admin.get_brokers(n)
 
             return all([
@@ -318,7 +318,7 @@ class MaintenanceTest(RedpandaTest):
 
         def _check_maintenance_status_on_each_broker(status):
             all_brokers = []
-            for n in self.redpanda.started_nodes():
+            for n in self.funes.started_nodes():
                 all_brokers += self.admin.get_brokers(n)
 
             return all([

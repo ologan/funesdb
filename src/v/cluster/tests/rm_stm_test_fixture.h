@@ -43,7 +43,7 @@ struct rm_stm_test_fixture : simple_raft_fixture {
         return _stm->apply_local_snapshot(hdr, std::move(buf));
     }
 
-    auto wait_for_kafka_offset_apply(kafka::offset offset) {
+    auto wait_for_sql_offset_apply(sql::offset offset) {
         auto raft_offset = _stm->to_log_offset(offset);
         return _stm->wait(raft_offset, model::timeout_clock::now() + 10ms);
     }

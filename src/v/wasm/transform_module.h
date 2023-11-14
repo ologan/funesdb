@@ -55,7 +55,7 @@ struct batch_transform_context {
 };
 
 /**
- * The WASM module for redpanda transform specific host calls.
+ * The WASM module for funes transform specific host calls.
  *
  * This provides an ABI to WASM guests, as well as the mechanism for
  * guest<->host interactions (such as how we call into a wasm host and when).
@@ -69,7 +69,7 @@ public:
     transform_module& operator=(transform_module&&) = delete;
     ~transform_module() = default;
 
-    static constexpr std::string_view name = "redpanda_transform";
+    static constexpr std::string_view name = "funes_transform";
 
     /**
      * A helper method for correctly adhering to the ABI contract. Given a

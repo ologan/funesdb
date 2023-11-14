@@ -65,7 +65,7 @@ def read_endpoint(r):
 def read_broker(rdr):
     br = {}
     br['id'] = rdr.read_int32()
-    br['kafka_endpoints'] = rdr.read_vector(lambda r: read_endpoint(r))
+    br['sql_endpoints'] = rdr.read_vector(lambda r: read_endpoint(r))
     br['rpc_address'] = rdr.read_string()
     br['rpc_port'] = rdr.read_uint16()
     br['rack'] = rdr.read_optional(lambda r: r.read_string())

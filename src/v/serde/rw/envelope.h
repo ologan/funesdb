@@ -92,8 +92,8 @@ requires is_envelope<std::decay_t<T>>
 void tag_invoke(tag_t<write_tag>, iobuf& out, T t) {
     using Type = std::decay_t<T>;
 
-    write(out, Type::redpanda_serde_version);
-    write(out, Type::redpanda_serde_compat_version);
+    write(out, Type::funes_serde_version);
+    write(out, Type::funes_serde_compat_version);
 
     auto size_placeholder = out.reserve(sizeof(serde_size_t));
 

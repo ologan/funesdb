@@ -288,11 +288,11 @@ func (factory *tunersFactory) newBallastFileTuner(
 	return ballast.NewBallastFileTuner(factory.t.BallastFilePath, factory.t.BallastFileSize, factory.executor)
 }
 
-func MergeTunerParamsConfig(params *TunerParams, y *config.RedpandaYaml) (*TunerParams, error) {
+func MergeTunerParamsConfig(params *TunerParams, y *config.FunesYaml) (*TunerParams, error) {
 	if len(params.Nics) == 0 {
-		addrs := []string{y.Redpanda.RPCServer.Address}
-		if len(y.Redpanda.KafkaAPI) > 0 {
-			addrs = append(addrs, y.Redpanda.KafkaAPI[0].Address)
+		addrs := []string{y.Funes.RPCServer.Address}
+		if len(y.Funes.SQLAPI) > 0 {
+			addrs = append(addrs, y.Funes.SQLAPI[0].Address)
 		}
 		nics, err := net.GetInterfacesByIps(
 			addrs...,
@@ -303,15 +303,15 @@ func MergeTunerParamsConfig(params *TunerParams, y *config.RedpandaYaml) (*Tuner
 		params.Nics = nics
 	}
 	if len(params.Directories) == 0 {
-		params.Directories = []string{y.Redpanda.Directory}
+		params.Directories = []string{y.Funes.Directory}
 	}
 	return params, nil
 }
 
-func FillTunerParamsWithValuesFromConfig(params *TunerParams, y *config.RedpandaYaml) error {
-	addrs := []string{y.Redpanda.RPCServer.Address}
-	if len(y.Redpanda.KafkaAPI) > 0 {
-		addrs = append(addrs, y.Redpanda.KafkaAPI[0].Address)
+func FillTunerParamsWithValuesFromConfig(params *TunerParams, y *config.FunesYaml) error {
+	addrs := []string{y.Funes.RPCServer.Address}
+	if len(y.Funes.SQLAPI) > 0 {
+		addrs = append(addrs, y.Funes.SQLAPI[0].Address)
 	}
 	nics, err := net.GetInterfacesByIps(
 		addrs...,
@@ -320,8 +320,8 @@ func FillTunerParamsWithValuesFromConfig(params *TunerParams, y *config.Redpanda
 		return err
 	}
 	params.Nics = nics
-	zap.L().Sugar().Debugf("Redpanda uses '%v' NICs", params.Nics)
-	zap.L().Sugar().Debugf("Redpanda data directory '%s'", y.Redpanda.Directory)
-	params.Directories = []string{y.Redpanda.Directory}
+	zap.L().Sugar().Debugf("Funes uses '%v' NICs", params.Nics)
+	zap.L().Sugar().Debugf("Funes data directory '%s'", y.Funes.Directory)
+	params.Directories = []string{y.Funes.Directory}
 	return nil
 }

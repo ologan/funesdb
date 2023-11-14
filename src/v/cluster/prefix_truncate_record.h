@@ -34,7 +34,7 @@ struct prefix_truncate_record
     model::offset rp_start_offset{};
 
     // May not be empty.
-    kafka::offset kafka_start_offset{};
+    sql::offset sql_start_offset{};
 };
 
 } // namespace cluster

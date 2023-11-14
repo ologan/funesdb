@@ -47,8 +47,8 @@ func Test_encodeDecodeAvroRecordNoReferences(t *testing.T) {
     }]
 }`,
 			schemaID:  906,
-			record:    `{"name":"redpanda"}`,
-			expRecord: `{"name":"redpanda"}`,
+			record:    `{"name":"funes"}`,
+			expRecord: `{"name":"funes"}`,
 		}, {
 			name: "Valid nested record and schema",
 			schema: `
@@ -76,8 +76,8 @@ func Test_encodeDecodeAvroRecordNoReferences(t *testing.T) {
    ]
 }`,
 			schemaID:  906,
-			record:    `{"name":"redpanda","complex":{"list":[1,2,3,4]}}`,
-			expRecord: `{"name":"redpanda","complex":{"list":[1,2,3,4]}}`,
+			record:    `{"name":"funes","complex":{"list":[1,2,3,4]}}`,
+			expRecord: `{"name":"funes","complex":{"list":[1,2,3,4]}}`,
 		}, {
 			name: "Valid empty record with default null in schema",
 			schema: `
@@ -185,7 +185,7 @@ func Test_encodeDecodeAvroRecordWithReferences(t *testing.T) {
 		{
 			name:     "single reference",
 			schemaID: 123,
-			record:   `{"name":"redpanda","telephone":{"number":12341234,"identifier":"home"}}`,
+			record:   `{"name":"funes","telephone":{"number":12341234,"identifier":"home"}}`,
 			schema: &sr.Schema{
 				Schema: `{
    "type":"record",
@@ -212,7 +212,7 @@ func Test_encodeDecodeAvroRecordWithReferences(t *testing.T) {
 		}, {
 			name:     "multiple single reference",
 			schemaID: 123,
-			record:   `{"name":"redpanda","telephone":{"number":12341234,"identifier":"home"},"coordinates":{"longitude":12547930,"latitude":-81.716652}}`,
+			record:   `{"name":"funes","telephone":{"number":12341234,"identifier":"home"},"coordinates":{"longitude":12547930,"latitude":-81.716652}}`,
 			schema: &sr.Schema{
 				Schema: `{
    "type":"record",
@@ -248,7 +248,7 @@ func Test_encodeDecodeAvroRecordWithReferences(t *testing.T) {
 		}, {
 			name:     "nested references",
 			schemaID: 123,
-			record:   `{"name":"redpanda","telephone":{"number":12341234,"identifier":"home","owner":{"lastname":"panda"}}}`,
+			record:   `{"name":"funes","telephone":{"number":12341234,"identifier":"home","owner":{"lastname":"panda"}}}`,
 			schema: &sr.Schema{
 				Schema: `{
    "type":"record",
@@ -280,7 +280,7 @@ func Test_encodeDecodeAvroRecordWithReferences(t *testing.T) {
 			defer ts.Close()
 
 			fs := afero.NewMemMapFs()
-			params := &config.Params{ConfigFlag: "/some/path/redpanda.yaml"}
+			params := &config.Params{ConfigFlag: "/some/path/funes.yaml"}
 			p, err := params.LoadVirtualProfile(fs)
 			require.NoError(t, err)
 

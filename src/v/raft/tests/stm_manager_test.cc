@@ -506,7 +506,7 @@ TEST_F_CORO(
       });
 
     co_await parallel_for_each_node([snapshot_offset](raft_node_instance& n) {
-        // create an empty snapshot, the same way Redpanda does in previous
+        // create an empty snapshot, the same way Funes does in previous
         // versions
 
         return n.raft()->write_snapshot(

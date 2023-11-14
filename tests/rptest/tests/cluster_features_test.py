@@ -12,10 +12,10 @@ import json
 
 from rptest.utils.rpenv import sample_license
 from rptest.services.admin import Admin
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions
+from rptest.services.funes_installer import FunesInstaller, wait_for_num_versions
 from rptest.util import expect_exception
 
 from ducktape.errors import TimeoutError as DucktapeTimeoutError
@@ -29,11 +29,11 @@ FEATURE_CHARLIE_NAME = "__test_charlie"
 TEST_FEATURES_VERSION = 2001
 
 
-class FeaturesTestBase(RedpandaTest):
+class FeaturesTestBase(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.admin = Admin(self.redpanda)
-        self.installer = self.redpanda._installer
+        self.admin = Admin(self.funes)
+        self.installer = self.funes._installer
         self.head_latest_logical_version = None
         self.head_earliest = None
 
@@ -56,7 +56,7 @@ class FeaturesTestBase(RedpandaTest):
                 <= features['node_latest_version'])
 
         self.previous_version = self.installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
+            FunesInstaller.HEAD)
 
     """
     Test cases defined in this parent class are executed as part
@@ -78,7 +78,7 @@ class FeaturesTestBase(RedpandaTest):
         self.logger.info(f"Features response: {features_response}")
 
         # This assertion will break each time we increment the value
-        # of `latest_version` in the redpanda source.  Update it when
+        # of `latest_version` in the funes source.  Update it when
         # that happens.
         initial_version = features_response["cluster_version"]
         assert initial_version == self.head_latest_logical_version, \
@@ -95,7 +95,7 @@ class FeaturesTestBase(RedpandaTest):
         propagate via controller log
         """
         def check():
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 node_version = self.admin.get_features(
                     node=node)['cluster_version']
                 if node_version != target_version:
@@ -113,7 +113,7 @@ class FeaturesTestBase(RedpandaTest):
         propagate via controller log
         """
         def check():
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 feature_map = self._get_features_map(node=node)
                 if not fn(feature_map):
                     return False
@@ -151,23 +151,23 @@ class FeaturesMultiNodeTest(FeaturesTestBase):
         # should be hidden
         assert FEATURE_ALPHA_NAME not in self._get_features_map().keys()
 
-        self.redpanda.set_environment({'__REDPANDA_TEST_FEATURES': "ON"})
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.set_environment({'__FUNES_TEST_FEATURES': "ON"})
+        self.funes.restart_nodes(self.funes.nodes)
         assert self._get_features_map(
         )[FEATURE_ALPHA_NAME]['state'] == 'unavailable'
 
         # Version is too low, feature should be unavailable
         assert initial_version == self.admin.get_features()['cluster_version']
 
-        self.redpanda.set_environment({
-            '__REDPANDA_TEST_FEATURES':
+        self.funes.set_environment({
+            '__FUNES_TEST_FEATURES':
             "ON",
-            '__REDPANDA_EARLIEST_LOGICAL_VERSION':
+            '__FUNES_EARLIEST_LOGICAL_VERSION':
             f'{self.head_latest_logical_version}',
-            '__REDPANDA_LATEST_LOGICAL_VERSION':
+            '__FUNES_LATEST_LOGICAL_VERSION':
             f'{feature_alpha_version}'
         })
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         # Wait for version to increment: this is a little slow because we wait
         # for health monitor structures to time out in order to propagate the
@@ -212,7 +212,7 @@ class FeaturesMultiNodeTest(FeaturesTestBase):
         license = sample_license()
         if license is None:
             self.logger.info(
-                "Skipping test, REDPANDA_SAMPLE_LICENSE env var not found")
+                "Skipping test, FUNES_SAMPLE_LICENSE env var not found")
             return
         expected_license_contents = {
             'expires':
@@ -220,7 +220,7 @@ class FeaturesMultiNodeTest(FeaturesTestBase):
             'format_version':
             0,
             'org':
-            'redpanda-testing',
+            'funes-testing',
             'type':
             'enterprise',
             'sha256':
@@ -248,8 +248,8 @@ class FeaturesMultiNodeUpgradeTest(FeaturesTestBase):
     def setUp(self):
         super().setUp()
         # setup an old version as start condition
-        self.installer.install(self.redpanda.nodes, self.previous_version)
-        self.redpanda.start()
+        self.installer.install(self.funes.nodes, self.previous_version)
+        self.funes.start()
 
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_upgrade(self):
@@ -261,19 +261,19 @@ class FeaturesMultiNodeUpgradeTest(FeaturesTestBase):
         assert initial_version < self.head_latest_logical_version, \
             f"downgraded logical version {initial_version}"
 
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
 
         # Restart nodes one by one.  Version shouldn't increment until all three are done.
-        self.redpanda.restart_nodes([self.redpanda.nodes[0]])
-        _ = wait_for_num_versions(self.redpanda, 2)
+        self.funes.restart_nodes([self.funes.nodes[0]])
+        _ = wait_for_num_versions(self.funes, 2)
         assert initial_version == self.admin.get_features()['cluster_version']
 
-        self.redpanda.restart_nodes([self.redpanda.nodes[1]])
+        self.funes.restart_nodes([self.funes.nodes[1]])
         # Even after waiting a bit, the logical version shouldn't change.
         time.sleep(5)
         assert initial_version == self.admin.get_features()['cluster_version']
 
-        self.redpanda.restart_nodes([self.redpanda.nodes[2]])
+        self.funes.restart_nodes([self.funes.nodes[2]])
 
         # Node logical versions are transmitted as part of health messages, so we may
         # have to wait for the next health tick (health_monitor_tick_interval=10s) before
@@ -283,7 +283,7 @@ class FeaturesMultiNodeUpgradeTest(FeaturesTestBase):
         # Check that initial version and current version are properly reflected
         # across all nodes.
         def complete():
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 features = self.admin.get_features(node=n)
                 if features['cluster_version'] != self.head_latest_logical_version \
                         or features['original_cluster_version'] != initial_version:
@@ -293,7 +293,7 @@ class FeaturesMultiNodeUpgradeTest(FeaturesTestBase):
         wait_until(complete, timeout_sec=5, backoff_sec=1)
 
         # Check that initial version is properly remembered past restarts
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         assert complete()
 
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
@@ -306,22 +306,22 @@ class FeaturesMultiNodeUpgradeTest(FeaturesTestBase):
         assert initial_version < self.head_latest_logical_version, \
             f"downgraded logical version {initial_version}"
 
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
         # Restart nodes one by one.  Version shouldn't increment until all three are done.
-        self.redpanda.restart_nodes([self.redpanda.nodes[0]])
-        _ = wait_for_num_versions(self.redpanda, 2)
+        self.funes.restart_nodes([self.funes.nodes[0]])
+        _ = wait_for_num_versions(self.funes, 2)
         # Even after waiting a bit, the logical version shouldn't change.
         time.sleep(5)
         assert initial_version == self.admin.get_features()['cluster_version']
 
-        self.redpanda.restart_nodes([self.redpanda.nodes[1]])
+        self.funes.restart_nodes([self.funes.nodes[1]])
         time.sleep(5)
         assert initial_version == self.admin.get_features()['cluster_version']
 
-        self.installer.install(self.redpanda.nodes, self.previous_version)
-        self.redpanda.restart_nodes([self.redpanda.nodes[0]])
-        self.redpanda.restart_nodes([self.redpanda.nodes[1]])
-        _ = wait_for_num_versions(self.redpanda, 1)
+        self.installer.install(self.funes.nodes, self.previous_version)
+        self.funes.restart_nodes([self.funes.nodes[0]])
+        self.funes.restart_nodes([self.funes.nodes[1]])
+        _ = wait_for_num_versions(self.funes, 1)
         assert initial_version == self.admin.get_features()['cluster_version']
 
 
@@ -348,8 +348,8 @@ class FeaturesSingleNodeUpgradeTest(FeaturesTestBase):
 
     def setUp(self):
         super().setUp()
-        self.installer.install(self.redpanda.nodes, self.previous_version)
-        self.redpanda.start()
+        self.installer.install(self.funes.nodes, self.previous_version)
+        self.funes.start()
 
     @cluster(num_nodes=1, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_upgrade(self):
@@ -362,9 +362,9 @@ class FeaturesSingleNodeUpgradeTest(FeaturesTestBase):
             f"downgraded logical version {initial_version}"
 
         # Restart nodes one by one.  Version shouldn't increment until all three are done.
-        self.installer.install([self.redpanda.nodes[0]],
-                               RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes([self.redpanda.nodes[0]])
+        self.installer.install([self.funes.nodes[0]],
+                               FunesInstaller.HEAD)
+        self.funes.restart_nodes([self.funes.nodes[0]])
         wait_until(lambda: self.head_latest_logical_version == self.admin.
                    get_features()['cluster_version'],
                    timeout_sec=10,
@@ -385,35 +385,35 @@ class FeaturesNodeJoinTest(FeaturesTestBase):
     def setUp(self):
         super().setUp()
         # We will start nodes by hand during test.
-        self.redpanda.stop()
+        self.funes.stop()
 
     @cluster(num_nodes=4, log_allow_list=OLD_NODE_JOIN_LOG_ALLOW_LIST)
     def test_old_node_join(self):
         """
         Verify that when an old-versioned node tries to join a newer-versioned cluster,
-        it is rejected, using real redpanda packages of different versions.
+        it is rejected, using real funes packages of different versions.
         """
 
-        # Pick a node to roleplay an old version of redpanda
-        old_node = self.redpanda.nodes[-1]
+        # Pick a node to roleplay an old version of funes
+        old_node = self.funes.nodes[-1]
         old_version = self.installer.highest_from_prior_feature_version(
             self.installer.HEAD)
         self.logger.info(f"Selected old version {old_version}")
         self.installer.install([old_node], old_version)
 
         # Start first three nodes
-        self.redpanda.start(self.redpanda.nodes[0:-1])
+        self.funes.start(self.funes.nodes[0:-1])
 
         # Explicit clean because it's not included in the default
         # one during start()
-        self.redpanda.clean_node(old_node, preserve_current_install=True)
+        self.funes.clean_node(old_node, preserve_current_install=True)
 
         initial_version = self.admin.get_features()['cluster_version']
         assert initial_version == self.head_latest_logical_version, \
             f"Version mismatch: {initial_version} vs {self.head_latest_logical_version}"
 
         try:
-            self.redpanda.start_node(old_node)
+            self.funes.start_node(old_node)
         except DucktapeTimeoutError:
             pass
         else:
@@ -422,12 +422,12 @@ class FeaturesNodeJoinTest(FeaturesTestBase):
             )
 
         # Restart it with a sufficiently recent version and join should succeed
-        self.installer.install([old_node], RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes([old_node])
+        self.installer.install([old_node], FunesInstaller.HEAD)
+        self.funes.restart_nodes([old_node])
 
         # Timeout long enough for join retries & health monitor tick (registered
         # requires `is_alive`)
-        wait_until(lambda: self.redpanda.registered(old_node),
+        wait_until(lambda: self.funes.registered(old_node),
                    timeout_sec=30,
                    backoff_sec=1)
 
@@ -441,15 +441,15 @@ class FeaturesNodeJoinTest(FeaturesTestBase):
         """
 
         # Pick a node to run with a synthetic old version
-        old_node = self.redpanda.nodes[-1]
+        old_node = self.funes.nodes[-1]
         self.logger.info(f"Selected node {old_node.name} to be joiner")
 
         # Start first three nodes
-        self.redpanda.start(self.redpanda.nodes[0:-1])
+        self.funes.start(self.funes.nodes[0:-1])
 
         # Explicit clean because it's not included in the default
         # one during start()
-        self.redpanda.clean_node(old_node, preserve_current_install=True)
+        self.funes.clean_node(old_node, preserve_current_install=True)
 
         initial_version = self.admin.get_features()['cluster_version']
         assert initial_version == self.head_latest_logical_version, \
@@ -461,13 +461,13 @@ class FeaturesNodeJoinTest(FeaturesTestBase):
             )
             # Set the joining node's version to something bad, it should be forbidden
             # to join the cluster.
-            self.redpanda.set_environment(
-                {"__REDPANDA_LATEST_LOGICAL_VERSION": joiner_latest_version})
-            self.redpanda.set_environment({
-                "__REDPANDA_EARLIEST_LOGICAL_VERSION":
+            self.funes.set_environment(
+                {"__FUNES_LATEST_LOGICAL_VERSION": joiner_latest_version})
+            self.funes.set_environment({
+                "__FUNES_EARLIEST_LOGICAL_VERSION":
                 joiner_earliest_version
             })
-            self.redpanda.start_node(old_node)
+            self.funes.start_node(old_node)
         except DucktapeTimeoutError:
             pass
         else:
@@ -478,15 +478,15 @@ class FeaturesNodeJoinTest(FeaturesTestBase):
         # Restart it with a sufficiently recent version and join should succeed
         self.logger.info(
             f"Starting node {old_node.name} with version {initial_version}")
-        self.redpanda.set_environment(
-            {"__REDPANDA_LATEST_LOGICAL_VERSION": initial_version})
-        self.redpanda.set_environment(
-            {"__REDPANDA_EARLIEST_LOGICAL_VERSION": initial_version})
-        self.redpanda.restart_nodes([old_node])
+        self.funes.set_environment(
+            {"__FUNES_LATEST_LOGICAL_VERSION": initial_version})
+        self.funes.set_environment(
+            {"__FUNES_EARLIEST_LOGICAL_VERSION": initial_version})
+        self.funes.restart_nodes([old_node])
 
         # Timeout long enough for join retries & health monitor tick (registered
         # requires `is_alive`)
-        wait_until(lambda: self.redpanda.registered(old_node),
+        wait_until(lambda: self.funes.registered(old_node),
                    timeout_sec=30,
                    backoff_sec=1)
 
@@ -512,31 +512,31 @@ class FeaturesUpgradeAssertionTest(FeaturesTestBase):
     def test_upgrade_assertion(self):
         """
         That if we try to upgrade to a version whose earliest_logical_version is ahead
-        of the pre-upgrade version, Redpanda refuses to start.
+        of the pre-upgrade version, Funes refuses to start.
         :return:
         """
 
-        upgrade_node = self.redpanda.nodes[-1]
-        self.redpanda.stop_node(upgrade_node)
+        upgrade_node = self.funes.nodes[-1]
+        self.funes.stop_node(upgrade_node)
 
-        self.redpanda.set_environment({
-            "__REDPANDA_LATEST_LOGICAL_VERSION":
+        self.funes.set_environment({
+            "__FUNES_LATEST_LOGICAL_VERSION":
             self.head_latest_logical_version + 2
         })
-        self.redpanda.set_environment({
-            "__REDPANDA_EARLIEST_LOGICAL_VERSION":
+        self.funes.set_environment({
+            "__FUNES_EARLIEST_LOGICAL_VERSION":
             self.head_latest_logical_version + 1
         })
 
         # Startup should fail with an incompatible version
         with expect_exception(DucktapeTimeoutError, lambda _: True):
-            self.redpanda.start_node(upgrade_node)
+            self.funes.start_node(upgrade_node)
 
         # Don't assume that the asserted node will have exited promptly: explicitly kill it.
-        self.redpanda.stop_node(upgrade_node, forced=True)
+        self.funes.stop_node(upgrade_node, forced=True)
 
         # With the config set to override checks, start should succeed
-        self.redpanda.start_node(
+        self.funes.start_node(
             upgrade_node,
             override_cfg_params={'upgrade_override_checks': True})
 
@@ -550,21 +550,21 @@ class FeaturesUpgradeActivationTest(FeaturesTestBase):
     @parametrize(upgrade=True)
     def test_new_cluster_only_activation(self, upgrade: bool):
         if upgrade:
-            self.redpanda.set_environment({
-                '__REDPANDA_TEST_FEATURES':
+            self.funes.set_environment({
+                '__FUNES_TEST_FEATURES':
                 "ON",
-                "__REDPANDA_LATEST_LOGICAL_VERSION":
+                "__FUNES_LATEST_LOGICAL_VERSION":
                 TEST_FEATURES_VERSION - 1
             })
         else:
-            self.redpanda.set_environment({
-                '__REDPANDA_TEST_FEATURES':
+            self.funes.set_environment({
+                '__FUNES_TEST_FEATURES':
                 "ON",
-                "__REDPANDA_LATEST_LOGICAL_VERSION":
+                "__FUNES_LATEST_LOGICAL_VERSION":
                 TEST_FEATURES_VERSION,
             })
 
-        self.redpanda.start()
+        self.funes.start()
 
         if upgrade:
             for f in [
@@ -574,14 +574,14 @@ class FeaturesUpgradeActivationTest(FeaturesTestBase):
                 # Pre-upgrade, none of the features should be available
                 assert self._get_features_map()[f]['state'] == 'unavailable'
 
-            self.redpanda.set_environment({
-                '__REDPANDA_TEST_FEATURES':
+            self.funes.set_environment({
+                '__FUNES_TEST_FEATURES':
                 "ON",
-                "__REDPANDA_LATEST_LOGICAL_VERSION":
+                "__FUNES_LATEST_LOGICAL_VERSION":
                 TEST_FEATURES_VERSION,
             })
-            self.redpanda.restart_nodes(self.redpanda.nodes)
-            self.redpanda.wait_until(lambda: self._get_features_map()[
+            self.funes.restart_nodes(self.funes.nodes)
+            self.funes.wait_until(lambda: self._get_features_map()[
                 FEATURE_ALPHA_NAME]['state'] == 'available',
                                      timeout_sec=30,
                                      backoff_sec=1)
@@ -603,16 +603,16 @@ class FeaturesUpgradeActivationTest(FeaturesTestBase):
     @parametrize(disable=False)
     @parametrize(disable=True)
     def test_policy_change_in_minor_release(self, disable: bool):
-        self.redpanda.set_environment({
-            '__REDPANDA_TEST_FEATURES':
+        self.funes.set_environment({
+            '__FUNES_TEST_FEATURES':
             "ON",
-            "__REDPANDA_LATEST_LOGICAL_VERSION":
+            "__FUNES_LATEST_LOGICAL_VERSION":
             TEST_FEATURES_VERSION,
-            "__REDPANDA_TEST_FEATURE_NO_AUTO_ACTIVATE_BRAVO":
+            "__FUNES_TEST_FEATURE_NO_AUTO_ACTIVATE_BRAVO":
             'true',
         })
-        self.logger.info(f"test: env={self.redpanda._environment}")
-        self.redpanda.start()
+        self.logger.info(f"test: env={self.funes._environment}")
+        self.funes.start()
 
         # The feature's policy is explicit_only, it should only go to available, not active
         assert self._get_features_map(
@@ -624,7 +624,7 @@ class FeaturesUpgradeActivationTest(FeaturesTestBase):
         )[FEATURE_BRAVO_NAME]['state'] == 'available'
 
         # Ensure that restarts don't activate the feature
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
         time.sleep(10)
         assert self._get_features_map(
         )[FEATURE_BRAVO_NAME]['state'] == 'available'
@@ -637,15 +637,15 @@ class FeaturesUpgradeActivationTest(FeaturesTestBase):
                 lambda fm: fm[FEATURE_BRAVO_NAME]['state'] == 'disabled')
 
         # Simulate upgrading to a .z release that changes the feature's policy to ::always
-        self.redpanda.unset_environment(
-            ["__REDPANDA_TEST_FEATURE_NO_AUTO_ACTIVATE_BRAVO"])
-        self.redpanda.set_environment({
-            '__REDPANDA_TEST_FEATURES':
+        self.funes.unset_environment(
+            ["__FUNES_TEST_FEATURE_NO_AUTO_ACTIVATE_BRAVO"])
+        self.funes.set_environment({
+            '__FUNES_TEST_FEATURES':
             "ON",
-            "__REDPANDA_LATEST_LOGICAL_VERSION":
+            "__FUNES_LATEST_LOGICAL_VERSION":
             TEST_FEATURES_VERSION
         })
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.funes.restart_nodes(self.funes.nodes)
 
         if disable:
             # Because feature was explicitly disabled, it should not auto-activate

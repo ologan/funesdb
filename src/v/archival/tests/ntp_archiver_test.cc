@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/adjacent_segment_merger.h"
@@ -48,7 +48,7 @@ inline ss::logger test_log("test"); // NOLINT
 
 static ss::abort_source never_abort;
 
-static const auto manifest_namespace = model::ns("kafka");      // NOLINT
+static const auto manifest_namespace = model::ns("sql");      // NOLINT
 static const auto manifest_topic = model::topic("test-topic");  // NOLINT
 static const auto manifest_partition = model::partition_id(42); // NOLINT
 static const auto manifest_ntp = model::ntp(                    // NOLINT
@@ -94,8 +94,8 @@ static remote_manifest_path generate_spill_manifest_path(
     cloud_storage::spillover_manifest_path_components comp{
       .base = meta.base_offset,
       .last = meta.committed_offset,
-      .base_kafka = meta.base_kafka_offset(),
-      .next_kafka = meta.next_kafka_offset(),
+      .base_sql = meta.base_sql_offset(),
+      .next_sql = meta.next_sql_offset(),
       .base_ts = meta.base_timestamp,
       .last_ts = meta.max_timestamp,
     };
@@ -1118,7 +1118,7 @@ FIXTURE_TEST(test_upload_segments_leadership_transfer, archiver_fixture) {
     };
     auto oldname = archival::segment_name("2-2-v1.log");
     old_manifest.add(oldname, old_meta);
-    ss::sstring segment3_url = "/dfee62b1/kafka/test-topic/42_0/2-2-v1.log";
+    ss::sstring segment3_url = "/dfee62b1/sql/test-topic/42_0/2-2-v1.log";
 
     // Simulate pre-existing state in the snapshot
     std::vector<cloud_storage::segment_meta> old_segments;
@@ -1744,19 +1744,19 @@ static void test_manifest_spillover_impl(
 
     const auto& stm_manifest = part->archival_meta_stm()->manifest();
     auto new_so = stm_manifest.get_start_offset();
-    auto new_kafka = stm_manifest.get_start_kafka_offset();
+    auto new_sql = stm_manifest.get_start_sql_offset();
     auto archive_so = stm_manifest.get_archive_start_offset();
-    auto archive_kafka = stm_manifest.get_archive_start_kafka_offset();
+    auto archive_sql = stm_manifest.get_archive_start_sql_offset();
     auto archive_clean = stm_manifest.get_archive_clean_offset();
 
     vlog(
       test_log.info,
-      "new_so: {}, new_kafka: {}, archive_so: {}, archive_kafka: {}, "
+      "new_so: {}, new_sql: {}, archive_so: {}, archive_sql: {}, "
       "archive_clean: {}",
       new_so,
-      new_kafka,
+      new_sql,
       archive_so,
-      archive_kafka,
+      archive_sql,
       archive_clean);
 
     // Validate uploaded spillover manifest
@@ -1780,7 +1780,7 @@ static void test_manifest_spillover_impl(
 
     BOOST_REQUIRE(model::next_offset(last.get_last_offset()) == new_so);
     BOOST_REQUIRE(first.get_start_offset().value() == archive_so);
-    BOOST_REQUIRE(first.get_start_kafka_offset().value() == archive_kafka);
+    BOOST_REQUIRE(first.get_start_sql_offset().value() == archive_sql);
 
     model::offset expected_so = archive_so;
     for (const auto& [key, m] : uploaded) {

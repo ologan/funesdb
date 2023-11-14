@@ -15,14 +15,14 @@ from ducktape.mark import ignore
 from ducktape.tests.test import TestLoggerMaker
 from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import LoggingConfig, RedpandaService, SecurityConfig
+from rptest.services.funes import LoggingConfig, FunesService, SecurityConfig
 from rptest.services.verifiable_producer import VerifiableProducer
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 
 from rptest.clients.types import TopicSpec
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.kcl import KCL
 from typing import Optional
 
@@ -91,8 +91,8 @@ def check_verify_reassign_partitions(lines: list[str], reassignments: dict,
     #        - One line for each topic partition
     #        - Empty string
     #        - "Clearing broker-level throttles on brokers node_id1,node_id2,..."
-    #        - An InvalidConfigurationException because the kafka script attempts to alter broker configs
-    #          on a per-node basis which Redpanda does not support
+    #        - An InvalidConfigurationException because the sql script attempts to alter broker configs
+    #          on a per-node basis which Funes does not support
 
     lines.reverse()
 
@@ -178,14 +178,14 @@ def alter_partition_reassignments_with_kcl(
 
 log_config = LoggingConfig('info',
                            logger_levels={
-                               'kafka': 'trace',
-                               'kafka/client': 'trace',
+                               'sql': 'trace',
+                               'sql/client': 'trace',
                                'cluster': 'trace',
                                'raft': 'trace'
                            })
 
 
-class PartitionReassignmentsTest(RedpandaTest):
+class PartitionReassignmentsTest(FunesTest):
     REPLICAS_COUNT = 3
     PARTITION_COUNT = 3
     topics = [
@@ -235,7 +235,7 @@ class PartitionReassignmentsTest(RedpandaTest):
     def make_producer(self, topic_name: str, throughput: int):
         prod = VerifiableProducer(self.test_context,
                                   num_nodes=1,
-                                  redpanda=self.redpanda,
+                                  funes=self.funes,
                                   topic=topic_name,
                                   throughput=throughput)
         prod.start()
@@ -261,12 +261,12 @@ class PartitionReassignmentsTest(RedpandaTest):
         self.logger.debug(f"Initial assignments: {initial_assignments}")
 
         all_node_idx = [
-            self.redpanda.node_id(node) for node in self.redpanda.nodes
+            self.funes.node_id(node) for node in self.funes.nodes
         ]
         self.logger.debug(f"All node idx: {all_node_idx}")
 
         if recovery_rate is not None:
-            self.redpanda.set_cluster_config(
+            self.funes.set_cluster_config(
                 {"raft_learner_recovery_rate": str(recovery_rate)})
 
         assert "throughput" in producer_config
@@ -283,8 +283,8 @@ class PartitionReassignmentsTest(RedpandaTest):
     def execute_reassign_partitions(self,
                                     reassignments: dict,
                                     timeout_s: int = 10):
-        kafka_tools = KafkaCliTools(self.redpanda)
-        return kafka_tools.reassign_partitions(
+        sql_tools = SQLCliTools(self.funes)
+        return sql_tools.reassign_partitions(
             reassignments=reassignments,
             operation="execute",
             # RP may report that the topic does not exist, this can
@@ -297,8 +297,8 @@ class PartitionReassignmentsTest(RedpandaTest):
                                    reassignments: dict,
                                    msg_retry: Optional[str] = None,
                                    timeout_s: int = 10):
-        kafka_tools = KafkaCliTools(self.redpanda)
-        return kafka_tools.reassign_partitions(
+        sql_tools = SQLCliTools(self.funes)
+        return sql_tools.reassign_partitions(
             reassignments=reassignments,
             operation="verify",
             # Retry the script if there is a reassignment still in progress
@@ -306,12 +306,12 @@ class PartitionReassignmentsTest(RedpandaTest):
             timeout_s=timeout_s).splitlines()
 
     def cancel_reassign_partitions(self, reassignments: dict):
-        kafka_tools = KafkaCliTools(self.redpanda)
-        return kafka_tools.reassign_partitions(
+        sql_tools = SQLCliTools(self.funes)
+        return sql_tools.reassign_partitions(
             reassignments=reassignments, operation="cancel").splitlines()
 
     @cluster(num_nodes=6)
-    def test_reassignments_kafka_cli(self):
+    def test_reassignments_sql_cli(self):
         initial_assignments, all_node_idx, producers = self.initial_setup_steps(
             producer_config={
                 "topics": [self.topics[0].name, self.topics[1].name],
@@ -361,7 +361,7 @@ class PartitionReassignmentsTest(RedpandaTest):
 
         self.logger.debug(
             f"Replacing replicas. New assignments: {reassignments}")
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         alter_partition_reassignments_with_kcl(kcl, reassignments)
 
         all_partition_idx = [p for p in range(self.PARTITION_COUNT)]
@@ -406,7 +406,7 @@ class PartitionReassignmentsTest(RedpandaTest):
         wait_until(reassignments_done, timeout_sec=180, backoff_sec=1)
 
         # Test even replica count by adding a replica. Expect a failure because
-        # even replication factor is not supported in Redpanda
+        # even replication factor is not supported in Funes
         for topic in reassignments:
             for pid in reassignments[topic]:
                 # Add a node to the replica set
@@ -418,7 +418,7 @@ class PartitionReassignmentsTest(RedpandaTest):
             f"Even replica count by adding. Expect fail. New assignments: {reassignments}"
         )
 
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
 
         def try_even_replication_factor(topics):
             try:
@@ -434,7 +434,7 @@ class PartitionReassignmentsTest(RedpandaTest):
         try_even_replication_factor(reassignments)
 
         # Test even replica count by removing two replicas. Expect a failure
-        # because even replication factor is not supported in Redpanda
+        # because even replication factor is not supported in Funes
         for topic in reassignments:
             for pid in reassignments[topic]:
                 reassignments[topic][pid].pop()
@@ -479,12 +479,12 @@ class PartitionReassignmentsTest(RedpandaTest):
     @cluster(num_nodes=4)
     def test_disable_alter_reassignment_api(self):
         # works
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         kcl.alter_partition_reassignments({})
 
         # disable api
-        self.redpanda.set_cluster_config(
-            dict(kafka_enable_partition_reassignment=False))
+        self.funes.set_cluster_config(
+            dict(sql_enable_partition_reassignment=False))
 
         # doesn't work
         try:
@@ -494,14 +494,14 @@ class PartitionReassignmentsTest(RedpandaTest):
             assert "AlterPartitionReassignment API is disabled. See" in e.output
 
 
-class PartitionReassignmentsACLsTest(RedpandaTest):
+class PartitionReassignmentsACLsTest(FunesTest):
     topics = [TopicSpec()]
     password = "password"
     algorithm = "SCRAM-SHA-256"
 
     def __init__(self, test_context):
         security = SecurityConfig()
-        security.kafka_enable_authorization = True
+        security.sql_enable_authorization = True
         security.endpoint_authn_method = 'sasl'
         super(PartitionReassignmentsACLsTest,
               self).__init__(test_context=test_context,
@@ -511,13 +511,13 @@ class PartitionReassignmentsACLsTest(RedpandaTest):
 
     @cluster(num_nodes=4)
     def test_reassignments_with_acls(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         username = "regular_user"
         admin.create_user(username, self.password, self.algorithm)
 
         # wait for user to propagate to nodes
         def user_exists():
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 users = admin.list_users(node=node)
                 if username not in users:
                     return False
@@ -532,7 +532,7 @@ class PartitionReassignmentsACLsTest(RedpandaTest):
         self.logger.debug(f"New replica assignments: {reassignments}")
 
         method = self.algorithm.lower().replace('-', '_')
-        kcl = KCL(self.redpanda, username, self.password, method)
+        kcl = KCL(self.funes, username, self.password, method)
         try:
             alter_partition_reassignments_with_kcl(kcl, reassignments)
             raise Exception(
@@ -554,9 +554,9 @@ class PartitionReassignmentsACLsTest(RedpandaTest):
             else:
                 raise
 
-        super_username, super_password, super_algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        super_username, super_password, super_algorithm = self.funes.SUPERUSER_CREDENTIALS
         method = super_algorithm.lower().replace('-', '_')
-        kcl = KCL(self.redpanda, super_username, super_password, method)
+        kcl = KCL(self.funes, super_username, super_password, method)
         alter_partition_reassignments_with_kcl(kcl, reassignments)
 
         def reassignments_done():

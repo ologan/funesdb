@@ -21,7 +21,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.tests.test import TestContext
 from ducktape.utils.util import wait_until
 
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 from rptest.clients.rpk import RpkTool
 
 
@@ -33,7 +33,7 @@ class KgoRepeaterService(Service):
 
     def __init__(self,
                  context: TestContext,
-                 redpanda: RedpandaService,
+                 funes: FunesService,
                  *,
                  nodes: Optional[list[ClusterNode]] = None,
                  num_nodes: Optional[int] = None,
@@ -63,7 +63,7 @@ class KgoRepeaterService(Service):
             assert len(nodes) > 0
             self.nodes = nodes
 
-        self.redpanda = redpanda
+        self.funes = funes
         self.topic = topic
         self.msg_size = msg_size
         self.workers = workers
@@ -96,7 +96,7 @@ class KgoRepeaterService(Service):
         self._stopped = False
 
     def clean_node(self, node):
-        self.redpanda.logger.debug(f"{self.__class__.__name__}.clean_node")
+        self.funes.logger.debug(f"{self.__class__.__name__}.clean_node")
         node.account.kill_process(self.EXE, clean_shutdown=False)
         if node.account.exists(self.LOG_PATH):
             node.account.remove(self.LOG_PATH)
@@ -106,7 +106,7 @@ class KgoRepeaterService(Service):
 
         cmd = (
             "/opt/kgo-verifier/kgo-repeater "
-            f"-topic {self.topic} -brokers {self.redpanda.brokers()} "
+            f"-topic {self.topic} -brokers {self.funes.brokers()} "
             f"-workers {self.workers} -initial-data-mb {initial_data_mb} "
             f"-group {self.group_name} -remote -remote-port {self.remote_port} "
         )
@@ -208,7 +208,7 @@ class KgoRepeaterService(Service):
         if self._pid is None:
             return
 
-        self.redpanda.logger.info(f"{self.__class__.__name__}.stop")
+        self.funes.logger.info(f"{self.__class__.__name__}.stop")
         self.logger.debug("Killing pid %s" % {self._pid})
         try:
             node.account.signal(self._pid, signal.SIGKILL, allow_fail=False)
@@ -240,7 +240,7 @@ class KgoRepeaterService(Service):
         expect_members = self.workers * len(self.nodes)
 
         def group_ready():
-            rpk = RpkTool(self.redpanda)
+            rpk = RpkTool(self.funes)
             try:
                 group = rpk.group_describe(self.group_name, summary=True)
             except Exception as e:
@@ -269,7 +269,7 @@ class KgoRepeaterService(Service):
         self.logger.debug(f"Waiting for group {self.group_name} to be ready")
         t1 = time.time()
         try:
-            self.redpanda.wait_until(group_ready,
+            self.funes.wait_until(group_ready,
                                      timeout_sec=120,
                                      backoff_sec=10)
         except:
@@ -289,7 +289,7 @@ class KgoRepeaterService(Service):
             # go inspect the remote kgo-repeater logs to see if the
             # client logged any errors.
 
-            rpk = RpkTool(self.redpanda)
+            rpk = RpkTool(self.funes)
             group = rpk.group_describe(self.group_name, summary=False)
 
             # Identify which of the clients is dropping some consumers
@@ -352,16 +352,16 @@ class KgoRepeaterService(Service):
         # the system isn't at peak throughput (e.g. when it's just warming up)
         timeout_sec = max(timeout_sec, 60)
 
-        self.redpanda.wait_until(check, timeout_sec=timeout_sec, backoff_sec=1)
+        self.funes.wait_until(check, timeout_sec=timeout_sec, backoff_sec=1)
 
 
 @contextmanager
 def repeater_traffic(context,
-                     redpanda,
+                     funes,
                      *args,
                      cleanup: Optional[Callable] = None,
                      **kwargs):
-    svc = KgoRepeaterService(context, redpanda, *args, **kwargs)
+    svc = KgoRepeaterService(context, funes, *args, **kwargs)
     svc.start()
     svc.prepare_and_activate()
 
@@ -371,7 +371,7 @@ def repeater_traffic(context,
         # Helpful to log the exception so that it appears before
         # all the logs from our teardown and developer can jump
         # straight to the point the error occurred.
-        redpanda.logger.exception("Exception during repeater_traffic region")
+        funes.logger.exception("Exception during repeater_traffic region")
         raise
     finally:
         svc.stop()

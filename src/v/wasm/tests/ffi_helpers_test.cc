@@ -134,12 +134,12 @@ TEST(FFIHelpers, ExtractParameters) {
                 return guest_array.data();
             }
             case ns_offset:
-                if (len != model::kafka_namespace().size()) {
+                if (len != model::sql_namespace().size()) {
                     throw std::runtime_error(
                       ss::format("unexpected ns len {}", len));
                 }
                 // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-                return const_cast<char*>(model::kafka_namespace().data());
+                return const_cast<char*>(model::sql_namespace().data());
             case num_ptr_offset:
                 if (len != sizeof(int64_t)) {
                     throw std::runtime_error(
@@ -157,7 +157,7 @@ TEST(FFIHelpers, ExtractParameters) {
       array_offset,
       array_len,
       ns_offset,
-      model::kafka_namespace().size(),
+      model::sql_namespace().size(),
       std::numeric_limits<int32_t>::max(),
       static_cast<uint64_t>(std::numeric_limits<int64_t>::min()),
       num_ptr_offset,
@@ -174,7 +174,7 @@ TEST(FFIHelpers, ExtractParameters) {
     ASSERT_EQ(array.data(), guest_array.data());
     ASSERT_TRUE(std::equal(
       array.begin(), array.end(), guest_array.begin(), guest_array.end()));
-    ASSERT_EQ(ns, model::kafka_namespace);
+    ASSERT_EQ(ns, model::sql_namespace);
     ASSERT_EQ(i32, std::numeric_limits<int32_t>::max());
     ASSERT_EQ(i64, std::numeric_limits<int64_t>::min());
     ASSERT_EQ(u64_ptr, &num);

@@ -12,20 +12,20 @@ from ducktape.utils.util import wait_until
 from rptest.clients.types import TopicSpec
 from rptest.util import expect_exception
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.admin import Admin
 
 
-class ReplicationFactorChangeTest(RedpandaTest):
+class ReplicationFactorChangeTest(FunesTest):
     topics = (TopicSpec(partition_count=3, replication_factor=3), )
 
     def __init__(self, test_context):
         super(ReplicationFactorChangeTest,
               self).__init__(test_context=test_context, num_brokers=4)
 
-        self._rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self._rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
 
         self.rf_property = "replication.factor"
         self.topic_name = self.topics[0].name

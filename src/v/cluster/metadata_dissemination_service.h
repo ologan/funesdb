@@ -102,7 +102,7 @@ private:
         ss::chunked_fifo<ntp_leader_revision> updates;
         bool finished = false;
     };
-    // Used to track the process of requesting update when redpanda starts
+    // Used to track the process of requesting update when funes starts
     // when update using a node from ids will fail we will try the next one
     struct request_retry_meta {
         using container_t = std::vector<net::unresolved_address>;

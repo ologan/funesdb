@@ -1,18 +1,18 @@
 # Copyright 2023 Redpanda Data, Inc.
 #
-# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# Licensed as a Funes Enterprise file under the Funes Community
 # License (the "License"); you may not use this file except in compliance with
 # the License. You may obtain a copy of the License at
 #
-# https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+# https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import CloudStorageType, SISettings, get_cloud_storage_type
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import CloudStorageType, SISettings, get_cloud_storage_type
 
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.util import (
     wait_until, )
 from rptest.utils.si_utils import BucketView
@@ -21,7 +21,7 @@ from ducktape.mark import matrix
 
 import time
 
-# Log errors expected when connectivity between redpanda and the S3
+# Log errors expected when connectivity between funes and the S3
 # backend is disrupted
 CONNECTION_ERROR_LOGS = [
     # e.g. archival - [fiber1] - service.cc:484 - Failed to upload 3 segments out of 4
@@ -29,7 +29,7 @@ CONNECTION_ERROR_LOGS = [
 ]
 
 
-class AdjacentSegmentMergingTest(RedpandaTest):
+class AdjacentSegmentMergingTest(FunesTest):
     s3_topic_name = "panda-topic"
     topics = (TopicSpec(name=s3_topic_name,
                         partition_count=1,
@@ -57,8 +57,8 @@ class AdjacentSegmentMergingTest(RedpandaTest):
                              extra_rp_conf=xtra_conf,
                              si_settings=si_settings)
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
+        self.rpk = RpkTool(self.funes)
 
     def setUp(self):
         super().setUp()  # topic is created here
@@ -77,7 +77,7 @@ class AdjacentSegmentMergingTest(RedpandaTest):
         for _ in range(10):
             # Every 'produce' call should create at least one segment
             # in the cloud which is 1MiB
-            self.kafka_tools.produce(self.topic, 1024, 1024, acks)
+            self.sql_tools.produce(self.topic, 1024, 1024, acks)
             time.sleep(1)
         time.sleep(5)
 
@@ -85,7 +85,7 @@ class AdjacentSegmentMergingTest(RedpandaTest):
             try:
                 num_good = 0
                 for ntp, manifest in BucketView(
-                        self.redpanda).partition_manifests.items():
+                        self.funes).partition_manifests.items():
                     target_lower_bound = 1024 * 1024 * 8
                     for name, meta in manifest["segments"].items():
                         self.logger.info(

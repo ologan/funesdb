@@ -14,8 +14,8 @@
 #include "cluster/partition_manager.h"
 #include "cluster/tx_hash_ranges.h"
 #include "hashing/murmur.h"
-#include "kafka/protocol/types.h"
-#include "kafka/types.h"
+#include "sql/protocol/types.h"
+#include "sql/types.h"
 #include "model/fundamental.h"
 #include "model/namespace.h"
 #include "seastar/core/sharded.hh"
@@ -41,7 +41,7 @@ inline model::partition_id get_partition_from_default_distribution(
 /**
  * \brief Mapping from transaction id to coordinator ntp.
  *
- * A kafka transactional id is used to identify coordinator partition that
+ * A sql transactional id is used to identify coordinator partition that
  * hosts this transaction.
  *
  * Currently this mapping is static.
@@ -61,7 +61,7 @@ public:
       : _md(md) {}
 
     ss::future<std::optional<model::ntp>>
-    ntp_for(kafka::transactional_id tx_id) const {
+    ntp_for(sql::transactional_id tx_id) const {
         auto cfg = _md.local().get_topic_cfg(model::tx_manager_nt);
         if (!cfg) {
             // Transaction coordinator topic not exist in cache

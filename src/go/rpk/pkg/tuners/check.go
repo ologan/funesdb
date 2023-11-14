@@ -16,17 +16,17 @@ import (
 	"time"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/redpanda"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/funes"
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
 )
 
 func Check(
-	fs afero.Fs, y *config.RedpandaYaml, timeout time.Duration,
+	fs afero.Fs, y *config.FunesYaml, timeout time.Duration,
 ) ([]CheckResult, error) {
 	var results []CheckResult
-	ioConfigFile := redpanda.GetIOConfigPath(filepath.Dir(y.FileLocation()))
-	checkersMap, err := RedpandaCheckers(fs, ioConfigFile, y, timeout)
+	ioConfigFile := funes.GetIOConfigPath(filepath.Dir(y.FileLocation()))
+	checkersMap, err := FunesCheckers(fs, ioConfigFile, y, timeout)
 	if err != nil {
 		return results, err
 	}

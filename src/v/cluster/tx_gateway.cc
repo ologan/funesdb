@@ -74,7 +74,7 @@ tx_gateway::prepare_tx(prepare_tx_request&&, rpc::streaming_context&) {
     // this RPC is no longer used.
     return ss::make_exception_future<prepare_tx_reply>(std::runtime_error{
       "prepare_tx is no longer supported, this is only possible if the cluster "
-      "is running mixed versions of Redpanda and the initiator of this RPC is "
+      "is running mixed versions of Funes and the initiator of this RPC is "
       "pre-22.3.x. Check your installation."});
 }
 
@@ -102,7 +102,7 @@ ss::future<prepare_group_tx_reply> tx_gateway::prepare_group_tx(
     return ss::make_exception_future<cluster::prepare_group_tx_reply>(
       std::runtime_error{
         "prepare_group_tx is no longer supported, this is only possible if the "
-        "cluster is running mixed versions of Redpanda and the initiator of "
+        "cluster is running mixed versions of Funes and the initiator of "
         "this RPC is pre-22.3.x. Check your installation."});
 };
 

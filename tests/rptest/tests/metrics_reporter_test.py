@@ -12,17 +12,17 @@ import json
 import random
 
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.utils.rpenv import sample_license
 from ducktape.utils.util import wait_until
 
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.http_server import HttpServer
 
 
-class MetricsReporterTest(RedpandaTest):
+class MetricsReporterTest(FunesTest):
     def __init__(self, test_ctx, num_brokers):
         self._ctx = test_ctx
         self.http = HttpServer(self._ctx)
@@ -38,24 +38,24 @@ class MetricsReporterTest(RedpandaTest):
                 "metrics_reporter_url": f"{self.http.url}/metrics",
                 "retention_bytes": 20000,
             })
-        self.redpanda.set_environment({"REDPANDA_ENVIRONMENT": "test"})
+        self.funes.set_environment({"FUNES_ENVIRONMENT": "test"})
 
     def setUp(self):
-        # Start HTTP server before redpanda
+        # Start HTTP server before funes
         self.http.start()
-        self.redpanda.start()
+        self.funes.start()
 
-    def _test_redpanda_metrics_reporting(self):
+    def _test_funes_metrics_reporting(self):
         """
-        Test that redpanda nodes send well formed messages to the metrics endpoint
+        Test that funes nodes send well formed messages to the metrics endpoint
         """
 
         # Load and put a license at start. This is to check the SHA-256 checksum
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         license = sample_license()
         if license is None:
             self.logger.info(
-                "Skipping test, REDPANDA_SAMPLE_LICENSE env var not found")
+                "Skipping test, FUNES_SAMPLE_LICENSE env var not found")
             return
 
         assert admin.put_license(
@@ -68,11 +68,11 @@ class MetricsReporterTest(RedpandaTest):
             total_partitions += partitions
             self.client().create_topic([
                 TopicSpec(partition_count=partitions,
-                          replication_factor=len(self.redpanda.nodes))
+                          replication_factor=len(self.funes.nodes))
             ])
 
         # create topics
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"created {total_topics} topics with {total_partitions} partitions"
         )
 
@@ -89,7 +89,7 @@ class MetricsReporterTest(RedpandaTest):
         self.http.stop()
         metadata = [json.loads(r['body']) for r in self.http.requests]
         for m in metadata:
-            self.redpanda.logger.info(m)
+            self.funes.logger.info(m)
 
         def assert_fields_are_the_same(metadata, field):
             assert all(m[field] == metadata[0][field] for m in metadata)
@@ -100,20 +100,20 @@ class MetricsReporterTest(RedpandaTest):
         assert_fields_are_the_same(metadata, 'cluster_uuid')
         assert_fields_are_the_same(metadata, 'cluster_created_ts')
         # Configuration should be the same across requests
-        assert_fields_are_the_same(metadata, 'has_kafka_gssapi')
+        assert_fields_are_the_same(metadata, 'has_sql_gssapi')
         # cluster config should be the same
         assert_fields_are_the_same(metadata, 'config')
         # get the last report
         last = metadata.pop()
         assert last['topic_count'] == total_topics
         assert last['partition_count'] == total_partitions
-        assert last['has_kafka_gssapi'] is False
+        assert last['has_sql_gssapi'] is False
         assert last['active_logical_version'] == features['cluster_version']
         assert last['original_logical_version'] == features[
             'original_cluster_version']
         nodes_meta = last['nodes']
 
-        assert len(last['nodes']) == len(self.redpanda.nodes)
+        assert len(last['nodes']) == len(self.funes.nodes)
 
         assert all('node_id' in n for n in nodes_meta)
         assert all('cpu_count' in n for n in nodes_meta)
@@ -124,19 +124,19 @@ class MetricsReporterTest(RedpandaTest):
         assert all('disks' in n for n in nodes_meta)
 
         # Check cluster UUID and creation time survive a restart
-        for n in self.redpanda.nodes:
-            self.redpanda.stop_node(n)
+        for n in self.funes.nodes:
+            self.funes.stop_node(n)
 
         pre_restart_requests = len(self.http.requests)
 
         self.http.start()
-        for n in self.redpanda.nodes:
-            self.redpanda.start_node(n)
+        for n in self.funes.nodes:
+            self.funes.start_node(n)
 
         wait_until(lambda: len(self.http.requests) > pre_restart_requests,
                    timeout_sec=20,
                    backoff_sec=1)
-        self.redpanda.logger.info("Checking metadata after restart")
+        self.funes.logger.info("Checking metadata after restart")
         assert_fields_are_the_same(metadata, 'cluster_uuid')
         assert_fields_are_the_same(metadata, 'cluster_created_ts')
 
@@ -146,7 +146,7 @@ class MetricsReporterTest(RedpandaTest):
         assert last["config"]["auto_create_topics_enabled"] == False
         assert "metrics_reporter_tick_interval" not in last["config"]
         assert last["config"]["log_message_timestamp_type"] == "CreateTime"
-        assert last["redpanda_environment"] == "test"
+        assert last["funes_environment"] == "test"
 
         raw_id_hash = hashlib.sha256(license.encode()).hexdigest()
         last_post_restart = metadata.pop()
@@ -162,8 +162,8 @@ class MultiNodeMetricsReporterTest(MetricsReporterTest):
         super().__init__(test_ctx, 3)
 
     @cluster(num_nodes=4, log_allow_list=RESTART_LOG_ALLOW_LIST)
-    def test_redpanda_metrics_reporting(self):
-        self._test_redpanda_metrics_reporting()
+    def test_funes_metrics_reporting(self):
+        self._test_funes_metrics_reporting()
 
 
 class SingleNodeMetricsReporterTest(MetricsReporterTest):
@@ -176,5 +176,5 @@ class SingleNodeMetricsReporterTest(MetricsReporterTest):
         super().__init__(test_ctx, 1)
 
     @cluster(num_nodes=2, log_allow_list=RESTART_LOG_ALLOW_LIST)
-    def test_redpanda_metrics_reporting(self):
-        self._test_redpanda_metrics_reporting()
+    def test_funes_metrics_reporting(self):
+        self._test_funes_metrics_reporting()

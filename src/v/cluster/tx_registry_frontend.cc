@@ -164,7 +164,7 @@ ss::future<describe_tx_registry_reply> tx_registry_frontend::process_locally(
 }
 
 ss::future<find_coordinator_reply> tx_registry_frontend::find_coordinator(
-  kafka::transactional_id tid, model::timeout_clock::duration timeout) {
+  sql::transactional_id tid, model::timeout_clock::duration timeout) {
     if (!_metadata_cache.local().contains(model::tx_manager_nt)) {
         if (!co_await try_create_tx_topic()) {
             vlog(clusterlog.warn, "failed to create {}", model::tx_manager_nt);
@@ -261,7 +261,7 @@ ss::future<find_coordinator_reply> tx_registry_frontend::find_coordinator(
 ss::future<find_coordinator_reply>
 tx_registry_frontend::dispatch_find_coordinator(
   model::node_id leader,
-  kafka::transactional_id tid,
+  sql::transactional_id tid,
   model::timeout_clock::duration timeout) {
     return _connection_cache.local()
       .with_node_client<cluster::tx_gateway_client_protocol>(
@@ -342,7 +342,7 @@ ss::future<find_coordinator_reply> tx_registry_frontend::process_locally(
 }
 
 ss::future<find_coordinator_reply>
-tx_registry_frontend::find_coordinator_statically(kafka::transactional_id tid) {
+tx_registry_frontend::find_coordinator_statically(sql::transactional_id tid) {
     std::optional<model::node_id> leader = std::nullopt;
 
     auto ntp = co_await _tx_coordinator_ntp_mapper.local().ntp_for(tid);
@@ -360,7 +360,7 @@ tx_registry_frontend::find_coordinator_statically(kafka::transactional_id tid) {
 
 ss::future<bool> tx_registry_frontend::try_create_tx_registry_topic() {
     cluster::topic_configuration topic{
-      model::kafka_internal_namespace,
+      model::sql_internal_namespace,
       model::tx_registry_topic,
       1,
       _controller->internal_topic_replication()};
@@ -381,7 +381,7 @@ ss::future<bool> tx_registry_frontend::try_create_tx_registry_topic() {
               vlog(
                 clusterlog.warn,
                 "can not create {}/{} topic - error: {}",
-                model::kafka_internal_namespace,
+                model::sql_internal_namespace,
                 model::tx_registry_topic,
                 cluster::make_error_code(res[0].ec).message());
               return false;
@@ -392,7 +392,7 @@ ss::future<bool> tx_registry_frontend::try_create_tx_registry_topic() {
           vlog(
             clusterlog.warn,
             "can not create {}/{} topic - error: {}",
-            model::kafka_internal_namespace,
+            model::sql_internal_namespace,
             model::tx_registry_topic,
             e);
           return false;
@@ -408,7 +408,7 @@ ss::future<bool> tx_registry_frontend::try_create_tx_topic() {
     }
 
     cluster::topic_configuration topic{
-      model::kafka_internal_namespace,
+      model::sql_internal_namespace,
       model::tx_manager_topic,
       partitions_amount,
       _controller->internal_topic_replication()};
@@ -434,7 +434,7 @@ ss::future<bool> tx_registry_frontend::try_create_tx_topic() {
               vlog(
                 clusterlog.warn,
                 "can not create {}/{} topic - error: {}",
-                model::kafka_internal_namespace,
+                model::sql_internal_namespace,
                 model::tx_manager_topic,
                 cluster::make_error_code(res[0].ec).message());
               return false;
@@ -445,7 +445,7 @@ ss::future<bool> tx_registry_frontend::try_create_tx_topic() {
           vlog(
             txlog.warn,
             "can not create {}/{} topic - error: {}",
-            model::kafka_internal_namespace,
+            model::sql_internal_namespace,
             model::tx_manager_topic,
             e);
           return false;

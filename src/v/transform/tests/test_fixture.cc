@@ -44,15 +44,15 @@ ss::future<> fake_source::start() { co_return; }
 
 ss::future<> fake_source::stop() { co_return; }
 
-kafka::offset fake_source::latest_offset() {
+sql::offset fake_source::latest_offset() {
     if (_batches.empty()) {
-        return kafka::offset(0);
+        return sql::offset(0);
     }
-    return kafka::next_offset(_batches.rbegin()->first);
+    return sql::next_offset(_batches.rbegin()->first);
 }
 
 ss::future<model::record_batch_reader>
-fake_source::read_batch(kafka::offset offset, ss::abort_source* as) {
+fake_source::read_batch(sql::offset offset, ss::abort_source* as) {
     auto sub = as->subscribe([this]() noexcept { _cond_var.broadcast(); });
     co_await _cond_var.wait([this, as, offset] {
         if (as->abort_requested()) {
@@ -106,18 +106,18 @@ fake_wasm_engine::transform(model::record_batch batch, wasm::transform_probe*) {
     }
 }
 
-ss::future<> fake_offset_tracker::commit_offset(kafka::offset o) {
+ss::future<> fake_offset_tracker::commit_offset(sql::offset o) {
     _committed = o;
     _cond_var.broadcast();
     co_return;
 }
 
-ss::future<std::optional<kafka::offset>>
+ss::future<std::optional<sql::offset>>
 fake_offset_tracker::load_committed_offset() {
     co_return _committed;
 }
 
-ss::future<> fake_offset_tracker::wait_for_committed_offset(kafka::offset o) {
+ss::future<> fake_offset_tracker::wait_for_committed_offset(sql::offset o) {
     return _cond_var.wait(
       1s, [this, o] { return _committed && *_committed >= o; });
 }

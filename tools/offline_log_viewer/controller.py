@@ -290,7 +290,7 @@ def decode_topic_command_serde(k_rdr: Reader, rdr: Reader):
         k_rdr.read_string()
         k_rdr.read_string()
     elif cmd['type'] == 10:
-        # This command replaces delete_topic in Redpanda 23.2
+        # This command replaces delete_topic in Funes 23.2
         cmd['type_string'] = 'topic_lifecycle_transition'
         cmd['namespace'] = k_rdr.read_string()
         cmd['topic'] = k_rdr.read_string()
@@ -733,7 +733,7 @@ def decode_feature_command_serde(k_rdr: Reader, rdr: Reader):
         cmd['type_name'] = 'license_update'
         cmd |= k_rdr.read_envelope(
             lambda k_rdr, _: {
-                'redpanda_license':
+                'funes_license':
                 k_rdr.read_envelope(decode_license_t, max_version=1)
             })
     return cmd

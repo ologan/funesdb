@@ -11,14 +11,14 @@ import uuid
 
 from rptest.utils.mode_checks import skip_debug_mode
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, SISettings, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, SISettings, get_cloud_storage_type
 from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
 from rptest.clients.types import TopicSpec
 from rptest.clients.default import DefaultClient
 from rptest.clients.rpk import RpkTool
 from rptest.tests.end_to_end import EndToEndTest
-from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST
+from rptest.services.funes import CHAOS_LOG_ALLOW_LIST
 
 
 class MultiRestartTest(EndToEndTest):
@@ -43,24 +43,24 @@ class MultiRestartTest(EndToEndTest):
                                  log_segment_size=self.log_segment_size)
         self.s3_bucket_name = si_settings.cloud_storage_bucket
 
-        self.start_redpanda(3,
+        self.start_funes(3,
                             extra_rp_conf=self._extra_rp_conf,
                             si_settings=si_settings)
         spec = TopicSpec(partition_count=partition_count, replication_factor=3)
 
-        DefaultClient(self.redpanda).create_topic(spec)
+        DefaultClient(self.funes).create_topic(spec)
         self.topic = spec.name
 
-        rpk = RpkTool(self.redpanda)
-        rpk.alter_topic_config(spec.name, 'redpanda.remote.write', 'true')
-        rpk.alter_topic_config(spec.name, 'redpanda.remote.read', 'true')
+        rpk = RpkTool(self.funes)
+        rpk.alter_topic_config(spec.name, 'funes.remote.write', 'true')
+        rpk.alter_topic_config(spec.name, 'funes.remote.read', 'true')
 
         self.start_producer(1, throughput=100)
         self.start_consumer(1)
         self.await_startup()
 
         def no_under_replicated_partitions():
-            metric_sample = self.redpanda.metrics_sample("under_replicated")
+            metric_sample = self.funes.metrics_sample("under_replicated")
             for s in metric_sample.samples:
                 if s.value > 0:
                     return False
@@ -68,9 +68,9 @@ class MultiRestartTest(EndToEndTest):
 
         # restart all the nodes and wait for recovery
         for i in range(0, 10):
-            for n in self.redpanda.nodes:
-                self.redpanda.signal_redpanda(n)
-                self.redpanda.start_node(n)
+            for n in self.funes.nodes:
+                self.funes.signal_funes(n)
+                self.funes.start_node(n)
             wait_until(no_under_replicated_partitions, 30, 2)
 
         self.run_validation(enable_idempotence=False,

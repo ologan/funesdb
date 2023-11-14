@@ -23,7 +23,7 @@ type OutputFormat string
 const (
 	Envfile OutputFormat = "envfile" // Legacy env file
 	Seastar OutputFormat = "seastar" // YAML properties file
-	Bin     string       = "iotune-redpanda"
+	Bin     string       = "iotune-funes"
 )
 
 type IoTuneArgs struct {

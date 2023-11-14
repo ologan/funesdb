@@ -26,9 +26,9 @@ namespace model {
  * 2. It is used represent compression policies (eg producer)
  *
  * And (3) the enum values for batch compression types must be identical to
- * those values used in the encoding of kafka batch attributes.
+ * those values used in the encoding of sql batch attributes.
  *
- *    https://kafka.apache.org/documentation/#compression.type
+ *    https://sql.apache.org/documentation/#compression.type
  *
  * Compression types like `producer` have values outside the range of values
  * used in any wire encoded representation and are only used internally.
@@ -44,7 +44,7 @@ enum class compression : uint8_t {
     zstd = 4,
 
     // values below must not intersect with the value range used to encode
-    // compression codecs in kafka batch attributes.
+    // compression codecs in sql batch attributes.
     producer = std::numeric_limits<std::underlying_type_t<compression>>::max()
 };
 

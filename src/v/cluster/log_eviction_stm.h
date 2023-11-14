@@ -62,7 +62,7 @@ public:
     /// Returns the offset at which the operation was replicated.
     ss::future<offset_result> truncate(
       model::offset rp_start_offset,
-      kafka::offset kafka_start_offset,
+      sql::offset sql_start_offset,
       ss::lowres_clock::time_point deadline,
       std::optional<std::reference_wrapper<ss::abort_source>> as
       = std::nullopt);

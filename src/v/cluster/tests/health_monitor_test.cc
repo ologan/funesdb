@@ -56,7 +56,7 @@ void check_reports_the_same(
         auto& lr = lhs[i];
         auto& rr = rhs[i];
         BOOST_TEST_REQUIRE(
-          lr.local_state.redpanda_version == rr.local_state.redpanda_version);
+          lr.local_state.funes_version == rr.local_state.funes_version);
         BOOST_TEST_REQUIRE(std::equal(
           lr.topics.cbegin(),
           lr.topics.cend(),
@@ -222,11 +222,11 @@ FIXTURE_TEST(test_ntp_filter, cluster_test_fixture) {
 
     // create topics
     std::vector<cluster::topic_configuration> topics;
-    topics.push_back(topic_cfg(model::kafka_namespace, "tp-1", 3, 3));
-    topics.push_back(topic_cfg(model::kafka_namespace, "tp-2", 3, 2));
-    topics.push_back(topic_cfg(model::kafka_namespace, "tp-3", 3, 1));
+    topics.push_back(topic_cfg(model::sql_namespace, "tp-1", 3, 3));
+    topics.push_back(topic_cfg(model::sql_namespace, "tp-2", 3, 2));
+    topics.push_back(topic_cfg(model::sql_namespace, "tp-3", 3, 1));
     topics.push_back(
-      topic_cfg(model::kafka_internal_namespace, "internal-1", 3, 2));
+      topic_cfg(model::sql_internal_namespace, "internal-1", 3, 2));
 
     n1->controller->get_topics_frontend()
       .local()
@@ -242,21 +242,21 @@ FIXTURE_TEST(test_ntp_filter, cluster_test_fixture) {
 
     auto f_1 = filter_template();
     // test filtering by ntp
-    cluster::partitions_filter::topic_map_t kafka_topics_map;
-    kafka_topics_map.emplace(
+    cluster::partitions_filter::topic_map_t sql_topics_map;
+    sql_topics_map.emplace(
       model::topic("tp-1"),
       cluster::partitions_filter::partitions_set_t{
         model::partition_id(0), model::partition_id(2)});
-    kafka_topics_map.emplace(
+    sql_topics_map.emplace(
       model::topic("tp-2"),
       cluster::partitions_filter::partitions_set_t{model::partition_id(0)});
 
     f_1.node_report_filter.ntp_filters.namespaces.emplace(
-      model::kafka_namespace, std::move(kafka_topics_map));
+      model::sql_namespace, std::move(sql_topics_map));
 
     // filter by namespace
     f_1.node_report_filter.ntp_filters.namespaces.emplace(
-      model::redpanda_ns, cluster::partitions_filter::topic_map_t{});
+      model::funes_ns, cluster::partitions_filter::topic_map_t{});
 
     // filter by topic
     cluster::partitions_filter::topic_map_t internal_topic_map;
@@ -265,11 +265,11 @@ FIXTURE_TEST(test_ntp_filter, cluster_test_fixture) {
       cluster::partitions_filter::partitions_set_t{});
 
     f_1.node_report_filter.ntp_filters.namespaces.emplace(
-      model::kafka_internal_namespace, std::move(internal_topic_map));
+      model::sql_internal_namespace, std::move(internal_topic_map));
 
     /**
-     * Requested kafka/tp-1/0, kafka/tp-1/2, kafka/tp-2/0,
-     * redpanda/controller/0, all partitions of kafka-internal/internal-1
+     * Requested sql/tp-1/0, sql/tp-1/2, sql/tp-2/0,
+     * funes/controller/0, all partitions of sql-internal/internal-1
      */
     tests::cooperative_spin_wait_with_timeout(10s, [&] {
         return n1->controller->get_health_monitor()
@@ -282,12 +282,12 @@ FIXTURE_TEST(test_ntp_filter, cluster_test_fixture) {
                      && contains_exactly_ntp_leaders(
                        g_seastar_test_log,
                        {
-                         ntp(model::kafka_namespace, "tp-1", 0),
-                         ntp(model::kafka_namespace, "tp-1", 2),
-                         ntp(model::kafka_namespace, "tp-2", 0),
-                         ntp(model::kafka_internal_namespace, "internal-1", 0),
-                         ntp(model::kafka_internal_namespace, "internal-1", 1),
-                         ntp(model::redpanda_ns, "controller", 0),
+                         ntp(model::sql_namespace, "tp-1", 0),
+                         ntp(model::sql_namespace, "tp-1", 2),
+                         ntp(model::sql_namespace, "tp-2", 0),
+                         ntp(model::sql_internal_namespace, "internal-1", 0),
+                         ntp(model::sql_internal_namespace, "internal-1", 1),
+                         ntp(model::funes_ns, "controller", 0),
                        },
                        report.value().node_reports.begin()->topics);
           });
@@ -303,12 +303,12 @@ FIXTURE_TEST(test_ntp_filter, cluster_test_fixture) {
                      && contains_exactly_ntp_leaders(
                        g_seastar_test_log,
                        {
-                         ntp(model::kafka_namespace, "tp-1", 0),
-                         ntp(model::kafka_namespace, "tp-1", 2),
-                         ntp(model::kafka_namespace, "tp-2", 0),
-                         ntp(model::kafka_internal_namespace, "internal-1", 0),
-                         ntp(model::kafka_internal_namespace, "internal-1", 1),
-                         ntp(model::redpanda_ns, "controller", 0),
+                         ntp(model::sql_namespace, "tp-1", 0),
+                         ntp(model::sql_namespace, "tp-1", 2),
+                         ntp(model::sql_namespace, "tp-2", 0),
+                         ntp(model::sql_internal_namespace, "internal-1", 0),
+                         ntp(model::sql_internal_namespace, "internal-1", 1),
+                         ntp(model::funes_ns, "controller", 0),
                        },
                        report.value().topics);
           });
@@ -401,7 +401,7 @@ make_ts(ss::sstring name, const std::vector<part_status>& status_list) {
         statuses.emplace_back(s);
     }
 
-    return {{model::kafka_namespace, topic{name}}, std::move(statuses)};
+    return {{model::sql_namespace, topic{name}}, std::move(statuses)};
 }
 
 node_health_report
@@ -455,9 +455,9 @@ FIXTURE_TEST(test_aggregate, health_report_unit) {
     auto healthy_urp_a = make_ts(topic_a, {HEALTHY, URP});
     auto urp_a = make_ts(topic_a, {URP});
 
-    model::ntp ntp0_a{model::kafka_namespace, topic_a, 0};
-    model::ntp ntp1_a{model::kafka_namespace, topic_a, 1};
-    model::ntp ntp2_a{model::kafka_namespace, topic_a, 2};
+    model::ntp ntp0_a{model::sql_namespace, topic_a, 0};
+    model::ntp ntp1_a{model::sql_namespace, topic_a, 1};
+    model::ntp ntp2_a{model::sql_namespace, topic_a, 2};
 
     const ss::sstring topic_b = "topic_b";
     auto healthy_b = make_ts(topic_b, {HEALTHY, HEALTHY});
@@ -465,9 +465,9 @@ FIXTURE_TEST(test_aggregate, health_report_unit) {
     auto healthy_urp_b = make_ts(topic_b, {HEALTHY, URP});
     auto urp_b = make_ts(topic_b, {URP});
 
-    model::ntp ntp0_b{model::kafka_namespace, topic_b, 0};
-    model::ntp ntp1_b{model::kafka_namespace, topic_b, 1};
-    model::ntp ntp2_b{model::kafka_namespace, topic_b, 2};
+    model::ntp ntp0_b{model::sql_namespace, topic_b, 0};
+    model::ntp ntp1_b{model::sql_namespace, topic_b, 1};
+    model::ntp ntp2_b{model::sql_namespace, topic_b, 2};
 
     report_cache_t empty_reports{{model::node_id(0), {}}};
 

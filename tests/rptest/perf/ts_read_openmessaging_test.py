@@ -8,14 +8,14 @@
 # by the Apache License, Version 2.0
 
 from rptest.services.openmessaging_benchmark_configs import OMBSampleConfigurations
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
 from ducktape.mark import parametrize
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 
 
-class TSReadOpenmessagingTest(RedpandaTest):
+class TSReadOpenmessagingTest(FunesTest):
     BENCHMARK_WAIT_TIME_MIN = 15
 
     def __init__(self, ctx):
@@ -42,7 +42,7 @@ class TSReadOpenmessagingTest(RedpandaTest):
         An OMB perf regression test that has TS reads.
         """
 
-        assert self.redpanda.dedicated_nodes
+        assert self.funes.dedicated_nodes
 
         validator = {
             OMBSampleConfigurations.PUB_LATENCY_MIN:
@@ -77,7 +77,7 @@ class TSReadOpenmessagingTest(RedpandaTest):
         }
 
         benchmark = OpenMessagingBenchmark(self._ctx,
-                                           self.redpanda,
+                                           self.funes,
                                            driver=driver_idx,
                                            workload=[workload, validator])
         benchmark.start()

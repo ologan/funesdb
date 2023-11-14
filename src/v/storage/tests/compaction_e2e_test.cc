@@ -7,9 +7,9 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
 
-#include "kafka/server/tests/produce_consume_utils.h"
+#include "sql/server/tests/produce_consume_utils.h"
 #include "model/namespace.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/tests/fixture.h"
 #include "test_utils/async.h"
 #include "test_utils/scoped_config.h"
 #include "test_utils/test.h"
@@ -86,14 +86,14 @@ struct work_dir_summary {
 
 class CompactionFixtureTest
   : public storage_manual_mixin
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public seastar_test {
 public:
     ss::future<> SetUpAsync() override {
         cluster::topic_properties props;
         props.cleanup_policy_bitflags
           = model::cleanup_policy_bitflags::compaction;
-        co_await add_topic({model::kafka_namespace, topic_name}, 1, props);
+        co_await add_topic({model::sql_namespace, topic_name}, 1, props);
         co_await wait_for_leader(ntp);
 
         partition = app.partition_manager.local().get(ntp).get();
@@ -113,7 +113,7 @@ public:
 
     ss::future<> generate_data(
       size_t num_segments, size_t cardinality, size_t records_per_segment) {
-        tests::kafka_produce_transport producer(co_await make_kafka_client());
+        tests::sql_produce_transport producer(co_await make_sql_client());
         co_await producer.start();
 
         // Generate some segments.
@@ -136,7 +136,7 @@ public:
     }
     ss::future<std::vector<tests::kv_t>>
     check_records(size_t cardinality, size_t max_duplicates) {
-        tests::kafka_consume_transport consumer(co_await make_kafka_client());
+        tests::sql_consume_transport consumer(co_await make_sql_client());
         co_await consumer.start();
         auto consumed_kvs = co_await consumer.consume_from_partition(
           topic_name, model::partition_id(0), model::offset(0));
@@ -148,7 +148,7 @@ public:
 
 protected:
     const model::topic topic_name{"compaction_e2e_test_topic"};
-    const model::ntp ntp{model::kafka_namespace, topic_name, 0};
+    const model::ntp ntp{model::sql_namespace, topic_name, 0};
     cluster::partition* partition;
     ss::shared_ptr<storage::log> log;
 };
@@ -209,7 +209,7 @@ TEST_P(CompactionFixtureParamTest, TestDedupeOnePass) {
     wait_for_leader(ntp).get();
     auto restart_summary = dir_summary().get();
 
-    tests::kafka_consume_transport second_consumer(make_kafka_client().get());
+    tests::sql_consume_transport second_consumer(make_sql_client().get());
     second_consumer.start().get();
     auto consumed_kvs_restarted = second_consumer
                                     .consume_from_partition(

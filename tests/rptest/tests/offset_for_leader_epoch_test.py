@@ -15,7 +15,7 @@ from ducktape.utils.util import wait_until
 
 from rptest.clients.kcl import KCL
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
@@ -27,9 +27,9 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
     Check offset for leader epoch handling
     """
     def _all_have_leaders(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             partitions = admin.get_partitions(node=n)
             if not all([p['leader'] != -1 for p in partitions]):
                 return False
@@ -44,7 +44,7 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
             err_msg="Timeout waiting for all partitions to have leaders")
 
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                topic,
                                16384,
                                msg_cnt,
@@ -64,7 +64,7 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
                              node_prealloc_count=1)
 
     def list_offsets(self, topics, total_partitions):
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         topic_names = [t.name for t in topics]
         offsets_map = {}
 
@@ -106,7 +106,7 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
         initial_offsets = self.list_offsets(topics=topics,
                                             total_partitions=total_partitions)
 
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         leader_epoch_offsets = kcl.offset_for_leader_epoch(topics=topic_names,
                                                            leader_epoch=1)
 
@@ -120,7 +120,7 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
 
         # restart all the nodes to force leader election,
         # increase start timeout as partition count may get large
-        self.redpanda.restart_nodes(self.redpanda.nodes, start_timeout=30)
+        self.funes.restart_nodes(self.funes.nodes, start_timeout=30)
         # produce more data
         for t in topics:
             self._produce(t.name, 20)
@@ -137,7 +137,7 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
 
         last_offsets = self.list_offsets(topics=topics,
                                          total_partitions=total_partitions)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         for t in topics:
             tp_desc = rpk.describe_topic(t.name)
             for p in tp_desc:
@@ -174,19 +174,19 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
         # create test topics
         self.client().create_topic(topic)
 
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
 
         def produce_some():
             msg_size = 512
-            msg_cnt = 1000000 if self.redpanda.dedicated_nodes else 10000
+            msg_cnt = 1000000 if self.funes.dedicated_nodes else 10000
 
-            producer = KgoVerifierProducer(self.test_context, self.redpanda,
+            producer = KgoVerifierProducer(self.test_context, self.funes,
                                            topic.name, msg_size, msg_cnt,
                                            self.preallocated_nodes)
             producer.start()
             producer.wait()
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         offsets = {}
 
         def get_offsets_for_leader_epoch(epoch):
@@ -206,7 +206,7 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
 
             return offsets_for_leader_epoch
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def get_offsets_and_epochs():
             offsets = []
@@ -235,13 +235,13 @@ class OffsetForLeaderEpochTest(PreallocNodesTest):
             offsets_after_epochs.append(list(offsets))
 
             for p in offsets_after_epochs[-1]:
-                admin.partition_transfer_leadership("kafka",
+                admin.partition_transfer_leadership("sql",
                                                     topic=topic.name,
                                                     partition=p.id)
         # generate some more leadership changes
         for _ in range(5):
             for p in offsets_after_epochs[-1]:
-                admin.partition_transfer_leadership("kafka",
+                admin.partition_transfer_leadership("sql",
                                                     topic=topic.name,
                                                     partition=p.id)
         epoch_offsets = defaultdict(dict)

@@ -84,7 +84,7 @@ ss::future<std::vector<self_test_result>> diskcheck::run(diskcheck_opts opts) {
     co_await verify_remaining_space(opts.data_size);
     vlog(
       clusterlog.info,
-      "Starting redpanda self-test disk benchmark, with options: {}",
+      "Starting funes self-test disk benchmark, with options: {}",
       opts);
     _cancelled = false;
     _opts = opts;
@@ -103,7 +103,7 @@ ss::future<std::vector<self_test_result>> diskcheck::run(diskcheck_opts opts) {
     co_return co_await initialize_benchmark(fname).finally([fname] {
         vlog(
           clusterlog.debug,
-          "redpanda self-test disk benchmark completed gracefully");
+          "funes self-test disk benchmark completed gracefully");
         return ss::remove_file(fname).handle_exception_type(
           [fname](const std::filesystem::filesystem_error& fs_ex) {
               vlog(

@@ -14,7 +14,7 @@ import (
 	"fmt"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -53,8 +53,8 @@ resource names:
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			b, err := a.createDeletionsAndDescribes(true)
@@ -62,7 +62,7 @@ resource names:
 			describeReqResp(adm, printAllFilters, false, b)
 		},
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	a.addListFlags(cmd)
 	cmd.Flags().BoolVarP(&printAllFilters, "print-filters", "f", false, "Print the filters that were requested (failed filters are always printed)")
 	return cmd
@@ -137,7 +137,7 @@ func printDescribeFilters(results kadm.DescribeACLsResults) {
 			f.Pattern,
 			f.Operation,
 			f.Permission,
-			kafka.ErrMessage(f.Err),
+			sql.ErrMessage(f.Err),
 		})
 	}
 }

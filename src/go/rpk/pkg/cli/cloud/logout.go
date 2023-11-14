@@ -23,8 +23,8 @@ func newLogoutCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	var clear bool
 	cmd := &cobra.Command{
 		Use:   "logout",
-		Short: "Log out from Redpanda cloud",
-		Long: `Log out from Redpanda cloud
+		Short: "Log out from Funes cloud",
+		Long: `Log out from Funes cloud
 
 This command deletes your cloud auth token. If you want to log out entirely and
 switch to a different organization, you can use the --clear-credentials flag to

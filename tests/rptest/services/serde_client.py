@@ -28,11 +28,11 @@ JAVA_EXEC = "java -cp"
 class SerdeClient(BackgroundThreadService):
     EXES = dict({
         SerdeClientType.Python:
-        f'{PYTHON_EXEC} /opt/remote/python_librdkafka_serde_client.py',
+        f'{PYTHON_EXEC} /opt/remote/python_librdsql_serde_client.py',
         SerdeClientType.Java:
-        f'{JAVA_EXEC} /opt/kafka-serde/kafka-serde.jar com.redpanda.JavaKafkaSerdeClientMain',
+        f'{JAVA_EXEC} /opt/sql-serde/sql-serde.jar com.funes.JavaSQLSerdeClientMain',
         SerdeClientType.Golang:
-        '/opt/redpanda-tests/go/go-kafka-serde/go-kafka-serde'
+        '/opt/funes-tests/go/go-sql-serde/go-sql-serde'
     })
 
     def __init__(
@@ -104,7 +104,7 @@ class SerdeClient(BackgroundThreadService):
         if self._serde_client_type == SerdeClientType.Python:
             inject_remote_script(node, "payload_pb2.py")
             script_path = inject_remote_script(
-                node, "python_librdkafka_serde_client.py")
+                node, "python_librdsql_serde_client.py")
             script_path = f"{PYTHON_EXEC} {script_path}"
         else:
             script_path = self.EXES[self._serde_client_type]

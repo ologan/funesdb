@@ -157,7 +157,7 @@ T make_ntp(const ss::sstring& t, int32_t p) {
 
 template<>
 ntp make_ntp<ntp>(const ss::sstring& t, int32_t p) {
-    return ntp{model::kafka_namespace, t, p};
+    return ntp{model::sql_namespace, t, p};
 }
 
 template<typename T>
@@ -212,13 +212,13 @@ struct old_ntp_hash<model::ntp> {
 
 size_t get_ktp_hash(const ktp& k) { return std::hash<ktp>{}(k); }
 size_t get_kaf_hash0(model::ktp const&) {
-    return std::hash<std::string_view>{}("kafka");
+    return std::hash<std::string_view>{}("sql");
 }
 size_t get_kaf_hash1() {
-    return std::hash<std::string_view>{}(model::kafka_ns_view);
+    return std::hash<std::string_view>{}(model::sql_ns_view);
 }
 size_t get_kaf_hash2() {
-    return std::hash<ss::sstring>{}(ss::sstring{model::kafka_ns_view});
+    return std::hash<ss::sstring>{}(ss::sstring{model::sql_ns_view});
 }
 
 bool ntp_equals(const ntp& l, const ktp& r) { return l == r; }

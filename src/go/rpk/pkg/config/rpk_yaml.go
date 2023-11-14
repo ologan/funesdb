@@ -108,10 +108,10 @@ type (
 		CommandTimeout Duration `json:"command_timeout" yaml:"command_timeout"`
 
 		// DialTimeout is how long we allow for initiating a connection
-		// to brokers for the Admin API and Kafka API.
+		// to brokers for the Admin API and SQL API.
 		DialTimeout Duration `json:"dial_timeout" yaml:"dial_timeout"`
 
-		// RequestTimeoutOverhead, for Kafka API requests, how long do
+		// RequestTimeoutOverhead, for SQL API requests, how long do
 		// we give the request on top of any request's timeout field.
 		RequestTimeoutOverhead Duration `json:"request_timeout_overhead" yaml:"request_timeout_overhead"`
 
@@ -125,8 +125,8 @@ type (
 		// fetch requests.
 		FetchMaxWait Duration `json:"fetch_max_wait" yaml:"fetch_max_wait"`
 
-		// KafkaProtocolReqClientID is the client ID to use for the Kafka API.
-		KafkaProtocolReqClientID string `json:"kafka_protocol_request_client_id" yaml:"kafka_protocol_request_client_id"`
+		// SQLProtocolReqClientID is the client ID to use for the SQL API.
+		SQLProtocolReqClientID string `json:"sql_protocol_request_client_id" yaml:"sql_protocol_request_client_id"`
 	}
 
 	RpkProfile struct {
@@ -135,7 +135,7 @@ type (
 		Prompt       string               `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 		FromCloud    bool                 `json:"from_cloud,omitempty" yaml:"from_cloud,omitempty"`
 		CloudCluster *RpkCloudCluster     `json:"cloud_cluster,omitempty" yaml:"cloud_cluster,omitempty"`
-		KafkaAPI     RpkKafkaAPI          `json:"kafka_api,omitempty" yaml:"kafka_api,omitempty"`
+		SQLAPI     RpkSQLAPI          `json:"sql_api,omitempty" yaml:"sql_api,omitempty"`
 		AdminAPI     RpkAdminAPI          `json:"admin_api,omitempty" yaml:"admin_api,omitempty"`
 		SR           RpkSchemaRegistryAPI `json:"schema_registry,omitempty" yaml:"schema_registry,omitempty"`
 
@@ -268,9 +268,9 @@ func (p *RpkProfile) DevOverrides() DevOverrides {
 	return p.c.devOverrides
 }
 
-// HasSASLCredentials returns if both Kafka SASL user and password are empty.
+// HasSASLCredentials returns if both SQL SASL user and password are empty.
 func (p *RpkProfile) HasSASLCredentials() bool {
-	s := p.KafkaAPI.SASL
+	s := p.SQLAPI.SASL
 	return s != nil && s.User != "" && s.Password != ""
 }
 

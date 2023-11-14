@@ -41,7 +41,7 @@ const (
 	MembershipStatusDraining MembershipStatus = "draining"
 )
 
-// Broker is the information returned from the Redpanda admin broker endpoints.
+// Broker is the information returned from the Funes admin broker endpoints.
 type Broker struct {
 	NodeID           int                `json:"node_id"`
 	NumCores         int                `json:"num_cores"`

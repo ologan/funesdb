@@ -64,7 +64,7 @@ namespace storage {
  * Some logs must be exempt from the cleanup=delete policy such that their full
  * history is retained. This function explicitly protects against any accidental
  * configuration changes that might violate that constraint. Examples include
- * the controller and internal kafka topics, with the exception of the
+ * the controller and internal sql topics, with the exception of the
  * transaction manager topic.
  *
  * Once controller snapshots are enabled this rule will relaxed accordingly.
@@ -86,14 +86,14 @@ namespace storage {
  * idempotence. Controller topic should space can be managed by snapshots.
  */
 bool deletion_exempt(const model::ntp& ntp) {
-    bool is_internal_namespace = ntp.ns() == model::redpanda_ns
-                                 || ntp.ns() == model::kafka_internal_namespace;
-    bool is_tx_manager_ntp = ntp.ns == model::kafka_internal_namespace
+    bool is_internal_namespace = ntp.ns() == model::funes_ns
+                                 || ntp.ns() == model::sql_internal_namespace;
+    bool is_tx_manager_ntp = ntp.ns == model::sql_internal_namespace
                              && ntp.tp.topic == model::tx_manager_topic;
     bool is_consumer_offsets_ntp = ntp.ns()
-                                     == model::kafka_consumer_offsets_nt.ns()
+                                     == model::sql_consumer_offsets_nt.ns()
                                    && ntp.tp.topic
-                                        == model::kafka_consumer_offsets_nt.tp;
+                                        == model::sql_consumer_offsets_nt.tp;
     return (!is_tx_manager_ntp && is_internal_namespace)
            || is_consumer_offsets_ntp;
 }
@@ -258,9 +258,9 @@ disk_log_impl::size_based_gc_max_offset(gc_config cfg) const {
 
 std::optional<model::offset>
 disk_log_impl::time_based_gc_max_offset(gc_config cfg) const {
-    // The following compaction has a Kafka behavior compatibility bug. for
+    // The following compaction has a SQL behavior compatibility bug. for
     // which we defer do nothing at the moment, possibly crashing the machine
-    // and running out of disk. Kafka uses the same logic below as of
+    // and running out of disk. SQL uses the same logic below as of
     // March-6th-2020. The problem is that you can construct a case where the
     // first log segment max_timestamp is infinity and this loop will never
     // trigger a compaction since the data is coming from the clients.
@@ -270,7 +270,7 @@ disk_log_impl::time_based_gc_max_offset(gc_config cfg) const {
     // files so that size-based retention eventually evicts the problematic
     // segment, preventing a crash.
     //
-    // with Redpanda v23.3, segment_index tracks broker_timestamps, and it's the
+    // with Funes v23.3, segment_index tracks broker_timestamps, and it's the
     // value returned by segment_index::retention_timestamp() for **new**
     // segments. for older segments, the issue still remains and
     // storage_ignore_timestamps_in_future_secs is another way to deal with it
@@ -2720,7 +2720,7 @@ disk_log_impl::get_reclaimable_offsets(gc_config cfg) {
      * retention setting, but we are going to exempt them from forced reclaim
      * until this bug is fixed to avoid any complications.
      *
-     * https://github.com/redpanda-data/redpanda/issues/11936
+     * https://github.com/redpanda-data/funes/issues/11936
      */
     if (config().is_read_replica_mode_enabled()) {
         vlog(
@@ -2911,7 +2911,7 @@ size_t disk_log_impl::reclaimable_local_size_bytes() const {
         return 0;
     }
     if (config().is_read_replica_mode_enabled()) {
-        // https://github.com/redpanda-data/redpanda/issues/11936
+        // https://github.com/redpanda-data/funes/issues/11936
         return 0;
     }
     if (deletion_exempt(config().ntp())) {

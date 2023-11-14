@@ -17,7 +17,7 @@
 
 // centralized unit for memory management
 struct memory_groups {
-    static size_t kafka_total_memory() {
+    static size_t sql_total_memory() {
         // 30%
         return ss::memory::stats().total_memory() * .30;
     }

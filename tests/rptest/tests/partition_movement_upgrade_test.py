@@ -17,8 +17,8 @@ from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsum
 from rptest.tests.partition_movement import PartitionMovementMixin
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_installer import FunesInstaller, wait_for_num_versions
 from ducktape.utils.util import wait_until
 
 
@@ -28,22 +28,22 @@ class PartitionMovementUpgradeTest(PreallocNodesTest, PartitionMovementMixin):
               self).__init__(test_context=test_context,
                              num_brokers=5,
                              node_prealloc_count=1)
-        self.installer = self.redpanda._installer
+        self.installer = self.funes._installer
         self._message_size = 128
         self._message_cnt = 30000
         self._stop_move = threading.Event()
 
     def setUp(self):
         self.old_version = self.installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
+            FunesInstaller.HEAD)
         _, self.old_version_str = self.installer.install(
-            self.redpanda.nodes, self.old_version)
+            self.funes.nodes, self.old_version)
         super(PartitionMovementUpgradeTest, self).setUp()
 
     def _start_producer(self, topic_name):
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             self._message_size,
             self._message_cnt,
@@ -58,7 +58,7 @@ class PartitionMovementUpgradeTest(PreallocNodesTest, PartitionMovementMixin):
 
         self.consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             self._message_size,
             readers=5,
@@ -91,7 +91,7 @@ class PartitionMovementUpgradeTest(PreallocNodesTest, PartitionMovementMixin):
                     self._do_move_and_verify(topic, partition, 360)
                     # connection errors are expected as we restart nodes for upgrade
                 except requests.exceptions.ConnectionError as e:
-                    self.redpanda.logger.info(f"Error moving partition: {e}")
+                    self.funes.logger.info(f"Error moving partition: {e}")
                     sleep(1)
 
         self.move_worker = threading.Thread(name='partition-move-worker',
@@ -104,7 +104,7 @@ class PartitionMovementUpgradeTest(PreallocNodesTest, PartitionMovementMixin):
 
         self.move_worker.join()
 
-    # Allow unsupported version error log entry for older redpanda versions
+    # Allow unsupported version error log entry for older funes versions
     #
     # This log entry may be logged by version up to v22.1.x
     unsupported_api_version_log_entry = re.compile(
@@ -128,29 +128,29 @@ class PartitionMovementUpgradeTest(PreallocNodesTest, PartitionMovementMixin):
         metadata = self.client().describe_topics()
         self.start_moving_partitions(metadata)
 
-        first_node = self.redpanda.nodes[0]
+        first_node = self.funes.nodes[0]
 
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert self.old_version_str in unique_versions, unique_versions
 
         # Upgrade one node to the head version.
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes([first_node])
-        unique_versions = wait_for_num_versions(self.redpanda, 2)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        self.funes.restart_nodes([first_node])
+        unique_versions = wait_for_num_versions(self.funes, 2)
         assert self.old_version_str in unique_versions, unique_versions
 
         # Rollback the partial upgrade and ensure we go back to the original
         # state.
         self.installer.install([first_node], self.old_version)
-        self.redpanda.restart_nodes([first_node])
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        self.funes.restart_nodes([first_node])
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert self.old_version_str in unique_versions, unique_versions
 
         # Only once we upgrade the rest of the nodes do we converge on the new
         # version.
-        self.installer.install([first_node], RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
-        unique_versions = wait_for_num_versions(self.redpanda, 1)
+        self.installer.install([first_node], FunesInstaller.HEAD)
+        self.funes.restart_nodes(self.funes.nodes)
+        unique_versions = wait_for_num_versions(self.funes, 1)
         assert self.old_version_str not in unique_versions, unique_versions
 
         self.stop_moving_partitions()

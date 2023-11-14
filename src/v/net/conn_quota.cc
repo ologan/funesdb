@@ -489,7 +489,7 @@ void conn_quota::apply_overrides() {
                 // Avoid log spam from all shards, only log on shard 0
                 vlog(
                   rpc::rpclog.warn,
-                  "Invalid entry in kafka_connections_max_overrides: '{}'",
+                  "Invalid entry in sql_connections_max_overrides: '{}'",
                   o);
             }
             continue;

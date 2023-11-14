@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/materialized_resources.h"
@@ -188,7 +188,7 @@ materialized_resources::materialized_resources()
     _storage_read_readahead_count.watch(update_max_mem);
     _max_concurrent_hydrations_per_shard.watch([this]() {
         // The 'max_connections' parameter can't be changed without restarting
-        // redpanda.
+        // funes.
         _hydration_units.set_capacity(max_parallel_hydrations());
     });
 

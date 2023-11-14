@@ -43,7 +43,7 @@ enum class visibility {
     // details like (e.g. buffer sizes, queue lengths)
     tunable,
     // User properties are normal, end-user visible settings that control
-    // functional redpanda behaviours (e.g. enable a feature)
+    // functional funes behaviours (e.g. enable a feature)
     user,
     // Deprecated properties are kept around to avoid complaining
     // about invalid config after upgrades, but they do nothing and

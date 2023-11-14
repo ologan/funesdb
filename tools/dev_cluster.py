@@ -13,7 +13,7 @@
 #
 # Start a 3 node cluster:
 #
-#   [jerry@winterland]$ dev_cluster.py -e vbuild/debug/clang/bin/redpanda
+#   [jerry@winterland]$ dev_cluster.py -e vbuild/debug/clang/bin/funes
 #
 import asyncio
 from typing import Optional
@@ -41,8 +41,8 @@ class NetworkAddress:
 
 
 @dataclasses.dataclass
-class PandaproxyConfig:
-    pandaproxy_api: NetworkAddress
+class FunesproxyConfig:
+    funesproxy_api: NetworkAddress
 
 
 @dataclasses.dataclass
@@ -51,12 +51,12 @@ class SchemaRegistryConfig:
 
 
 @dataclasses.dataclass
-class RedpandaConfig:
+class FunesConfig:
     data_directory: pathlib.Path
     rpc_server: NetworkAddress
     advertised_rpc_api: NetworkAddress
-    advertised_kafka_api: NetworkAddress
-    kafka_api: NetworkAddress
+    advertised_sql_api: NetworkAddress
+    sql_api: NetworkAddress
     admin: NetworkAddress
     seed_servers: list[NetworkAddress]
     empty_seed_starts_cluster: bool = False
@@ -65,8 +65,8 @@ class RedpandaConfig:
 
 @dataclasses.dataclass
 class NodeConfig:
-    redpanda: RedpandaConfig
-    pandaproxy: PandaproxyConfig
+    funes: FunesConfig
+    funesproxy: FunesproxyConfig
     schema_registry: SchemaRegistryConfig
     config_path: str
 
@@ -75,7 +75,7 @@ class NodeConfig:
     cluster_size: int
 
 
-class Redpanda:
+class Funes:
     def __init__(self, binary, cores: int, config: NodeConfig, extra_args):
         self.binary = binary
         self.cores = cores
@@ -89,7 +89,7 @@ class Redpanda:
 
     async def run(self):
         log_path = pathlib.Path(os.path.dirname(
-            self.config.config_path)) / "redpanda.log"
+            self.config.config_path)) / "funes.log"
 
         # If user did not override cores with extra args, apply it from our internal cores setting
         if not {"-c", "--smp"} & set(self.extra_args):
@@ -113,7 +113,7 @@ class Redpanda:
         extra_args = ' '.join(f"\"{a}\"" for a in self.extra_args)
 
         self.process = await asyncio.create_subprocess_shell(
-            f"{self.binary} --redpanda-cfg {self.config.config_path} {cores_args} {memory_args} {extra_args} 2>&1 | tee -i {log_path}",
+            f"{self.binary} --funes-cfg {self.config.config_path} {cores_args} {memory_args} {extra_args} 2>&1 | tee -i {log_path}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT)
 
@@ -132,8 +132,8 @@ async def main():
     parser.add_argument("-e",
                         "--executable",
                         type=pathlib.Path,
-                        help="path to redpanda executable",
-                        default="redpanda")
+                        help="path to funes executable",
+                        default="funes")
     parser.add_argument("--nodes", type=int, help="number of nodes", default=3)
     parser.add_argument("--cores",
                         type=int,
@@ -148,9 +148,9 @@ async def main():
                         type=int,
                         help="rpc port",
                         default=33145)
-    parser.add_argument("--base-kafka-port",
+    parser.add_argument("--base-sql-port",
                         type=int,
-                        help="kafka port",
+                        help="sql port",
                         default=9092)
     parser.add_argument("--base-admin-port",
                         type=int,
@@ -161,10 +161,10 @@ async def main():
                         help="schema registry port",
                         default=8081)
     parser.add_argument(
-        "--base-pandaproxy-port",
+        "--base-funesproxy-port",
         type=int,
-        help="pandaproxy port",
-        # We can't use the "normal" pandaproxy port due to conflicts
+        help="funesproxy port",
+        # We can't use the "normal" funesproxy port due to conflicts
         default=8092)
     parser.add_argument("--listen-address",
                         type=str,
@@ -192,25 +192,25 @@ async def main():
     def make_node_config(i, data_dir, config_path, rack):
         make_address = lambda p: NetworkAddress(args.listen_address, p + i)
         rpc_address = rpc_addresses[i]
-        redpanda = RedpandaConfig(data_directory=data_dir,
+        funes = FunesConfig(data_directory=data_dir,
                                   rpc_server=rpc_address,
                                   advertised_rpc_api=rpc_address,
-                                  advertised_kafka_api=make_address(
-                                      args.base_kafka_port),
-                                  kafka_api=make_address(args.base_kafka_port),
+                                  advertised_sql_api=make_address(
+                                      args.base_sql_port),
+                                  sql_api=make_address(args.base_sql_port),
                                   admin=make_address(args.base_admin_port),
                                   seed_servers=rpc_addresses[:3],
                                   empty_seed_starts_cluster=False,
                                   rack=rack)
-        pandaproxy = PandaproxyConfig(
-            pandaproxy_api=make_address(args.base_pandaproxy_port))
+        funesproxy = FunesproxyConfig(
+            funesproxy_api=make_address(args.base_funesproxy_port))
         schema_registry = SchemaRegistryConfig(
             schema_registry_api=make_address(args.base_schema_registry_port))
-        return NodeConfig(redpanda=redpanda,
+        return NodeConfig(funes=funes,
                           index=i,
                           config_path=config_path,
                           cluster_size=args.nodes,
-                          pandaproxy=pandaproxy,
+                          funesproxy=funesproxy,
                           schema_registry=schema_registry)
 
     def pathlib_path_representer(dumper, path):
@@ -253,11 +253,11 @@ async def main():
 
     cores = args.cores
     if cores is None:
-        # Use 75% of cores for redpanda.  e.g. 3 node cluster on a 16 node system
+        # Use 75% of cores for funes.  e.g. 3 node cluster on a 16 node system
         # gives each node 4 cores.
         cores = max((3 * (psutil.cpu_count(logical=False) // 4)) // args.nodes,
                     1)
-    nodes = [Redpanda(args.executable, cores, c, extra_args) for c in configs]
+    nodes = [Funes(args.executable, cores, c, extra_args) for c in configs]
 
     coros = [r.run() for r in nodes]
 

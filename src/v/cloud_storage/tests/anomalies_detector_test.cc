@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iostream.h"
@@ -43,7 +43,7 @@ ss::logger test_logger{"anomaly_detection_test"};
 constexpr std::string_view stm_manifest = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,
@@ -117,7 +117,7 @@ constexpr std::string_view stm_manifest = R"json(
 constexpr std::string_view spillover_manifest_at_0 = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,
@@ -158,7 +158,7 @@ constexpr std::string_view spillover_manifest_at_0 = R"json(
 constexpr std::string_view spillover_manifest_at_20 = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,
@@ -415,8 +415,8 @@ private:
             cloud_storage::spillover_manifest_path_components comp{
               .base = iter->base_offset,
               .last = iter->committed_offset,
-              .base_kafka = iter->base_kafka_offset(),
-              .next_kafka = iter->next_kafka_offset(),
+              .base_sql = iter->base_sql_offset(),
+              .next_sql = iter->next_sql_offset(),
               .base_ts = iter->base_timestamp,
               .last_ts = iter->max_timestamp,
             };
@@ -603,7 +603,7 @@ FIXTURE_TEST(test_metadata_anomalies, bucket_view_fixture) {
     constexpr std::string_view stm_man = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,
@@ -674,7 +674,7 @@ FIXTURE_TEST(test_metadata_anomalies, bucket_view_fixture) {
     constexpr std::string_view first_spill_man = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,
@@ -702,7 +702,7 @@ FIXTURE_TEST(test_metadata_anomalies, bucket_view_fixture) {
     constexpr std::string_view last_spill_man = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,
@@ -781,7 +781,7 @@ FIXTURE_TEST(test_filtering_of_segment_merge, bucket_view_fixture) {
     constexpr std::string_view stm_man = R"json(
 {
   "version": 3,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 1,

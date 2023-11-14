@@ -34,7 +34,7 @@ namespace transform {
  */
 struct transformed_batch {
     model::record_batch batch;
-    kafka::offset input_offset;
+    sql::offset input_offset;
 };
 
 /**
@@ -77,7 +77,7 @@ private:
     ss::future<> run_transform_loop();
     ss::future<> run_producer_loop();
     ss::future<> poll_sleep();
-    ss::future<kafka::offset> load_start_offset();
+    ss::future<sql::offset> load_start_offset();
     void report_lag(int64_t);
 
     template<typename... Future>

@@ -10,11 +10,11 @@
 import os
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk_remote import RpkRemoteTool
 
 
-class RpkTunerTest(RedpandaTest):
+class RpkTunerTest(FunesTest):
     def __init__(self, ctx):
         super(RpkTunerTest, self).__init__(test_context=ctx)
         self._ctx = ctx
@@ -22,11 +22,11 @@ class RpkTunerTest(RedpandaTest):
     @cluster(num_nodes=1)
     def test_tune_prod_all(self):
         """
-        Test will set production mode and execute rpk redpanda tune all,
+        Test will set production mode and execute rpk funes tune all,
         we expect the command to exit with 1 if an error happens.
         """
-        node = self.redpanda.nodes[0]
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.nodes[0]
+        rpk = RpkRemoteTool(self.funes, node)
         rpk.mode_set("prod")
 
         rpk.tune("all")
@@ -35,10 +35,10 @@ class RpkTunerTest(RedpandaTest):
     def test_tune_fstrim(self):
         """
         Validate fstrim tuner execution,
-        fstrim was disabled in production mode https://github.com/redpanda-data/redpanda/issues/3068 
+        fstrim was disabled in production mode https://github.com/redpanda-data/funes/issues/3068 
         """
-        node = self.redpanda.nodes[0]
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.nodes[0]
+        rpk = RpkRemoteTool(self.funes, node)
         rpk.config_set('rpk.tune_fstrim', 'true')
 
         rpk.tune("fstrim")
@@ -49,8 +49,8 @@ class RpkTunerTest(RedpandaTest):
         Validate transparent hugepage tuner execution.
         THP tuner is disabled in production mode
         """
-        node = self.redpanda.nodes[0]
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.nodes[0]
+        rpk = RpkRemoteTool(self.funes, node)
         rpk.config_set('rpk.tune_transparent_hugepages', 'true')
 
         rpk.tune("transparent_hugepages")
@@ -62,8 +62,8 @@ class RpkTunerTest(RedpandaTest):
         tuners match our current setup, if a new tuner gets added we
         will catch it here.
         """
-        node = self.redpanda.nodes[0]
-        rpk = RpkRemoteTool(self.redpanda, node)
+        node = self.funes.nodes[0]
+        rpk = RpkRemoteTool(self.funes, node)
         # Set all tuners:
         rpk.mode_set("prod")
         rpk.config_set('rpk.tune_fstrim', 'true')

@@ -15,8 +15,8 @@
 #
 # Modifications Copyright 2021 Redpanda Data, Inc.
 # - Reformatted code
-# - Replaced dependency on Kafka with Redpanda
-# - Imported annotate_missing_msgs helper from kafka test suite
+# - Replaced dependency on SQL with Funes
+# - Imported annotate_missing_msgs helper from sql test suite
 
 from collections import defaultdict, namedtuple
 from typing import Optional
@@ -24,9 +24,9 @@ import os
 from typing import Optional
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from rptest.services.redpanda import RedpandaService, make_redpanda_service
-from rptest.services.redpanda_installer import InstallOptions
-from rptest.services.redpanda_installer import RedpandaInstaller
+from rptest.services.funes import FunesService, make_funes_service
+from rptest.services.funes_installer import InstallOptions
+from rptest.services.funes_installer import FunesInstaller
 from rptest.clients.default import DefaultClient
 from rptest.services.verifiable_consumer import VerifiableConsumer
 from rptest.services.verifiable_producer import VerifiableProducer, is_int_with_prefix
@@ -72,12 +72,12 @@ class EndToEndTest(Test):
 
         self.records_consumed = []
         self.last_consumed_offsets = {}
-        self.redpanda: Optional[RedpandaService] = None
+        self.funes: Optional[FunesService] = None
         self.si_settings = si_settings
         self.topic = None
         self._client = None
 
-    def start_redpanda(self,
+    def start_funes(self,
                        num_nodes=1,
                        extra_rp_conf=None,
                        si_settings=None,
@@ -95,9 +95,9 @@ class EndToEndTest(Test):
             # merge both configurations, the extra_rp_conf passed in
             # paramter takes the precedence
             self._extra_rp_conf = {**self._extra_rp_conf, **extra_rp_conf}
-        assert self.redpanda is None
+        assert self.funes is None
 
-        self.redpanda = make_redpanda_service(
+        self.funes = make_funes_service(
             self.test_context,
             num_nodes,
             extra_rp_conf=self._extra_rp_conf,
@@ -106,38 +106,38 @@ class EndToEndTest(Test):
             environment=environment)
         if new_bootstrap:
             seeds = [
-                self.redpanda.nodes[i]
-                for i in range(0, min(len(self.redpanda.nodes), max_num_seeds))
+                self.funes.nodes[i]
+                for i in range(0, min(len(self.funes.nodes), max_num_seeds))
             ]
-            self.redpanda.set_seed_servers(seeds)
+            self.funes.set_seed_servers(seeds)
         version_to_install = None
         if install_opts:
             if install_opts.install_previous_version:
                 version_to_install = \
-                    self.redpanda._installer.highest_from_prior_feature_version(RedpandaInstaller.HEAD)
+                    self.funes._installer.highest_from_prior_feature_version(FunesInstaller.HEAD)
             if install_opts.version:
                 version_to_install = install_opts.version
 
         if version_to_install:
-            self.redpanda._installer.install(self.redpanda.nodes,
+            self.funes._installer.install(self.funes.nodes,
                                              version_to_install)
 
-        self.redpanda.start(auto_assign_node_id=new_bootstrap,
+        self.funes.start(auto_assign_node_id=new_bootstrap,
                             omit_seeds_on_idx_one=not new_bootstrap)
         if version_to_install and install_opts.num_to_upgrade > 0:
             # Perform the upgrade rather than starting each node on the
-            # appropriate version. Redpanda may not start up if starting a new
+            # appropriate version. Funes may not start up if starting a new
             # cluster with mixed-versions.
             nodes_to_upgrade = [
-                self.redpanda.get_node(i + 1)
+                self.funes.get_node(i + 1)
                 for i in range(install_opts.num_to_upgrade)
             ]
-            self.redpanda._installer.install(nodes_to_upgrade,
-                                             RedpandaInstaller.HEAD)
-            self.redpanda.restart_nodes(nodes_to_upgrade)
+            self.funes._installer.install(nodes_to_upgrade,
+                                             FunesInstaller.HEAD)
+            self.funes.restart_nodes(nodes_to_upgrade)
 
-        self._client = DefaultClient(self.redpanda)
-        self._rpk_client = RpkTool(self.redpanda)
+        self._client = DefaultClient(self.funes)
+        self._rpk_client = RpkTool(self.funes)
 
     def rpk_client(self):
         assert self._rpk_client is not None
@@ -151,7 +151,7 @@ class EndToEndTest(Test):
     def debug_mode(self):
         """
         Useful for tests that want to change behaviour when running on
-        the much slower debug builds of redpanda, which generally cannot
+        the much slower debug builds of funes, which generally cannot
         keep up with significant quantities of data or partition counts.
         """
         return os.environ.get('BUILD_TYPE', None) == 'debug'
@@ -160,15 +160,15 @@ class EndToEndTest(Test):
                        num_nodes=1,
                        group_id="test_group",
                        verify_offsets=True,
-                       redpanda_cluster=None):
-        if redpanda_cluster is None:
-            assert self.redpanda
-            redpanda_cluster = self.redpanda
+                       funes_cluster=None):
+        if funes_cluster is None:
+            assert self.funes
+            funes_cluster = self.funes
         assert self.topic
         self.consumer = VerifiableConsumer(
             self.test_context,
             num_nodes=num_nodes,
-            redpanda=redpanda_cluster,
+            funes=funes_cluster,
             topic=self.topic,
             group_id=group_id,
             on_record_consumed=self.on_record_consumed,
@@ -181,12 +181,12 @@ class EndToEndTest(Test):
                        repeating_keys=None,
                        enable_idempotence=False,
                        acks=None):
-        assert self.redpanda
+        assert self.funes
         assert self.topic
         self.producer = VerifiableProducer(
             self.test_context,
             num_nodes=num_nodes,
-            redpanda=self.redpanda,
+            funes=self.funes,
             topic=self.topic,
             throughput=throughput,
             message_validator=is_int_with_prefix,
@@ -246,7 +246,7 @@ class EndToEndTest(Test):
     def _collect_segment_data(self):
         # TODO: data collection is disabled because it was
         # affecting other tests.
-        # See issue https://github.com/redpanda-data/redpanda/issues/7179
+        # See issue https://github.com/redpanda-data/funes/issues/7179
         pass
 
     def _collect_all_logs(self):
@@ -287,7 +287,7 @@ class EndToEndTest(Test):
         try:
             # Take copy of this dict in case a rogue VerifiableProducer
             # thread modifies it.
-            # Related: https://github.com/redpanda-data/redpanda/issues/3450
+            # Related: https://github.com/redpanda-data/funes/issues/3450
             last_acked_offsets = self.producer.last_acked_offsets.copy()
 
             self.logger.info("Producer's offsets after stopping: %s" %\

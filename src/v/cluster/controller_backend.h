@@ -125,7 +125,7 @@ namespace cluster {
  *
  * # Partition movement
  *
- * Partition movement in Redpanda is based on the Raft protocol mechanism called
+ * Partition movement in Funes is based on the Raft protocol mechanism called
  * Joint Consensus. When requested Raft implementation is able to move data
  * between nodes in a safe and consistent way. However requesting Raft to
  * reconfigure a raft group is not enough to complete a partition move. When
@@ -281,14 +281,14 @@ private:
     // Topics
     ss::future<> bootstrap_controller_backend();
     /**
-     * Function that will clean orphan topic files on redpanda startup
+     * Function that will clean orphan topic files on funes startup
      * Orphan topic files is files that left on disk after some node
-     * manipullations and redpanda doesn't know about these files, so it is
+     * manipullations and funes doesn't know about these files, so it is
      * impossible to remove them with default approach. Currently we may leave
-     * orphan topic files when we restart redpanda while partition deletion
+     * orphan topic files when we restart funes while partition deletion
      * operation was evaluating but hasn't finished yet.
-     * We assume that we can leave orphan files only on redpanda restart
-     * so we run clean process on startup, after bootstrap when redpanda
+     * We assume that we can leave orphan files only on funes restart
+     * so we run clean process on startup, after bootstrap when funes
      * already knows about all topics that it should containt on disk
      **/
     ss::future<> clear_orphan_topic_files(

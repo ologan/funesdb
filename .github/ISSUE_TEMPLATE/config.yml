@@ -2,9 +2,9 @@ blank_issues_enabled: true
 contact_links:
   - name: 👋 Slack
     url: https://redpanda.com/slack
-    about: Chat about all things Redpanda. Join the conversation!
+    about: Chat about all things Funes. Join the conversation!
   - name: ❓ Github Discussions
-    url: https://github.com/redpanda-data/redpanda/discussions
+    url: https://github.com/funes-data/funes/discussions
     about: Longer, more involved discussions
   - name: 💭 Product Feedback
     url: https://redpanda.com/feedback

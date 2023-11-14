@@ -8,12 +8,12 @@
 # by the Apache License, Version 2.0
 
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 
 
-class PartitionStateAPItest(RedpandaTest):
+class PartitionStateAPItest(FunesTest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs, num_brokers=5)
 
@@ -42,10 +42,10 @@ class PartitionStateAPItest(RedpandaTest):
         """Checks if all nodes report same leadership information. When no_leader is set ensures
         that no node reports a leader for the partition."""
         all_leaders = []
-        nodes = self.redpanda.started_nodes()
+        nodes = self.funes.started_nodes()
         for node in nodes:
-            p_state = self.redpanda._admin.get_partition_state(
-                "kafka", self.topic, 0, node)
+            p_state = self.funes._admin.get_partition_state(
+                "sql", self.topic, 0, node)
             replicas = p_state["replicas"]
             leaders = list(
                 filter(lambda r: r["raft_state"]["is_elected_leader"],
@@ -60,29 +60,29 @@ class PartitionStateAPItest(RedpandaTest):
         return len(all_leaders) == len(nodes) and len(set(all_leaders)) == 1
 
     def _wait_for_stable_leader(self):
-        self.redpanda.wait_until(self._has_stable_leadership,
+        self.funes.wait_until(self._has_stable_leadership,
                                  timeout_sec=30,
                                  backoff_sec=2)
 
     def _wait_for_no_leader(self):
-        self.redpanda.wait_until(
+        self.funes.wait_until(
             lambda: self._has_stable_leadership(no_leader=True),
             timeout_sec=30,
             backoff_sec=2)
 
     def _get_partition_state(self):
-        nodes = self.redpanda.started_nodes()
-        admin = self.redpanda._admin
+        nodes = self.funes.started_nodes()
+        admin = self.funes._admin
         return [
-            admin.get_partition_state("kafka", self.topic, 0, n) for n in nodes
+            admin.get_partition_state("sql", self.topic, 0, n) for n in nodes
         ]
 
     def _stop_first_replica_node(self, states):
         # Node id of first replica of first state.
         node_id = states[0]["replicas"][0]["raft_state"]["node_id"]
-        self.redpanda.logger.debug(f"Stopping node: {node_id}")
-        node = self.redpanda.get_node_by_id(node_id)
-        self.redpanda.stop_node(node)
+        self.funes.logger.debug(f"Stopping node: {node_id}")
+        node = self.funes.get_node_by_id(node_id)
+        self.funes.stop_node(node)
 
     @cluster(num_nodes=5)
     def test_partition_state(self):
@@ -112,10 +112,10 @@ class PartitionStateAPItest(RedpandaTest):
     @cluster(num_nodes=5)
     def test_controller_partition_state(self):
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         controller_state = [
-            admin.get_partition_state("redpanda", "controller", 0, n)
-            for n in self.redpanda.started_nodes()
+            admin.get_partition_state("funes", "controller", 0, n)
+            for n in self.funes.started_nodes()
         ]
 
         for s in controller_state:

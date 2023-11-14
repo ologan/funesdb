@@ -170,14 +170,14 @@ inline cluster::deprecated_seq_entry::deprecated_seq_cache_entry
 random_seq_cache_entry() {
     return {
       random_generators::get_int<int32_t>(),
-      tests::random_named_int<kafka::offset>()};
+      tests::random_named_int<sql::offset>()};
 }
 
 inline cluster::deprecated_seq_entry random_seq_entry() {
     cluster::deprecated_seq_entry entry;
     entry.pid = model::random_producer_identity(),
     entry.seq = random_generators::get_int<int32_t>(),
-    entry.last_offset = tests::random_named_int<kafka::offset>(),
+    entry.last_offset = tests::random_named_int<sql::offset>(),
     entry.seq_cache = tests::random_circular_buffer(random_seq_cache_entry),
     entry.last_write_timestamp = random_generators::get_int<int64_t>();
     return entry;

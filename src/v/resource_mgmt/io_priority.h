@@ -22,7 +22,7 @@ class priority_manager {
 public:
     ss::io_priority_class raft_priority() { return _raft_priority; }
     ss::io_priority_class controller_priority() { return _controller_priority; }
-    ss::io_priority_class kafka_read_priority() { return _kafka_read_priority; }
+    ss::io_priority_class sql_read_priority() { return _sql_read_priority; }
     ss::io_priority_class wasm_read_priority() { return _wasm_read_priority; }
     ss::io_priority_class compaction_priority() { return _compaction_priority; }
     ss::io_priority_class raft_learner_recovery_priority() {
@@ -45,8 +45,8 @@ private:
       : _raft_priority(ss::io_priority_class::register_one("raft", 1000))
       , _controller_priority(
           ss::io_priority_class::register_one("controller", 1000))
-      , _kafka_read_priority(
-          ss::io_priority_class::register_one("kafka_read", 1000))
+      , _sql_read_priority(
+          ss::io_priority_class::register_one("sql_read", 1000))
       , _wasm_read_priority(
           ss::io_priority_class::register_one("wasm_read", 500))
       , _compaction_priority(
@@ -65,7 +65,7 @@ private:
 
     ss::io_priority_class _raft_priority;
     ss::io_priority_class _controller_priority;
-    ss::io_priority_class _kafka_read_priority;
+    ss::io_priority_class _sql_read_priority;
     ss::io_priority_class _wasm_read_priority;
     ss::io_priority_class _compaction_priority;
     ss::io_priority_class _raft_learner_recovery_priority;
@@ -81,8 +81,8 @@ inline ss::io_priority_class controller_priority() {
     return priority_manager::local().controller_priority();
 }
 
-inline ss::io_priority_class kafka_read_priority() {
-    return priority_manager::local().kafka_read_priority();
+inline ss::io_priority_class sql_read_priority() {
+    return priority_manager::local().sql_read_priority();
 }
 
 inline ss::io_priority_class wasm_read_priority() {

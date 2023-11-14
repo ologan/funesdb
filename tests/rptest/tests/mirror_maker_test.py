@@ -17,28 +17,28 @@ from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.services.rpk_producer import RpkProducer
-from rptest.services.kafka import KafkaServiceAdapter
+from rptest.services.sql import SQLServiceAdapter
 from rptest.services.mirror_maker2 import MirrorMaker2
 
-from rptest.services.redpanda import make_redpanda_service
+from rptest.services.funes import make_funes_service
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.services.verifiable_producer import VerifiableProducer, is_int_with_prefix
 from rptest.services.verifiable_consumer import VerifiableConsumer
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.zookeeper import ZookeeperService
+from sqltest.services.sql import SQLService
+from sqltest.services.zookeeper import ZookeeperService
 
-from kafkatest.version import V_3_0_0
+from sqltest.version import V_3_0_0
 
 
 class MirrorMakerService(EndToEndTest):
-    kafka_source = "kafka"
-    redpanda_source = "redpanda"
+    sql_source = "sql"
+    funes_source = "funes"
 
     def __init__(self, test_context):
         super(MirrorMakerService, self).__init__(test_context)
 
         self.topic = TopicSpec(replication_factor=3)
-        # create single zookeeper node for Kafka
+        # create single zookeeper node for SQL
         self.zk = ZookeeperService(self.test_context,
                                    num_nodes=1,
                                    version=V_3_0_0)
@@ -51,7 +51,7 @@ class MirrorMakerService(EndToEndTest):
         # ducktape handle service teardown automatically, but it is hard
         # to tell what went wrong if one of the services hangs.  Do it
         # explicitly here with some logging, to enable debugging issues
-        # like https://github.com/redpanda-data/redpanda/issues/4270
+        # like https://github.com/redpanda-data/funes/issues/4270
 
         if self.source_broker is not None:
             self.logger.info(
@@ -66,25 +66,25 @@ class MirrorMakerService(EndToEndTest):
         self.zk.stop()
         self.logger.info("Awaiting zookeeper...")
 
-    def start_brokers(self, source_type=kafka_source):
-        if source_type == TestMirrorMakerService.redpanda_source:
-            self.source_broker = make_redpanda_service(self.test_context,
+    def start_brokers(self, source_type=sql_source):
+        if source_type == TestMirrorMakerService.funes_source:
+            self.source_broker = make_funes_service(self.test_context,
                                                        num_brokers=3)
         else:
-            self.source_broker = KafkaServiceAdapter(
+            self.source_broker = SQLServiceAdapter(
                 self.test_context,
-                KafkaService(self.test_context,
+                SQLService(self.test_context,
                              num_nodes=3,
                              zk=self.zk,
                              version=V_3_0_0))
 
-        self.redpanda = make_redpanda_service(self.test_context, num_brokers=3)
+        self.funes = make_funes_service(self.test_context, num_brokers=3)
         self.source_broker.start()
-        self.redpanda.start()
+        self.funes.start()
 
         self.source_client = DefaultClient(self.source_broker)
 
-        self.topic.partition_count = 1000 if self.redpanda.dedicated_nodes else 10
+        self.topic.partition_count = 1000 if self.funes.dedicated_nodes else 10
         self.source_client.create_topic(self.topic)
 
     def start_workload(self):
@@ -92,7 +92,7 @@ class MirrorMakerService(EndToEndTest):
         self.consumer = VerifiableConsumer(
             self.test_context,
             num_nodes=1,
-            redpanda=self.redpanda,
+            funes=self.funes,
             topic=self.topic.name,
             group_id='consumer_test_group',
             on_record_consumed=self.on_record_consumed)
@@ -101,7 +101,7 @@ class MirrorMakerService(EndToEndTest):
         self.producer = VerifiableProducer(
             self.test_context,
             num_nodes=1,
-            redpanda=self.source_broker,
+            funes=self.source_broker,
             topic=self.topic.name,
             throughput=1000,
             message_validator=is_int_with_prefix)
@@ -122,8 +122,8 @@ class TestMirrorMakerService(MirrorMakerService):
         super().__init__(*args, **kwargs)
 
     @cluster(num_nodes=10)
-    @parametrize(source_type=MirrorMakerService.kafka_source)
-    @parametrize(source_type=MirrorMakerService.redpanda_source)
+    @parametrize(source_type=MirrorMakerService.sql_source)
+    @parametrize(source_type=MirrorMakerService.funes_source)
     def test_simple_end_to_end(self, source_type):
         # start brokers
         self.start_brokers(source_type=source_type)
@@ -131,7 +131,7 @@ class TestMirrorMakerService(MirrorMakerService):
         self.mirror_maker = MirrorMaker2(self.test_context,
                                          num_nodes=1,
                                          source_cluster=self.source_broker,
-                                         target_cluster=self.redpanda)
+                                         target_cluster=self.funes)
         topics = []
         for i in range(0, 10):
             topics.append(
@@ -146,29 +146,29 @@ class TestMirrorMakerService(MirrorMakerService):
 
         self.run_validation(consumer_timeout_sec=120)
         self.mirror_maker.stop()
-        target_client = DefaultClient(self.redpanda)
+        target_client = DefaultClient(self.funes)
         for t in topics:
             desc = target_client.describe_topic(t.name)
             self.logger.debug(f'source topic: {t}, target topic: {desc}')
             assert len(desc.partitions) == t.partition_count
 
     @cluster(num_nodes=10)
-    @parametrize(source_type=MirrorMakerService.kafka_source)
-    @parametrize(source_type=MirrorMakerService.redpanda_source)
+    @parametrize(source_type=MirrorMakerService.sql_source)
+    @parametrize(source_type=MirrorMakerService.funes_source)
     def test_consumer_group_mirroring(self, source_type):
-        # start redpanda
+        # start funes
         self.start_brokers(source_type=source_type)
         # start mirror maker
         self.mirror_maker = MirrorMaker2(
             self.test_context,
             num_nodes=1,
             source_cluster=self.source_broker,
-            target_cluster=self.redpanda,
+            target_cluster=self.funes,
             consumer_group_pattern="kgo-verifier.*")
         self.mirror_maker.start()
 
         msg_size = 512
-        msg_cnt = 1000000 if self.redpanda.dedicated_nodes else 10000
+        msg_cnt = 1000000 if self.funes.dedicated_nodes else 10000
 
         producer = KgoVerifierProducer(self.test_context, self.source_broker,
                                        self.topic.name, msg_size, msg_cnt)
@@ -211,7 +211,7 @@ class TestMirrorMakerService(MirrorMakerService):
         consumer.stop()
         consumer.wait()
         self.logger.info(f"source topics: {list(src_rpk.list_topics())}")
-        target_rpk = RpkTool(self.redpanda)
+        target_rpk = RpkTool(self.funes)
         self.logger.info(f"target topics: {list(target_rpk.list_topics())}")
 
         def target_group_equal():
@@ -228,7 +228,7 @@ class TestMirrorMakerService(MirrorMakerService):
                 target_group.name == source_group.name
 
         # wait for consumer group sync
-        timeout = 600 if self.redpanda.dedicated_nodes else 60
+        timeout = 600 if self.funes.dedicated_nodes else 60
         wait_until(target_group_equal, timeout_sec=timeout, backoff_sec=5)
 
         self.mirror_maker.stop()

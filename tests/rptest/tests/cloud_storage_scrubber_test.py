@@ -1,17 +1,17 @@
 #Copyright 2023 Redpanda Data, Inc.
 #
-#Licensed as a Redpanda Enterprise file under the Redpanda Community
+#Licensed as a Funes Enterprise file under the Funes Community
 #License(the "License"); you may not use this file except in compliance with
 #the License.You may obtain a copy of the License at
 #
-#https: // github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+#https: // github.com/redpanda-data/funes/blob/master/licenses/rcl.md
 
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import SISettings, get_cloud_storage_type
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import SISettings, get_cloud_storage_type
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.utils.si_utils import parse_s3_segment_path, quiesce_uploads, BucketView, NTP, NTPR
 from rptest.util import wait_until_result
@@ -45,7 +45,7 @@ SCRUBBER_LOG_ALLOW_LIST = [
 ]
 
 
-class CloudStorageScrubberTest(RedpandaTest):
+class CloudStorageScrubberTest(FunesTest):
     scrub_timeout = 90
     partition_count = 3
     message_size = 16 * 1024  # 16KiB
@@ -77,7 +77,7 @@ class CloudStorageScrubberTest(RedpandaTest):
             si_settings=self.si_settings)
 
         self.bucket_name = self.si_settings.cloud_storage_bucket
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
     def _produce(self):
         # Use a smaller working set for debug builds to keep the test timely
@@ -86,20 +86,20 @@ class CloudStorageScrubberTest(RedpandaTest):
 
         msg_count = self.to_produce * self.partition_count // self.message_size
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     self.topic,
                                     self.message_size,
                                     msg_count,
                                     batch_max_bytes=self.message_size * 8,
                                     timeout_sec=60)
 
-        quiesce_uploads(self.redpanda, [self.topic], timeout_sec=60)
+        quiesce_uploads(self.funes, [self.topic], timeout_sec=60)
 
         def all_partitions_spilled():
-            bucket = BucketView(self.redpanda)
+            bucket = BucketView(self.funes)
             for pid in range(self.partition_count):
                 spillover_metas = bucket.get_spillover_metadata(
-                    NTP(ns="kafka", topic=self.topic, partition=pid))
+                    NTP(ns="sql", topic=self.topic, partition=pid))
 
                 if len(spillover_metas) == 0:
                     self.logger.debug(f"{self.topic}/{pid} did not spill yet")
@@ -131,10 +131,10 @@ class CloudStorageScrubberTest(RedpandaTest):
     def _collect_anomalies(self):
         anomalies_per_ntpr = {}
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         for pid in range(self.partition_count):
             anomalies = self._query_anomalies(admin,
-                                              namespace="kafka",
+                                              namespace="sql",
                                               topic=self.topic,
                                               partition=pid)
 
@@ -166,7 +166,7 @@ class CloudStorageScrubberTest(RedpandaTest):
                 self.bucket_name) if "log" in meta.key
         ]
 
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
         to_delete = random.choice(segment_metas)
         attempts = 1
         while view.is_segment_part_of_a_manifest(to_delete) == False:
@@ -209,9 +209,9 @@ class CloudStorageScrubberTest(RedpandaTest):
 
     def _delete_spillover_manifest_and_await_anomaly(self):
         pid = random.randint(0, 2)
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
         spillover_metas = view.get_spillover_metadata(
-            NTP(ns="kafka", topic=self.topic, partition=pid))
+            NTP(ns="sql", topic=self.topic, partition=pid))
         to_delete = random.choice(spillover_metas)
         ntpr = to_delete.ntpr
 
@@ -253,12 +253,12 @@ class CloudStorageScrubberTest(RedpandaTest):
             a is not None for a in old_anomalies.values()
         ]), f"Expected anomalies on at least one ntpr, but got {old_anomalies}"
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         for pid in range(self.partition_count):
-            admin.transfer_leadership_to(namespace="kafka",
+            admin.transfer_leadership_to(namespace="sql",
                                          topic=self.topic,
                                          partition=pid)
-            admin.await_stable_leader(namespace='kafka',
+            admin.await_stable_leader(namespace='sql',
                                       topic=self.topic,
                                       partition=pid)
 
@@ -283,11 +283,11 @@ class CloudStorageScrubberTest(RedpandaTest):
             a is not None for a in old_anomalies.values()
         ]), f"Expected anomalies on at least one ntpr, but got {old_anomalies}"
 
-        for node in self.redpanda.nodes:
-            self.redpanda.stop_node(node)
+        for node in self.funes.nodes:
+            self.funes.stop_node(node)
 
-        for node in self.redpanda.nodes:
-            self.redpanda.start_node(node)
+        for node in self.funes.nodes:
+            self.funes.start_node(node)
 
         def anomalies_stable():
             anomalies = self._collect_anomalies()
@@ -304,7 +304,7 @@ class CloudStorageScrubberTest(RedpandaTest):
         self.logger.info(
             "Fudging manifest and waiting on segment metadata anomalies")
 
-        view = BucketView(self.redpanda)
+        view = BucketView(self.funes)
         manifest = view.manifest_for_ntp(topic=self.topic, partition=0)
 
         sorted_segments = sorted(manifest['segments'].items(),
@@ -327,17 +327,17 @@ class CloudStorageScrubberTest(RedpandaTest):
         json_man = json.dumps(manifest)
         self.logger.info(f"Re-setting manifest to:{json_man}")
 
-        self.rpk.alter_topic_config(self.topic, 'redpanda.remote.write',
+        self.rpk.alter_topic_config(self.topic, 'funes.remote.write',
                                     'false')
         time.sleep(1)
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         admin.unsafe_reset_cloud_metadata(self.topic, 0, manifest)
 
-        self.rpk.alter_topic_config(self.topic, 'redpanda.remote.write',
+        self.rpk.alter_topic_config(self.topic, 'funes.remote.write',
                                     'true')
 
-        ntpr = NTPR(ns="kafka",
+        ntpr = NTPR(ns="sql",
                     topic=self.topic,
                     partition=0,
                     revision=seg_to_remove_meta["ntp_revision"])
@@ -387,7 +387,7 @@ class CloudStorageScrubberTest(RedpandaTest):
         # This test deletes segments, spillover manifests
         # and fudges the manifest. rp-storage-tool also picks
         # up on some of these things.
-        self.redpanda.si_settings.set_expected_damage({
+        self.funes.si_settings.set_expected_damage({
             "missing_segments", "metadata_offset_gaps",
             "missing_spillover_manifests"
         })

@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iobuf.h"
@@ -36,9 +36,9 @@
 using namespace cloud_storage;
 
 static remote_segment_path
-  segment_path("abcdef01/kafka/topic/0_1/0-1-v1.log.1");
+  segment_path("abcdef01/sql/topic/0_1/0-1-v1.log.1");
 static remote_manifest_path
-  manifest_path("abcdef01/kafka/topic/0_1/0-1-v1.log.1.tx");
+  manifest_path("abcdef01/sql/topic/0_1/0-1-v1.log.1.tx");
 
 using tx_range_t = model::tx_range;
 

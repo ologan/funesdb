@@ -297,7 +297,7 @@ public:
 
     /**
      * Last visible index is an offset that is safe to be fetched by the
-     * consumers. This is similar to Kafka's HighWatermark. Last visible
+     * consumers. This is similar to SQL's HighWatermark. Last visible
      * offset depends on the consistency level of messages replicated by the
      * consensus instance and state of the log. Last visible offset similarly
      * to HighWaterMark is monotonic and can never move backward. Last visible
@@ -784,7 +784,7 @@ private:
     // not enough for a node to become a leader, it should successfully
     // replicate a new record to be sure that older records stored in
     // the local log were actually replicated and do not constitute an
-    // artifact of the previously crashed leader. Redpanda uses a confi-
+    // artifact of the previously crashed leader. Funes uses a confi-
     // guration batch for the initial replication to gain certainty. When
     // commit index moves past the configuration batch _confirmed_term
     // gets updated. So when _term==_confirmed_term it's safe to use

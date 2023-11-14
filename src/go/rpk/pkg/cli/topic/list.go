@@ -14,7 +14,7 @@ import (
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/cli/cluster"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -52,7 +52,7 @@ information.
 		Run: func(cmd *cobra.Command, topics []string) {
 			// The purpose of the regex flag really is for users to
 			// know what topics they will delete when using regex.
-			// We forbid deleting internal topics (redpanda
+			// We forbid deleting internal topics (funes
 			// actually does not expose these currently), so we
 			// make -r and -i incompatible.
 			if internal && re {
@@ -62,8 +62,8 @@ information.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			if re {

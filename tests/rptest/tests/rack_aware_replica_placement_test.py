@@ -17,11 +17,11 @@ from rptest.clients.rpk import RpkTool
 from rptest.services.admin import Admin
 from rptest.clients.default import DefaultClient
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.mode_checks import cleanup_on_early_exit
 
 
-class RackAwarePlacementTest(RedpandaTest):
+class RackAwarePlacementTest(FunesTest):
     def __init__(self, test_context):
         super(RackAwarePlacementTest,
               self).__init__(test_context=test_context,
@@ -32,7 +32,7 @@ class RackAwarePlacementTest(RedpandaTest):
                              })
 
     def setUp(self):
-        # Delay startup, so that the test case can configure redpanda
+        # Delay startup, so that the test case can configure funes
         # based on test parameters before starting it.
         pass
 
@@ -114,7 +114,7 @@ class RackAwarePlacementTest(RedpandaTest):
         @param replication_factor defines recplication factor of all partitions.
         """
 
-        # https://github.com/redpanda-data/redpanda/issues/11276
+        # https://github.com/redpanda-data/funes/issues/11276
         if self.debug_mode and num_partitions == 400:
             self.logger.info(
                 "Disabling test in debug mode due to slowness/timeouts with large number of partitions."
@@ -125,7 +125,7 @@ class RackAwarePlacementTest(RedpandaTest):
         rack_layout = [str(i) for i in rack_layout_str]
         assert len(rack_layout) == 6
 
-        for ix, node in enumerate(self.redpanda.nodes):
+        for ix, node in enumerate(self.funes.nodes):
             extra_node_conf = {
                 # We're introducing two racks, small and large.
                 # The small rack has only one node and the
@@ -135,9 +135,9 @@ class RackAwarePlacementTest(RedpandaTest):
                 'enable_rack_awareness': True,
                 'segment_fallocation_step': 4096,
             }
-            self.redpanda.set_extra_node_conf(node, extra_node_conf)
+            self.funes.set_extra_node_conf(node, extra_node_conf)
 
-        self.redpanda.start()
+        self.funes.start()
 
         if num_topics * num_partitions * replication_factor > 3000:
             # Combination of 2 topics, 5 replicas and 400 partitions can't be run
@@ -169,8 +169,8 @@ class RackAwarePlacementTest(RedpandaTest):
     def test_rack_awareness_after_node_operations(self, rack_layout):
         replication_factor = 3
 
-        for ix, node in enumerate(self.redpanda.nodes):
-            self.redpanda.set_extra_node_conf(
+        for ix, node in enumerate(self.funes.nodes):
+            self.funes.set_extra_node_conf(
                 node,
                 {
                     "rack": rack_layout[ix],
@@ -179,8 +179,8 @@ class RackAwarePlacementTest(RedpandaTest):
                     'segment_fallocation_step': 4096,
                 })
 
-        self.redpanda.start()
-        self._client = DefaultClient(self.redpanda)
+        self.funes.start()
+        self._client = DefaultClient(self.funes)
 
         topic = TopicSpec(partition_count=self._partition_count(),
                           replication_factor=replication_factor)
@@ -188,7 +188,7 @@ class RackAwarePlacementTest(RedpandaTest):
         self._validate_placement(topic, rack_layout, replication_factor)
 
         # decommission one of the nodes
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         brokers = admin.get_brokers()
         to_decommission = random.choice(brokers)['node_id']
@@ -196,8 +196,8 @@ class RackAwarePlacementTest(RedpandaTest):
         admin.decommission_broker(to_decommission)
 
         def node_is_removed():
-            for n in self.redpanda.nodes:
-                if self.redpanda.idx(n) == to_decommission:
+            for n in self.funes.nodes:
+                if self.funes.idx(n) == to_decommission:
                     continue
                 brokers = admin.get_brokers(node=n)
                 for b in brokers:
@@ -211,9 +211,9 @@ class RackAwarePlacementTest(RedpandaTest):
         self._validate_placement(topic, rack_layout, replication_factor)
 
         # stop the node and add it back with different id
-        to_stop = self.redpanda.get_node(to_decommission)
-        self.redpanda.stop_node(to_stop)
-        self.redpanda.clean_node(node=to_stop, preserve_logs=True)
+        to_stop = self.funes.get_node(to_decommission)
+        self.funes.stop_node(to_stop)
+        self.funes.clean_node(node=to_stop, preserve_logs=True)
 
         new_node_id = 123
 
@@ -222,16 +222,16 @@ class RackAwarePlacementTest(RedpandaTest):
                 lambda n: {
                     "address": n.account.hostname,
                     "port": 33145
-                }, self.redpanda.nodes)
+                }, self.funes.nodes)
 
             return list(
                 filter(
-                    lambda n: n['address'] != self.redpanda.get_node(idx).
+                    lambda n: n['address'] != self.funes.get_node(idx).
                     account.hostname, seeds))
 
         # add a node back with different id but the same rack
         # change the seed server list to prevent node from forming new cluster
-        self.redpanda.start_node(
+        self.funes.start_node(
             to_stop,
             override_cfg_params={
                 "node_id": new_node_id,
@@ -242,7 +242,7 @@ class RackAwarePlacementTest(RedpandaTest):
                 'segment_fallocation_step': 4096,
             })
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def new_node_has_partitions():
             for p in rpk.describe_topic(topic.name):
@@ -255,7 +255,7 @@ class RackAwarePlacementTest(RedpandaTest):
         wait_until(new_node_has_partitions, 90, 2)
 
         def no_partitions_moving():
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 r = admin.list_reconfigurations(node=n)
                 if len(r) > 0:
                     return False
@@ -281,17 +281,17 @@ class RackAwarePlacementTest(RedpandaTest):
         replication_factor = 3
         num_partitions = 10
 
-        self.redpanda.start()
+        self.funes.start()
 
-        self.redpanda.stop()
-        for ix, node in enumerate(self.redpanda.nodes):
-            self.redpanda.start_node(
+        self.funes.stop()
+        for ix, node in enumerate(self.funes.nodes):
+            self.funes.start_node(
                 node, override_cfg_params={"rack": rack_layout[ix]})
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def rack_ids_updated():
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 if any('rack' not in b for b in admin.get_brokers(n)):
                     return False
             return True

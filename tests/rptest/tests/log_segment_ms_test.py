@@ -6,16 +6,16 @@ from ducktape.utils.util import wait_until
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
+from rptest.services.sql_cli_consumer import SQLCliConsumer
 
 from rptest.services.verifiable_consumer import VerifiableConsumer
 from rptest.services.verifiable_producer import VerifiableProducer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.util import segments_count
 
-# NOTE this value could be read from redpanda
+# NOTE this value could be read from funes
 # for example this should be a reasonable way
-# int(Admin(self.redpanda).get_cluster_config_schema()
+# int(Admin(self.funes).get_cluster_config_schema()
 #                       ['properties']['log_segment_ms_min']['example'])
 SERVER_SEGMENT_MS = 60000
 SERVER_HOUSEKEEPING_LOOP = 10
@@ -34,14 +34,14 @@ TEST_LOG_SEGMENT_MIN = 60000
 TEST_LOG_SEGMENT_MAX = 150000
 
 
-class SegmentMsTest(RedpandaTest):
+class SegmentMsTest(FunesTest):
     def __init__(self, test_context):
         super().__init__(test_context=test_context,
                          num_brokers=1,
                          extra_rp_conf={"enable_leader_balancer": False})
 
     def _total_segments_count(self, topic_spec: TopicSpec, partition=0):
-        return next(segments_count(self.redpanda, topic_spec.name, partition))
+        return next(segments_count(self.funes, topic_spec.name, partition))
 
     def generate_workload(self,
                           server_cfg: typing.Optional[int],
@@ -55,12 +55,12 @@ class SegmentMsTest(RedpandaTest):
         then starts a producer at 1hz of small #num_messages.
         returns the number of segment before and after the workload
         """
-        self.redpanda.set_cluster_config({'log_segment_ms': server_cfg}
+        self.funes.set_cluster_config({'log_segment_ms': server_cfg}
                                          | extra_cluster_cfg,
                                          expect_restart=False)
 
         topic = TopicSpec()
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic.name,
                          partitions=1,
                          config={TopicSpec.PROPERTY_SEGMENT_MS: topic_cfg} if
@@ -77,13 +77,13 @@ class SegmentMsTest(RedpandaTest):
 
         producer = VerifiableProducer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       max_messages=num_messages,
                                       throughput=1)
         consumer = VerifiableConsumer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       group_id=0)
         start_count = self._total_segments_count(topic)
@@ -146,7 +146,7 @@ class SegmentMsTest(RedpandaTest):
         The topic is created with the configuration or an alter config is issued to configure it
         """
 
-        # rolling is clamped by redpanda in the [log_segment_ms_min, log_segment_ms_max] range, so it's replicated here
+        # rolling is clamped by funes in the [log_segment_ms_min, log_segment_ms_max] range, so it's replicated here
         rolling_period = sorted(
             (TEST_LOG_SEGMENT_MIN, topic_cfg if topic_cfg else server_cfg,
              TEST_LOG_SEGMENT_MAX))[1]
@@ -171,12 +171,12 @@ class SegmentMsTest(RedpandaTest):
         once an alter-config sets segment.ms low enough
         """
         # ensure that the cluster do not have a fallback value, and that the clamp range of segment.ms is low enough
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             "log_segment_ms": None,
             "log_segment_ms_min": "60000"
         })
         topic = TopicSpec()
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(topic=topic.name, partitions=1)
 
         # write data to a topic, wait for a period of time T, check that the number of segments did not increase,
@@ -185,7 +185,7 @@ class SegmentMsTest(RedpandaTest):
 
         producer = VerifiableProducer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       throughput=1)
 
@@ -210,7 +210,7 @@ class SegmentMsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_segment_rolling_with_retention(self):
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             "log_segment_ms": None,
             "log_segment_ms_min": 10000
         })
@@ -221,7 +221,7 @@ class SegmentMsTest(RedpandaTest):
 
         producer = VerifiableProducer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       throughput=10000)
 
@@ -255,7 +255,7 @@ class SegmentMsTest(RedpandaTest):
 
         producer = VerifiableProducer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       throughput=10000)
         producer.start()
@@ -268,7 +268,7 @@ class SegmentMsTest(RedpandaTest):
 
         consumer = VerifiableConsumer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       group_id="test-group")
         consumer.start()
@@ -281,7 +281,7 @@ class SegmentMsTest(RedpandaTest):
 
     @cluster(num_nodes=4)
     def test_segment_rolling_with_retention_consumer(self):
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             "log_segment_ms": None,
             "log_segment_ms_min": 10000
         })
@@ -293,7 +293,7 @@ class SegmentMsTest(RedpandaTest):
 
         producer = VerifiableProducer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       throughput=10000)
 
@@ -319,7 +319,7 @@ class SegmentMsTest(RedpandaTest):
 
         consumer = VerifiableConsumer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       group_id=group_id)
         consumer.start()
@@ -336,7 +336,7 @@ class SegmentMsTest(RedpandaTest):
 
         producer = VerifiableProducer(context=self.test_context,
                                       num_nodes=1,
-                                      redpanda=self.redpanda,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       throughput=10000)
         producer.start()
@@ -347,7 +347,7 @@ class SegmentMsTest(RedpandaTest):
             f"producer failed to produce enough messages to create 5 segments")
         producer.stop()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         def no_lag_present():
             group = rpk.group_describe(group_id)
@@ -357,8 +357,8 @@ class SegmentMsTest(RedpandaTest):
 
             return all([p.lag == 0 for p in group.partitions])
 
-        consumer_2 = KafkaCliConsumer(context=self.test_context,
-                                      redpanda=self.redpanda,
+        consumer_2 = SQLCliConsumer(context=self.test_context,
+                                      funes=self.funes,
                                       topic=topic.name,
                                       group=group_id)
         consumer_2.start()

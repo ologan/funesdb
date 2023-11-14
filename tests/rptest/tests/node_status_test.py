@@ -13,7 +13,7 @@ from enum import IntEnum
 
 import numpy as np
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from ducktape.cluster.cluster import ClusterNode
@@ -35,7 +35,7 @@ class ConnectionStatus(IntEnum):
 
 class StatusGraph:
     """
-    This class models a status graph for the Redpanda nodes in a
+    This class models a status graph for the Funes nodes in a
     cluster. It supports marking nodes available, unavailable (i.e. a
     node that has joined the cluster, but is not available) and
     unknown (i.e. a node that has not yet joined the cluster).
@@ -45,9 +45,9 @@ class StatusGraph:
     expected between each pair of nodes via the peer_status admin
     request.
     """
-    def __init__(self, redpanda):
-        self.redpanda = redpanda
-        nodes = self.redpanda.nodes
+    def __init__(self, funes):
+        self.funes = funes
+        nodes = self.funes.nodes
 
         self.node_to_vertex = {node: i for i, node in enumerate(nodes)}
         self.vertex_to_node = {
@@ -78,7 +78,7 @@ class StatusGraph:
         return self.edges[vertex][vertex] == ConnectionStatus.ALIVE
 
     def do_check_cluster_status(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         results = []
         for node, peer, expected_status in self._all_edges():
             if not self.is_node_available(node):
@@ -86,9 +86,9 @@ class StatusGraph:
                 # for peer status would not get a response.
                 continue
 
-            self.redpanda.logger.debug(
-                f"Checking status of peer {self.redpanda.idx(peer)} "
-                f"from node {self.redpanda.idx(node)}, expected status: {expected_status}"
+            self.funes.logger.debug(
+                f"Checking status of peer {self.funes.idx(peer)} "
+                f"from node {self.funes.idx(node)}, expected status: {expected_status}"
             )
             peer_status = self._get_peer_status(admin, node, peer)
 
@@ -98,7 +98,7 @@ class StatusGraph:
             elif expected_status == ConnectionStatus.ALIVE:
                 ms_since_last_status = peer_status["since_last_status"]
                 is_peer_live = is_live(ms_since_last_status)
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"Node {peer.name} expected status: alive, last status: {ms_since_last_status}, is live: {is_peer_live}"
                 )
                 results.append(is_peer_live)
@@ -106,13 +106,13 @@ class StatusGraph:
             elif expected_status == ConnectionStatus.DOWN:
                 ms_since_last_status = peer_status["since_last_status"]
                 is_not_live = not is_live(ms_since_last_status)
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"Node {peer.name} expected status: down, last status: {ms_since_last_status}, is not live: {is_not_live}"
                 )
         return all(results)
 
     def check_cluster_status(self):
-        self.redpanda.wait_until(
+        self.funes.wait_until(
             self.do_check_cluster_status,
             timeout_sec=30,
             backoff_sec=2,
@@ -129,7 +129,7 @@ class StatusGraph:
     def _get_peer_status(self, admin: Admin, node: ClusterNode,
                          peer: ClusterNode):
         try:
-            return admin.get_peer_status(node, self.redpanda.idx(peer))
+            return admin.get_peer_status(node, self.funes.idx(peer))
         except requests.exceptions.HTTPError as e:
             status_code = e.response.status_code
             if status_code != 400:
@@ -138,36 +138,36 @@ class StatusGraph:
                 return None
 
 
-class NodeStatusTest(RedpandaTest):
+class NodeStatusTest(FunesTest):
     def __init__(self, ctx):
         super().__init__(
             test_context=ctx,
             extra_rp_conf={"node_status_interval": NODE_STATUS_INTERVAL})
 
     def _update_max_backoff(self):
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"node_status_reconnect_max_backoff_ms": 5000})
 
     @cluster(num_nodes=3)
     def test_all_nodes_up(self):
-        status_graph = StatusGraph(self.redpanda)
+        status_graph = StatusGraph(self.funes)
         status_graph.check_cluster_status()
         self._update_max_backoff()
         status_graph.check_cluster_status()
 
     @cluster(num_nodes=3)
     def test_node_down(self):
-        status_graph = StatusGraph(self.redpanda)
+        status_graph = StatusGraph(self.funes)
 
-        node_to_stop = random.choice(self.redpanda.nodes)
+        node_to_stop = random.choice(self.funes.nodes)
         status_graph.mark_node_unavailable(node_to_stop)
 
-        self.redpanda.stop_node(node_to_stop)
+        self.funes.stop_node(node_to_stop)
 
         status_graph.check_cluster_status()
 
 
-class NodeStatusStartupTest(RedpandaTest):
+class NodeStatusStartupTest(FunesTest):
     def __init__(self, ctx):
         super().__init__(
             test_context=ctx,
@@ -180,16 +180,16 @@ class NodeStatusStartupTest(RedpandaTest):
     @cluster(num_nodes=3)
     def test_late_joiner(self):
         # Start the first two nodes
-        self.redpanda.start(self.redpanda.nodes[0:-1])
-        late_joiner = self.redpanda.nodes[-1]
+        self.funes.start(self.funes.nodes[0:-1])
+        late_joiner = self.funes.nodes[-1]
 
         # Check the cluster status with the unavailable node
-        status_graph = StatusGraph(self.redpanda)
+        status_graph = StatusGraph(self.funes)
         status_graph.mark_node_unknwon(late_joiner)
         status_graph.check_cluster_status()
 
         # Start the late joiner
-        self.redpanda.start([late_joiner])
+        self.funes.start([late_joiner])
 
         # Check the cluster status again
         status_graph.mark_node_available(late_joiner)

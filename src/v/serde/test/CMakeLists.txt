@@ -18,7 +18,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(generated-structs-path ${CMAKE_CURRENT_BINARY_DIR}/generated_structs.h)
   add_custom_command(
     OUTPUT ${generated-structs-path}
-    COMMAND RedpandaPython::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/struct_gen.py
+    COMMAND FunesPython::Interpreter ${CMAKE_CURRENT_SOURCE_DIR}/struct_gen.py
     ARGS ${generated-structs-path}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/struct_gen.py
     COMMENT "Generating Fuzz Classes"

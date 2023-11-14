@@ -15,7 +15,7 @@ import (
 	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 
 	"github.com/spf13/afero"
@@ -30,8 +30,8 @@ func NewOffsetDeleteCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "offset-delete [GROUP] --from-file FILE --topic foo:0,1,2",
-		Short: "Delete offsets for a kafka group",
-		Long: `Forcefully delete offsets for a kafka group.
+		Short: "Delete offsets for a sql group",
+		Long: `Forcefully delete offsets for a sql group.
 
 The broker will only allow the request to succeed if the group is in a dead
 state (no subscriptions) or there are no subscriptions for offsets for
@@ -55,8 +55,8 @@ topic_b 0
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			// Parse input from file or command line

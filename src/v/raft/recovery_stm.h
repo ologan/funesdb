@@ -39,7 +39,7 @@ private:
         on_demand,
     };
     /**
-     * Holder for on demand snapshot output stream. Right now Redpanda uses
+     * Holder for on demand snapshot output stream. Right now Funes uses
      * simple empty snapshots for all data partition STMs hence there is no much
      * overhead in creating a separate snapshot for each follower even if it has
      * the same content.

@@ -13,7 +13,7 @@ from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 from rptest.tests.end_to_end import EndToEndTest
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, make_redpanda_service
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST, make_funes_service
 from rptest.services.admin import Admin
 from rptest.services.failure_injector import FailureInjector, FailureSpec
 from rptest.util import wait_until_result
@@ -42,24 +42,24 @@ class ShutdownTest(EndToEndTest):
             'enable_leader_balancer': False,
             'auto_create_topics_enabled': True
         }
-        self.redpanda = make_redpanda_service(self.test_context,
+        self.funes = make_funes_service(self.test_context,
                                               3,
                                               extra_rp_conf=rp_conf)
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def checked_get_leader():
             try:
-                leader = admin.get_partition_leader(namespace="kafka",
+                leader = admin.get_partition_leader(namespace="sql",
                                                     topic=self.topic.name,
                                                     partition=0)
                 return (True,
                         next(
-                            filter(lambda n: self.redpanda.idx(n) == leader,
-                                   self.redpanda.nodes)))
+                            filter(lambda n: self.funes.idx(n) == leader,
+                                   self.funes.nodes)))
             except:
                 return False
 
-        self.redpanda.start()
+        self.funes.start()
         # Background load generation
         self.start_producer(2)
         # Wait until a leader is available.
@@ -70,12 +70,12 @@ class ShutdownTest(EndToEndTest):
 
         def pause_non_leader_node():
             """Picks a non leader node for the ntp and isolates it repeatedly"""
-            with FailureInjector(self.redpanda) as finjector:
+            with FailureInjector(self.funes) as finjector:
                 timeout_s = 5
                 period_s = 1
                 failure = FailureSpec.FAILURE_ISOLATE
                 while not self.stopped.is_set():
-                    node = random.choice(self.redpanda.nodes)
+                    node = random.choice(self.funes.nodes)
                     assert node
                     if node == checked_get_leader():
                         continue
@@ -100,9 +100,9 @@ class ShutdownTest(EndToEndTest):
                     err_msg=f"Leader not found for ntp: {self.topic}/0")
 
                 assert leader
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     f"Restarting leader node {leader.account.hostname}")
-                self.redpanda.restart_nodes(leader)
+                self.funes.restart_nodes(leader)
                 pending_attempts -= 1
         finally:
             # Stop the finjector

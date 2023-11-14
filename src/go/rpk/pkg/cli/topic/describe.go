@@ -15,7 +15,7 @@ import (
 	"sort"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -49,8 +49,8 @@ partitions section. By default, the summary and configs sections are printed.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			cl, err := kafka.NewFranzClient(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			cl, err := sql.NewFranzClient(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer cl.Close()
 
 			topic := topicArg[0]
@@ -295,7 +295,7 @@ var errUnlisted = errors.New("list failed")
 //
 // We make some assumptions here that the response will not be buggy: it will
 // always contain the one topic we asked for, and it will contain all
-// partitions we asked for. The logic below will panic redpanda replies
+// partitions we asked for. The logic below will panic funes replies
 // incorrectly.
 func listStartEndOffsets(cl *kgo.Client, topic string, numPartitions int, stable bool) []startStableEndOffset {
 	offsets := make([]startStableEndOffset, 0, numPartitions)
@@ -324,7 +324,7 @@ func listStartEndOffsets(cl *kgo.Client, topic string, numPartitions int, stable
 	}
 	req.Topics = append(req.Topics, reqTopic)
 	shards := cl.RequestSharded(context.Background(), req)
-	allFailed := kafka.EachShard(req, shards, func(shard kgo.ResponseShard) {
+	allFailed := sql.EachShard(req, shards, func(shard kgo.ResponseShard) {
 		resp := shard.Resp.(*kmsg.ListOffsetsResponse)
 		if len(resp.Topics) > 0 {
 			for _, partition := range resp.Topics[0].Partitions {
@@ -355,7 +355,7 @@ func listStartEndOffsets(cl *kgo.Client, topic string, numPartitions int, stable
 	if stable {
 		req.IsolationLevel = 1
 		shards = cl.RequestSharded(context.Background(), req)
-		allFailed = kafka.EachShard(req, shards, func(shard kgo.ResponseShard) {
+		allFailed = sql.EachShard(req, shards, func(shard kgo.ResponseShard) {
 			resp := shard.Resp.(*kmsg.ListOffsetsResponse)
 			if len(resp.Topics) > 0 {
 				for _, partition := range resp.Topics[0].Partitions {
@@ -372,7 +372,7 @@ func listStartEndOffsets(cl *kgo.Client, topic string, numPartitions int, stable
 
 	// Finally, the HWM.
 	shards = cl.RequestSharded(context.Background(), req)
-	kafka.EachShard(req, shards, func(shard kgo.ResponseShard) {
+	sql.EachShard(req, shards, func(shard kgo.ResponseShard) {
 		resp := shard.Resp.(*kmsg.ListOffsetsResponse)
 		if len(resp.Topics) > 0 {
 			for _, partition := range resp.Topics[0].Partitions {

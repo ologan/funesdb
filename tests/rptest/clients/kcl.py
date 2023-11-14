@@ -39,11 +39,11 @@ KclListPartitionReassignmentsResponse = namedtuple(
 
 class KCL:
     def __init__(self,
-                 redpanda,
+                 funes,
                  username: str = None,
                  password: str = None,
                  sasl_mechanism: str = None):
-        self._redpanda = redpanda
+        self._funes = funes
         self._username = username
         self._password = password
         self._sasl_mechanism = sasl_mechanism
@@ -138,7 +138,7 @@ class KCL:
         """
         :param broker: node id.
         :param values: dict of property name to new value
-        :param incremental: if true, use incremental kafka APIs
+        :param incremental: if true, use incremental sql APIs
         :param entity_type: one of 'broker', 'topic'
         :param entity: string-izable entity, or None to omit
         """
@@ -178,7 +178,7 @@ class KCL:
     def delete_broker_config(self, keys, incremental):
         """
         :param keys: list of key names to clear
-        :param incremental: if true, use incremental kafka APIs
+        :param incremental: if true, use incremental sql APIs
         :return:
         """
         cmd = ["admin", "configs", "alter", "-tb"]
@@ -292,11 +292,11 @@ class KCL:
             # because test writers can use method params to account for their expectations
             for l in lines:
                 l = l.strip()
-                self._redpanda.logger.debug(l)
+                self._funes.logger.debug(l)
 
                 m = no_broker_re.match(l)
                 # No broker available means the partition did not find any eligible allocation nodes.
-                # See the map from cluster errors to kafka errors in kafka::map_topic_error_code()
+                # See the map from cluster errors to sql errors in sql::map_topic_error_code()
                 if m is not None:
                     raise RuntimeError('No eligible allocation nodes')
 
@@ -345,7 +345,7 @@ class KCL:
                 cmd.append(topic_str)
 
             lines = self._cmd(cmd, attempts=1).splitlines()
-        self._redpanda.logger.debug(lines)
+        self._funes.logger.debug(lines)
 
         def replicas_as_int(replicas: list[str]):
             return [int(node_id) for node_id in replicas]
@@ -356,7 +356,7 @@ class KCL:
         ret = []
         for l in lines:
             l = l.strip()
-            self._redpanda.logger.debug(l)
+            self._funes.logger.debug(l)
             m = res_re.match(l)
             if m is not None:
                 replicas = replicas_as_int(list(m["replicas"].replace(' ',
@@ -378,7 +378,7 @@ class KCL:
         :param attempts: how many times to try before giving up (1 for no retries)
         :return: stdout string
         """
-        brokers = self._redpanda.brokers()
+        brokers = self._funes.brokers()
         cmd = ["kcl", "-X", f"seed_brokers={brokers}", "--no-config-file"
                ] + self.sasl_options() + cmd
         assert attempts > 0
@@ -388,12 +388,12 @@ class KCL:
                                               text=True,
                                               input=input,
                                               stderr=subprocess.STDOUT)
-                self._redpanda.logger.debug(res)
+                self._funes.logger.debug(res)
                 return res
             except subprocess.CalledProcessError as e:
                 if retry == 0:
                     raise
-                self._redpanda.logger.debug(
+                self._funes.logger.debug(
                     "kcl retrying after exit code {}: {}".format(
                         e.returncode, e.output))
                 time.sleep(1)
@@ -406,10 +406,10 @@ class RawKCL(KCL):
     """
     Extentions to KCL class intented to be used with the 'misc raw-req' API
 
-    Callers should expect raw kafka responses json encoded with franz-go key naming scheme
+    Callers should expect raw sql responses json encoded with franz-go key naming scheme
     """
     def raw_create_topics(self, version, topics):
-        assert version >= 0 and version <= 6, "version out of supported redpanda range for this API"
+        assert version >= 0 and version <= 6, "version out of supported funes range for this API"
         create_topics_request = {
             'Version':
             version,
@@ -427,7 +427,7 @@ class RawKCL(KCL):
                          input=json.dumps(create_topics_request))
 
     def raw_delete_topics(self, version, topics):
-        assert version >= 0 and version <= 5, "version out of supported redpanda range for this API"
+        assert version >= 0 and version <= 5, "version out of supported funes range for this API"
         delete_topics_request = {
             'Version': version,
             'TimeoutMillis': 15000,
@@ -437,7 +437,7 @@ class RawKCL(KCL):
                          input=json.dumps(delete_topics_request))
 
     def raw_create_partitions(self, version, topics):
-        assert version >= 0 and version <= 3, "version out of supported redpanda range for this API"
+        assert version >= 0 and version <= 3, "version out of supported funes range for this API"
         create_partitions_request = {
             'Version': version,
             'ValidateOnly': False,
@@ -451,7 +451,7 @@ class RawKCL(KCL):
                          input=json.dumps(create_partitions_request))
 
     def raw_alter_topic_config(self, version, topic, configs):
-        assert version >= 0 and version <= 1, "version out of supported redpanda range for this API"
+        assert version >= 0 and version <= 1, "version out of supported funes range for this API"
         alter_configs_request = {
             'Version':
             version,
@@ -476,6 +476,6 @@ class RawKCL(KCL):
                 "Value":
                 str(v)
             })
-        self._redpanda.logger.info(f"DBG: {json.dumps(alter_configs_request)}")
+        self._funes.logger.info(f"DBG: {json.dumps(alter_configs_request)}")
         return self._cmd(['misc', 'raw-req', '-k', '33'],
                          input=json.dumps(alter_configs_request))

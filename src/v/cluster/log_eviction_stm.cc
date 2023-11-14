@@ -228,7 +228,7 @@ model::offset log_eviction_stm::effective_start_offset() const {
 
 ss::future<log_eviction_stm::offset_result> log_eviction_stm::truncate(
   model::offset rp_start_offset,
-  kafka::offset kafka_start_offset,
+  sql::offset sql_start_offset,
   ss::lowres_clock::time_point deadline,
   std::optional<std::reference_wrapper<ss::abort_source>> as) {
     /// Create the special prefix_truncate batch, it is a model::record_batch
@@ -239,7 +239,7 @@ ss::future<log_eviction_stm::offset_result> log_eviction_stm::truncate(
     /// offset itself will be the new low_watermark (readable)
     prefix_truncate_record val;
     val.rp_start_offset = rp_start_offset;
-    val.kafka_start_offset = kafka_start_offset;
+    val.sql_start_offset = sql_start_offset;
     builder.add_raw_kv(
       serde::to_iobuf(prefix_truncate_key), serde::to_iobuf(std::move(val)));
     auto batch = std::move(builder).build();
@@ -248,11 +248,11 @@ ss::future<log_eviction_stm::offset_result> log_eviction_stm::truncate(
     /// was replicated
     vlog(
       _log.info,
-      "Replicating prefix_truncate command, redpanda start offset: {}, kafka "
+      "Replicating prefix_truncate command, funes start offset: {}, sql "
       "start offset: {} "
       "current last snapshot offset: {}, current last visible offset: {}",
       val.rp_start_offset,
-      val.kafka_start_offset,
+      val.sql_start_offset,
       _raft->last_snapshot_index(),
       _raft->last_visible_index());
 
@@ -349,9 +349,9 @@ ss::future<> log_eviction_stm::apply(const model::record_batch& batch) {
         // other STMs can honor it (e.g. archival).
         vlog(
           _log.info,
-          "Replicated prefix_truncate batch with no local redpanda "
-          "offset. Requested start Kafka offset {}",
-          record.kafka_start_offset);
+          "Replicated prefix_truncate batch with no local funes "
+          "offset. Requested start SQL offset {}",
+          record.sql_start_offset);
         co_return;
     }
     auto truncate_offset = record.rp_start_offset - model::offset(1);

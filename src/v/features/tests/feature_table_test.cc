@@ -24,8 +24,8 @@ using action_t = feature_update_action::action_t;
 
 class setenv_helper {
 public:
-    setenv_helper() { setenv("__REDPANDA_TEST_FEATURES", "TRUE", 1); }
-    ~setenv_helper() { unsetenv("__REDPANDA_TEST_FEATURES"); }
+    setenv_helper() { setenv("__FUNES_TEST_FEATURES", "TRUE", 1); }
+    ~setenv_helper() { unsetenv("__FUNES_TEST_FEATURES"); }
 };
 
 namespace features {
@@ -80,7 +80,7 @@ SEASTAR_THREAD_TEST_CASE(feature_table_strings) {
     BOOST_REQUIRE_EQUAL(to_string_view(feature::test_alpha), mock_feature);
     BOOST_REQUIRE_EQUAL(
       to_string_view(feature::rpc_v2_by_default), "rpc_v2_by_default");
-    BOOST_REQUIRE_EQUAL(to_string_view(feature::kafka_gssapi), "kafka_gssapi");
+    BOOST_REQUIRE_EQUAL(to_string_view(feature::sql_gssapi), "sql_gssapi");
     BOOST_REQUIRE_EQUAL(
       to_string_view(feature::node_isolation), "node_isolation");
 }

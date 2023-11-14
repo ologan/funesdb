@@ -13,7 +13,7 @@ import (
 	"context"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -55,8 +55,8 @@ valid, but does not apply it.
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			cl, err := kafka.NewFranzClient(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			cl, err := sql.NewFranzClient(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer cl.Close()
 
 			if len(topics) == 0 {
@@ -72,18 +72,18 @@ valid, but does not apply it.
 			subtractKVs, err := parseKVs(subtracts)
 			out.MaybeDie(err, "unable to parse --subtract: %v", err)
 
-			// Redpanda fails to set both remote.read and write when passed
+			// Funes fails to set both remote.read and write when passed
 			// at the same time, so we issue first the set request for write,
 			// then the rest of the requests.
 			// See https://github.com/redpanda-data/redpanda/issues/9191
-			_, isRRR := setKVs["redpanda.remote.read"]
-			wv, isRRW := setKVs["redpanda.remote.write"]
+			_, isRRR := setKVs["funes.remote.read"]
+			wv, isRRW := setKVs["funes.remote.write"]
 			rrwErrors := make(map[string]int16)
 			if isRRR && isRRW {
 				req := kmsg.NewPtrIncrementalAlterConfigsRequest()
 				req.ValidateOnly = dry
 				cfg := kmsg.NewIncrementalAlterConfigsRequestResourceConfig()
-				cfg.Name = "redpanda.remote.write"
+				cfg.Name = "funes.remote.write"
 				cfg.Op = kmsg.IncrementalAlterConfigOpSet
 				cfg.Value = kmsg.StringPtr(wv)
 
@@ -100,7 +100,7 @@ valid, but does not apply it.
 					rrwErrors[resource.ResourceName] = resource.ErrorCode
 				}
 
-				delete(setKVs, "redpanda.remote.write")
+				delete(setKVs, "funes.remote.write")
 			}
 
 			req := kmsg.NewPtrIncrementalAlterConfigsRequest()
@@ -157,7 +157,7 @@ valid, but does not apply it.
 						msg = err.Message
 					}
 					if resource.ErrorMessage != nil {
-						zap.L().Sugar().Debugf("redpanda returned error message: %v", *resource.ErrorMessage)
+						zap.L().Sugar().Debugf("funes returned error message: %v", *resource.ErrorMessage)
 						msg += ": " + *resource.ErrorMessage
 					}
 				}

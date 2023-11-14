@@ -13,11 +13,11 @@ from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from rptest.clients.types import TopicSpec
 from rptest.clients.default import DefaultClient
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierSeqConsumer, KgoVerifierProducer
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 import concurrent
 
 from rptest.tests.prealloc_nodes import PreallocNodesTest
@@ -35,10 +35,10 @@ class ScalingUpTest(PreallocNodesTest):
             },
             node_prealloc_count=1,
         )
-        self.redpanda.set_skip_if_no_redpanda_log(True)
+        self.funes.set_skip_if_no_funes_log(True)
 
     def setup(self):
-        # defer starting Redpanda
+        # defer starting Funes
         pass
 
     """
@@ -49,10 +49,10 @@ class ScalingUpTest(PreallocNodesTest):
     group_topic_partitions = 16
 
     def _replicas_per_node(self):
-        kafkacat = KafkaCat(self.redpanda)
+        sqlcat = SQLCat(self.funes)
         node_replicas = {}
-        md = kafkacat.metadata()
-        self.redpanda.logger.debug(f"metadata: {md}")
+        md = sqlcat.metadata()
+        self.funes.logger.debug(f"metadata: {md}")
         for topic in md['topics']:
             for p in topic['partitions']:
                 for r in p['replicas']:
@@ -65,10 +65,10 @@ class ScalingUpTest(PreallocNodesTest):
 
     # Returns (count of replicas)[allocation_domain][node]
     def _replicas_per_domain_node(self):
-        kafkacat = KafkaCat(self.redpanda)
+        sqlcat = SQLCat(self.funes)
         replicas = {}
-        md = kafkacat.metadata()
-        self.redpanda.logger.debug(f"metadata: {md}")
+        md = sqlcat.metadata()
+        self.funes.logger.debug(f"metadata: {md}")
         for topic in md['topics']:
             domain = -1 if topic['topic'] == '__consumer_offsets' else 0
             in_domain = replicas.setdefault(domain, {})
@@ -80,10 +80,10 @@ class ScalingUpTest(PreallocNodesTest):
         return replicas
 
     def _topic_replicas_per_node(self):
-        kafkacat = KafkaCat(self.redpanda)
+        sqlcat = SQLCat(self.funes)
         topic_replicas = defaultdict(lambda: defaultdict(int))
-        md = kafkacat.metadata()
-        self.redpanda.logger.debug(f"metadata: {md}")
+        md = sqlcat.metadata()
+        self.funes.logger.debug(f"metadata: {md}")
         for topic in md['topics']:
             for p in topic['partitions']:
                 for r in p['replicas']:
@@ -95,7 +95,7 @@ class ScalingUpTest(PreallocNodesTest):
     def wait_for_partitions_rebalanced(self, total_replicas, timeout_sec):
         def partitions_rebalanced():
             per_domain_node = self._replicas_per_domain_node()
-            self.redpanda.logger.info(
+            self.funes.logger.info(
                 f"replicas per domain per node: "
                 f"{dict([(k,dict(sorted(v.items()))) for k,v in sorted(per_domain_node.items())])}"
             )
@@ -108,31 +108,31 @@ class ScalingUpTest(PreallocNodesTest):
                     # judge nonperfect ones by falling into the ±20%
                     # tolerance range
                     expected_per_node = sum(in_domain.values()) / len(
-                        self.redpanda.started_nodes())
+                        self.funes.started_nodes())
                     expected_range = [
                         math.floor(0.8 * expected_per_node),
                         math.ceil(1.2 * expected_per_node)
                     ]
                     if not all(expected_range[0] <= p[1] <= expected_range[1]
                                for p in in_domain.items()):
-                        self.redpanda.logger.debug(
+                        self.funes.logger.debug(
                             f"In domain {domain}, not all nodes' partition counts "
                             f"fall within the expected range {expected_range}. "
-                            f"Nodes: {len(self.redpanda.started_nodes())}")
+                            f"Nodes: {len(self.funes.started_nodes())}")
                         return False
 
                 for n in in_domain:
                     per_node[n] = per_node.get(n, 0) + in_domain[n]
 
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"replicas per node: {dict(sorted(per_node.items()))}")
-            if len(per_node) < len(self.redpanda.started_nodes()):
+            if len(per_node) < len(self.funes.started_nodes()):
                 return False
             if sum(per_node.values()) != total_replicas:
                 return False
 
             # make sure that all reconfigurations are finished
-            admin = Admin(self.redpanda)
+            admin = Admin(self.funes)
             return len(admin.list_reconfigurations()) == 0
 
         wait_until(partitions_rebalanced,
@@ -150,7 +150,7 @@ class ScalingUpTest(PreallocNodesTest):
             topics.append(spec)
 
         for spec in topics:
-            DefaultClient(self.redpanda).create_topic(spec)
+            DefaultClient(self.funes).create_topic(spec)
 
         self._topic = random.choice(topics).name
 
@@ -174,7 +174,7 @@ class ScalingUpTest(PreallocNodesTest):
         )
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self._topic,
             self.msg_size,
             self.msg_count,
@@ -188,7 +188,7 @@ class ScalingUpTest(PreallocNodesTest):
     def start_consumer(self):
         self.consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self._topic,
             self.msg_size,
             readers=1,
@@ -219,7 +219,7 @@ class ScalingUpTest(PreallocNodesTest):
     @matrix(partition_count=[1, 20])
     def test_adding_nodes_to_cluster(self, partition_count):
         # start single node cluster
-        self.redpanda.start(nodes=[self.redpanda.nodes[0]])
+        self.funes.start(nodes=[self.funes.nodes[0]])
         # create some topics
         total_replicas = self.create_topics(rf=1,
                                             partition_count=partition_count)
@@ -230,11 +230,11 @@ class ScalingUpTest(PreallocNodesTest):
         self.start_consumer()
 
         # add second node
-        self.redpanda.start_node(self.redpanda.nodes[1])
+        self.funes.start_node(self.funes.nodes[1])
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
         # add third node
-        self.redpanda.start_node(self.redpanda.nodes[2])
+        self.funes.start_node(self.funes.nodes[2])
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
 
@@ -245,7 +245,7 @@ class ScalingUpTest(PreallocNodesTest):
     def test_adding_multiple_nodes_to_the_cluster(self, partition_count):
 
         # start single node cluster
-        self.redpanda.start(nodes=self.redpanda.nodes[0:3])
+        self.funes.start(nodes=self.funes.nodes[0:3])
         # create some topics
         topics = []
         total_replicas = self.create_topics(rf=3,
@@ -257,9 +257,9 @@ class ScalingUpTest(PreallocNodesTest):
         self.start_consumer()
 
         # add three nodes at once
-        for n in self.redpanda.nodes[3:]:
-            self.redpanda.clean_node(n)
-            self.redpanda.start_node(n)
+        for n in self.funes.nodes[3:]:
+            self.funes.clean_node(n)
+            self.funes.start_node(n)
 
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
@@ -268,8 +268,8 @@ class ScalingUpTest(PreallocNodesTest):
     @matrix(partition_count=[1, 20])
     def test_on_demand_rebalancing(self, partition_count):
         # start single node cluster
-        self.redpanda.start(nodes=self.redpanda.nodes[0:3])
-        self.redpanda.set_cluster_config(
+        self.funes.start(nodes=self.funes.nodes[0:3])
+        self.funes.set_cluster_config(
             {"partition_autobalancing_mode": "off"})
         # create some topics
         total_replicas = self.create_topics(rf=3,
@@ -281,9 +281,9 @@ class ScalingUpTest(PreallocNodesTest):
         self.start_consumer()
 
         # add three nodes
-        for n in self.redpanda.nodes[3:]:
-            self.redpanda.clean_node(n)
-            self.redpanda.start_node(n)
+        for n in self.funes.nodes[3:]:
+            self.funes.clean_node(n)
+            self.funes.start_node(n)
 
         # verify that all new nodes are empty
 
@@ -292,7 +292,7 @@ class ScalingUpTest(PreallocNodesTest):
         assert len(per_node) == 3
 
         # trigger rebalance
-        admin = Admin(self.redpanda, retries_amount=20)
+        admin = Admin(self.funes, retries_amount=20)
         admin.trigger_rebalance()
 
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
@@ -302,7 +302,7 @@ class ScalingUpTest(PreallocNodesTest):
     @cluster(num_nodes=7)
     def test_topic_hot_spots(self):
         # start 3 nodes cluster
-        self.redpanda.start(nodes=self.redpanda.nodes[0:3])
+        self.funes.start(nodes=self.funes.nodes[0:3])
         # create some topics
         total_replicas = 0
         topics = []
@@ -313,7 +313,7 @@ class ScalingUpTest(PreallocNodesTest):
             topics.append(spec)
 
         for spec in topics:
-            DefaultClient(self.redpanda).create_topic(spec)
+            DefaultClient(self.funes).create_topic(spec)
 
         self._topic = random.choice(topics).name
 
@@ -324,11 +324,11 @@ class ScalingUpTest(PreallocNodesTest):
         self.start_consumer()
 
         # add second node
-        self.redpanda.start_node(self.redpanda.nodes[3])
+        self.funes.start_node(self.funes.nodes[3])
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
         # add third node
-        self.redpanda.start_node(self.redpanda.nodes[4])
+        self.funes.start_node(self.funes.nodes[4])
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
 
@@ -338,13 +338,13 @@ class ScalingUpTest(PreallocNodesTest):
         for t, nodes in topic_per_node.items():
             self.logger.info(f"{t} spans {len(nodes)} nodes")
             # assert that each topic has replicas on all of the nodes
-            assert len(nodes) == len(self.redpanda.started_nodes())
+            assert len(nodes) == len(self.funes.started_nodes())
 
     @cluster(num_nodes=7)
     def test_adding_node_with_unavailable_node(self):
         # start 3 nodes first
-        self.redpanda.start(nodes=self.redpanda.nodes[0:3])
-        self.redpanda.set_cluster_config(
+        self.funes.start(nodes=self.funes.nodes[0:3])
+        self.funes.set_cluster_config(
             {"partition_autobalancing_mode": "off"})
         # create some topics
         total_replicas = self.create_topics(rf=3, partition_count=20)
@@ -355,18 +355,18 @@ class ScalingUpTest(PreallocNodesTest):
         self.start_consumer()
 
         # start a node just to register it (no partitions will be moved)
-        unavailable_node = self.redpanda.nodes[3]
-        self.redpanda.start_node(unavailable_node)
-        self.redpanda.stop_node(unavailable_node)
+        unavailable_node = self.funes.nodes[3]
+        self.funes.start_node(unavailable_node)
+        self.funes.stop_node(unavailable_node)
         time.sleep(5.0)  # let the node become unavailable
 
-        admin = Admin(self.redpanda, default_node=self.redpanda.nodes[0])
+        admin = Admin(self.funes, default_node=self.funes.nodes[0])
         admin.patch_cluster_config(
             upsert={"partition_autobalancing_mode": "node_add"})
 
-        added_node = self.redpanda.nodes[4]
-        self.redpanda.start_node(added_node)
-        added_node_id = self.redpanda.node_id(added_node)
+        added_node = self.funes.nodes[4]
+        self.funes.start_node(added_node)
+        added_node_id = self.funes.node_id(added_node)
 
         def initial_rebalance_finished():
             reconfigurations_len = len(admin.list_reconfigurations())
@@ -380,16 +380,16 @@ class ScalingUpTest(PreallocNodesTest):
                    backoff_sec=1,
                    err_msg="initial rebalance failed")
 
-        self.redpanda.start_node(unavailable_node)
+        self.funes.start_node(unavailable_node)
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
         self.verify()
 
-    def _kafka_usage(self, nodes):
+    def _sql_usage(self, nodes):
         usage_per_node = {}
         for n in nodes:
-            id = self.redpanda.node_id(n)
-            disk_usage = self.redpanda.data_dir_usage("kafka", n)
+            id = self.funes.node_id(n)
+            disk_usage = self.funes.data_dir_usage("sql", n)
             usage_per_node[id] = disk_usage
 
         return usage_per_node
@@ -405,7 +405,7 @@ class ScalingUpTest(PreallocNodesTest):
         data_size = log_segment_size * total_segments_per_partition * partition_cnt
         msg_cnt = data_size // msg_size
 
-        # configure and start redpanda
+        # configure and start funes
         extra_rp_conf = {
             'cloud_storage_segment_max_upload_interval_sec': 10,
             'cloud_storage_manifest_max_upload_interval_sec': 10,
@@ -417,13 +417,13 @@ class ScalingUpTest(PreallocNodesTest):
                                  log_segment_size=log_segment_size,
                                  retention_local_strict=False)
 
-        self.redpanda.set_extra_rp_conf(extra_rp_conf)
-        self.redpanda.set_si_settings(si_settings)
-        self.redpanda.start(nodes=self.redpanda.nodes[0:4])
+        self.funes.set_extra_rp_conf(extra_rp_conf)
+        self.funes.set_si_settings(si_settings)
+        self.funes.start(nodes=self.funes.nodes[0:4])
         topic = TopicSpec(replication_factor=3,
                           partition_count=partition_cnt,
-                          redpanda_remote_write=True,
-                          redpanda_remote_read=True)
+                          funes_remote_write=True,
+                          funes_remote_read=True)
 
         total_replicas = 3 * partition_cnt
 
@@ -432,7 +432,7 @@ class ScalingUpTest(PreallocNodesTest):
             f"Producing {data_size} bytes of data in {msg_cnt} total messages")
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic.name,
             msg_size=msg_size,
             msg_count=msg_cnt,
@@ -441,7 +441,7 @@ class ScalingUpTest(PreallocNodesTest):
         self.producer.wait()
 
         # add fifth node
-        self.redpanda.start_node(self.redpanda.nodes[4])
+        self.funes.start_node(self.funes.nodes[4])
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
 
@@ -462,26 +462,26 @@ class ScalingUpTest(PreallocNodesTest):
                 f"Added node {id} disk usage {added_node_usage} is to large,"
                 "expected usage to be smaller than {percentage * avg_usage} bytes"
 
-        usage = self._kafka_usage(nodes=self.redpanda.nodes[0:5])
+        usage = self._sql_usage(nodes=self.funes.nodes[0:5])
         print_disk_usage(usage)
 
         verify_disk_usage(usage,
-                          [self.redpanda.node_id(self.redpanda.nodes[4])], 0.2)
+                          [self.funes.node_id(self.funes.nodes[4])], 0.2)
 
         # add sixth node
-        self.redpanda.start_node(self.redpanda.nodes[5])
+        self.funes.start_node(self.funes.nodes[5])
         self.wait_for_partitions_rebalanced(total_replicas=total_replicas,
                                             timeout_sec=self.rebalance_timeout)
 
-        usage = self._kafka_usage(self.redpanda.nodes)
+        usage = self._sql_usage(self.funes.nodes)
         print_disk_usage(usage)
         verify_disk_usage(usage, [
-            self.redpanda.node_id(self.redpanda.nodes[4]),
-            self.redpanda.node_id(self.redpanda.nodes[5])
+            self.funes.node_id(self.funes.nodes[4]),
+            self.funes.node_id(self.funes.nodes[5])
         ], 0.2)
         # verify that data can be read
         self.consumer = KgoVerifierSeqConsumer(self.test_context,
-                                               self.redpanda,
+                                               self.funes,
                                                topic.name,
                                                msg_size,
                                                nodes=self.preallocated_nodes)

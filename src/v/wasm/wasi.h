@@ -10,7 +10,7 @@
  */
 
 // These APIs are defined and documented in the wasi-libc project,
-// but Redpanda implements it's own version of the WASI standard,
+// but Funes implements it's own version of the WASI standard,
 // so that it works with the model we want to expose and have full
 // control over all the details. Most APIs here are stubbed out as
 // unsupported.

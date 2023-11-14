@@ -181,7 +181,7 @@ func startCluster(
 	// Start a seed node.
 	var (
 		seedID            uint
-		seedKafkaPort     = ports[0]
+		seedSQLPort     = ports[0]
 		seedProxyPort     = ports[1]
 		seedSchemaRegPort = ports[2]
 		seedRPCPort       = ports[3]
@@ -191,7 +191,7 @@ func startCluster(
 	seedState, err := common.CreateNode(
 		c,
 		seedID,
-		seedKafkaPort,
+		seedSQLPort,
 		seedProxyPort,
 		seedSchemaRegPort,
 		seedRPCPort,
@@ -215,7 +215,7 @@ func startCluster(
 
 	seedNode := node{
 		seedID,
-		nodeAddr(seedKafkaPort),
+		nodeAddr(seedSQLPort),
 	}
 
 	nodes := []node{seedNode}
@@ -228,7 +228,7 @@ func startCluster(
 		id := nodeID
 		grp.Go(func() error {
 			var (
-				kafkaPort     = ports[0+5*id]
+				sqlPort     = ports[0+5*id]
 				proxyPort     = ports[1+5*id]
 				schemaRegPort = ports[2+5*id]
 				rpcPort       = ports[3+5*id]
@@ -239,13 +239,13 @@ func startCluster(
 				"--seeds",
 				net.JoinHostPort(
 					seedState.ContainerIP,
-					strconv.Itoa(config.DevDefault().Redpanda.RPCServer.Port),
+					strconv.Itoa(config.DevDefault().Funes.RPCServer.Port),
 				),
 			}
 			state, err := common.CreateNode(
 				c,
 				id,
-				kafkaPort,
+				sqlPort,
 				proxyPort,
 				schemaRegPort,
 				rpcPort,
@@ -267,7 +267,7 @@ func startCluster(
 			mu.Lock()
 			nodes = append(nodes, node{
 				id,
-				nodeAddr(state.HostKafkaPort),
+				nodeAddr(state.HostSQLPort),
 			})
 			mu.Unlock()
 			return nil
@@ -324,7 +324,7 @@ func restartCluster(
 			mu.Lock()
 			nodes = append(nodes, node{
 				state.ID,
-				nodeAddr(state.HostKafkaPort),
+				nodeAddr(state.HostSQLPort),
 			})
 			mu.Unlock()
 			return nil
@@ -389,22 +389,22 @@ func renderClusterInfo(c common.Client) ([]*common.NodeState, error) {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		fmt.Println("No Redpanda nodes detected - use `rpk container start` or check `docker ps` if you expected nodes")
+		fmt.Println("No Funes nodes detected - use `rpk container start` or check `docker ps` if you expected nodes")
 		return nil, nil
 	}
 
-	tw := out.NewTable("Node-ID", "Status", "Kafka-Address", "Admin-Address", "Proxy-Address", "Schema-Registry-Address")
+	tw := out.NewTable("Node-ID", "Status", "SQL-Address", "Admin-Address", "Proxy-Address", "Schema-Registry-Address")
 	defer tw.Flush()
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].ID < nodes[j].ID
 	})
 	for _, node := range nodes {
-		kafka := nodeAddr(node.HostKafkaPort)
+		sql := nodeAddr(node.HostSQLPort)
 		admin := nodeAddr(node.HostAdminPort)
 		proxy := nodeAddr(node.HostProxyPort)
 		schema := nodeAddr(node.HostSchemaPort)
-		if node.HostKafkaPort == 0 {
-			kafka = "-"
+		if node.HostSQLPort == 0 {
+			sql = "-"
 		}
 		if node.HostAdminPort == 0 {
 			admin = "-"
@@ -418,7 +418,7 @@ func renderClusterInfo(c common.Client) ([]*common.NodeState, error) {
 		tw.PrintStrings(
 			fmt.Sprint(node.ID),
 			node.Status,
-			kafka,
+			sql,
 			admin,
 			proxy,
 			schema,
@@ -434,7 +434,7 @@ func renderClusterInteract(nodes []*common.NodeState, withProfile bool) {
 	)
 	for _, node := range nodes {
 		if node.Running {
-			brokers = append(brokers, nodeAddr(node.HostKafkaPort))
+			brokers = append(brokers, nodeAddr(node.HostSQLPort))
 			adminAddrs = append(adminAddrs, nodeAddr(node.HostAdminPort))
 		}
 	}

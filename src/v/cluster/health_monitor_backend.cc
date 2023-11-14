@@ -630,7 +630,7 @@ ss::future<std::error_code> health_monitor_backend::collect_cluster_health() {
           cloud_storage_size_reducer::default_retries_allowed);
 
         try {
-            /// TODO: https://github.com/redpanda-data/redpanda/issues/12515
+            /// TODO: https://github.com/redpanda-data/funes/issues/12515
             /// Eventually move the cloud storage size metrics into the node
             /// health report which will reduce the number of redundent RPCs
             /// needed to be made

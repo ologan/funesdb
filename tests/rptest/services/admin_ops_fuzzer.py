@@ -18,30 +18,30 @@ import time
 from requests.exceptions import HTTPError
 from ducktape.utils.util import wait_until
 from rptest.clients.kcl import KCL
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.types import TopicSpec
 from time import sleep
-from confluent_kafka import Producer
+from confluent_sql import Producer
 from typing import Dict
 
 from rptest.clients.rpk import RpkTool
 from rptest.services.admin import Admin
-from rptest.services.redpanda_installer import VERSION_RE, int_tuple
+from rptest.services.funes_installer import VERSION_RE, int_tuple
 
 
 # Operation context (used to save state between invocation of operations)
 class OperationCtx:
-    def __init__(self, redpanda):
-        self.redpanda = redpanda
+    def __init__(self, funes):
+        self.funes = funes
 
     def rpk(self):
-        return RpkTool(self.redpanda)
+        return RpkTool(self.funes)
 
     def admin(self):
-        return Admin(self.redpanda, retry_codes=[503, 504])
+        return Admin(self.funes, retry_codes=[503, 504])
 
     def kcl(self):
-        return KCL(self.redpanda)
+        return KCL(self.funes)
 
 
 # Base class for operation
@@ -60,7 +60,7 @@ def random_string(length):
 
 
 @unique
-class RedpandaAdminOperation(Enum):
+class FunesAdminOperation(Enum):
     CREATE_TOPIC = auto()
     DELETE_TOPIC = auto()
     UPDATE_TOPIC = auto()
@@ -118,7 +118,7 @@ class CreateTopicOperation(Operation):
         }
 
     def execute(self, ctx):
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Creating topic with name {self.topic}, replication: {self.rf} partitions: {self.partitions}"
         )
         ctx.rpk().create_topic(self.topic, self.partitions, self.rf,
@@ -128,7 +128,7 @@ class CreateTopicOperation(Operation):
     def validate(self, ctx):
         if self.topic is None:
             return False
-        ctx.redpanda.logger.info(f"Validating topic {self.topic} creation")
+        ctx.funes.logger.info(f"Validating topic {self.topic} creation")
         topics = ctx.rpk().list_topics()
         if self.topic not in topics:
             return False
@@ -158,18 +158,18 @@ class DeleteTopicOperation(Operation):
             self.topic = _choice_random_topic(ctx, prefix=self.prefix)
         if self.topic is None:
             return False
-        ctx.redpanda.logger.info(f"Deleting topic: {self.topic}")
+        ctx.funes.logger.info(f"Deleting topic: {self.topic}")
         ctx.rpk().delete_topic(self.topic)
         return True
 
     def validate(self, ctx):
         if self.topic is None:
             return False
-        ctx.redpanda.logger.info(f"Validating topic {self.topic} deletion")
+        ctx.funes.logger.info(f"Validating topic {self.topic} deletion")
         # validate RPK output first
         topics = ctx.rpk().list_topics()
         if self.topic in topics:
-            ctx.redpanda.logger.info(
+            ctx.funes.logger.info(
                 f"found deleted topic {self.topic} in RPK response: {topics}")
             return False
 
@@ -177,18 +177,18 @@ class DeleteTopicOperation(Operation):
             brokers = ctx.admin().get_brokers()
         except:
             return False
-        # since metadata in Redpanda and Kafka are eventually consistent
+        # since metadata in Funes and SQL are eventually consistent
         # we must check all the nodes before proceeding
         for b in brokers:
-            n = ctx.redpanda.get_node_by_id(b["node_id"])
-            if n not in ctx.redpanda.started_nodes():
+            n = ctx.funes.get_node_by_id(b["node_id"])
+            if n not in ctx.funes.started_nodes():
                 continue
             # we will check does topic_table contain any info about our topic and partition 0. If not we can assume that topic was deleted
             try:
                 ctx.admin().get_partitions(node=n,
                                            topic=self.topic,
                                            partition=0)
-                ctx.redpanda.logger.info(
+                ctx.funes.logger.info(
                     f"found deleted topic {self.topic} on node {n.account.hostname}"
                 )
                 return False
@@ -221,7 +221,7 @@ class UpdateTopicOperation(Operation):
             self.property = random.choice(list(TOPIC_PROPERTIES.keys()))
             self.value = TOPIC_PROPERTIES[self.property]()
 
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Updating topic: {self.topic} with: {self.property}={self.value}")
         ctx.rpk().alter_topic_config(self.topic, self.property,
                                      str(self.value))
@@ -230,7 +230,7 @@ class UpdateTopicOperation(Operation):
     def validate(self, ctx):
         if self.topic is None:
             return False
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Validating topic {self.topic} update, expected: {self.property}={self.value}"
         )
 
@@ -263,12 +263,12 @@ class AddPartitionsOperation(Operation):
         except:
             return None
         for b in brokers:
-            n = ctx.redpanda.get_node_by_id(b['node_id'])
-            if n not in ctx.redpanda.started_nodes():
+            n = ctx.funes.get_node_by_id(b['node_id'])
+            if n not in ctx.funes.started_nodes():
                 continue
             node_version = int_tuple(
-                VERSION_RE.findall(ctx.redpanda.get_version(n))[0])
-            # do not query nodes with redpanda version prior to v23.1.x
+                VERSION_RE.findall(ctx.funes.get_version(n))[0])
+            # do not query nodes with funes version prior to v23.1.x
             if node_version[0] < 23:
                 return None
             try:
@@ -282,7 +282,7 @@ class AddPartitionsOperation(Operation):
                     raise
 
         if len(per_node_count) != 1:
-            ctx.redpanda.logger.info(
+            ctx.funes.logger.info(
                 f"inconsistent partition count for {self.topic}: {per_node_count}"
             )
             return None
@@ -301,17 +301,17 @@ class AddPartitionsOperation(Operation):
             return False
         if self.total is None:
             self.total = random.randint(self.current + 1, self.current + 5)
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Updating topic: {self.topic} partitions count. Current partition count: {self.current} new partition count: {self.total}"
         )
-        cli = KafkaCliTools(ctx.redpanda)
+        cli = SQLCliTools(ctx.funes)
         cli.create_topic_partitions(self.topic, self.total)
         return True
 
     def validate(self, ctx):
         if self.topic is None:
             return False
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Validating topic {self.topic} partitions update")
         current = len(list(ctx.rpk().describe_topic(self.topic)))
         return current == self.total
@@ -334,14 +334,14 @@ class CreateUserOperation(Operation):
         self.algorithm = "SCRAM-SHA-256"
 
     def execute(self, ctx):
-        ctx.redpanda.logger.info(f"Creating user: {self.user}")
+        ctx.funes.logger.info(f"Creating user: {self.user}")
         ctx.admin().create_user(self.user, self.password, self.algorithm)
         return True
 
     def validate(self, ctx):
         if self.user is None:
             return False
-        ctx.redpanda.logger.info(f"Validating user {self.user} is present")
+        ctx.funes.logger.info(f"Validating user {self.user} is present")
         users = ctx.admin().list_users()
         return self.user in users
 
@@ -364,14 +364,14 @@ class DeleteUserOperation(Operation):
         self.user = _choice_random_user(ctx, prefix=self.prefix)
         if self.user is None:
             return False
-        ctx.redpanda.logger.info(f"Deleting user: {self.user}")
+        ctx.funes.logger.info(f"Deleting user: {self.user}")
         ctx.admin().delete_user(self.user)
         return True
 
     def validate(self, ctx):
         if self.user is None:
             return False
-        ctx.redpanda.logger.info(f"Validating user {self.user} is deleted")
+        ctx.funes.logger.info(f"Validating user {self.user} is deleted")
         users = ctx.admin().list_users()
         return self.user not in users
 
@@ -395,7 +395,7 @@ class CreateAclOperation(Operation):
         if self.user is None:
             return False
 
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Creating allow cluster describe ACL for user: {self.user}")
         ctx.rpk().acl_create_allow_cluster(self.user, op="describe")
 
@@ -404,7 +404,7 @@ class CreateAclOperation(Operation):
     def validate(self, ctx):
         if self.user is None:
             return False
-        ctx.redpanda.logger.info(f"Validating user {self.user} ACL is present")
+        ctx.funes.logger.info(f"Validating user {self.user} ACL is present")
         acls = ctx.rpk().acl_list()
         lines = acls.splitlines()
         for l in lines:
@@ -440,13 +440,13 @@ class UpdateConfigOperation(Operation):
         self.value = p[1]()
 
     def execute(self, ctx):
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Updating {self.property} value with {self.value}")
         ctx.rpk().cluster_config_set(self.property, str(self.value))
         return True
 
     def validate(self, ctx):
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Validating cluster configuration is set {self.property}=={self.value}"
         )
         return ctx.rpk().cluster_config_get(self.property) == str(self.value)
@@ -476,7 +476,7 @@ class ProduceToTopic(Operation):
         if self.topic is None:
             return False
 
-        producer = Producer({'bootstrap.servers': ctx.redpanda.brokers()})
+        producer = Producer({'bootstrap.servers': ctx.funes.brokers()})
         for i in range(self.msg_cnt):
             producer.produce(self.topic,
                              f"admin-ops-fuzzer-{self.topic}-{i}",
@@ -492,7 +492,7 @@ class ProduceToTopic(Operation):
 
     def validate(self, ctx):
         if self.produce_err:
-            ctx.redpanda.logger.info(
+            ctx.funes.logger.info(
                 f"Produce operation returned an error: {self.produce_err}")
             return True
 
@@ -500,7 +500,7 @@ class ProduceToTopic(Operation):
         for p in partitions:
             if p.id in self.delivery_offsets:
                 batch_offset = self.delivery_offsets[p.id]
-                ctx.redpanda.logger.debug(
+                ctx.funes.logger.debug(
                     f"Last produced record offset: {self.delivery_offsets[p.id]}, topic high watermark: {p.high_watermark}"
                 )
                 if batch_offset > p.high_watermark:
@@ -574,7 +574,7 @@ class DeleteRecords(Operation):
         if len(self.truncate_point) == 0:
             return False
 
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Issuing DeleteRecords command: {self.truncate_point}")
         (topic, partition_offset) = self.truncate_point
         (partition, offset) = partition_offset
@@ -585,7 +585,7 @@ class DeleteRecords(Operation):
         if len(self.truncate_point) == 0:
             return False
 
-        ctx.redpanda.logger.info(
+        ctx.funes.logger.info(
             f"Validing topic low watermarks, expecting: {self.truncate_point}")
 
         (topic, partition_offset) = self.truncate_point
@@ -610,7 +610,7 @@ class DeleteRecords(Operation):
 
 class AdminOperationsFuzzer():
     def __init__(self,
-                 redpanda,
+                 funes,
                  initial_entities=10,
                  retries=5,
                  retries_interval=5,
@@ -620,8 +620,8 @@ class AdminOperationsFuzzer():
                  min_replication=1,
                  max_replication=3,
                  allowed_operations=None):
-        self.redpanda = redpanda
-        self.operation_ctx = OperationCtx(self.redpanda)
+        self.funes = funes
+        self.operation_ctx = OperationCtx(self.funes)
         self.initial_entities = initial_entities
         self.retries = retries
         self.retries_interval = retries_interval
@@ -631,7 +631,7 @@ class AdminOperationsFuzzer():
         self.min_replication = min_replication
         self.max_replication = max_replication
         if allowed_operations is None:
-            self.allowed_operations = [o for o in RedpandaAdminOperation]
+            self.allowed_operations = [o for o in FunesAdminOperation]
         else:
             self.allowed_operations = allowed_operations
 
@@ -690,18 +690,18 @@ class AdminOperationsFuzzer():
 
     def pause(self):
         with self._pause_cond:
-            self.redpanda.logger.info("pausing admin ops fuzzer...")
+            self.funes.logger.info("pausing admin ops fuzzer...")
             assert self._pause_requested == False
             self._pause_requested = True
             while not self._pause_reached:
                 self._pause_cond.wait()
-            self.redpanda.logger.info("paused admin ops fuzzer")
+            self.funes.logger.info("paused admin ops fuzzer")
 
     def unpause(self):
         with self._pause_cond:
             self._pause_requested = False
             self._pause_cond.notify()
-            self.redpanda.logger.info("unpaused admin ops fuzzer")
+            self.funes.logger.info("unpaused admin ops fuzzer")
 
     def append_to_history(self, op):
         d = op.describe()
@@ -715,7 +715,7 @@ class AdminOperationsFuzzer():
             try:
                 return op.validate(self.operation_ctx)
             except Exception as e:
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"Error validating operation {op_type}", exc_info=True)
                 return False
 
@@ -733,19 +733,19 @@ class AdminOperationsFuzzer():
                 sleep(self.operations_interval)
                 return True
             else:
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     f"Skipped operation: {op_type}, current cluster state does not allow executing the operation"
                 )
                 return False
         except Exception as e:
-            self.redpanda.logger.error(f"Operation: {op.describe()} failed",
+            self.funes.logger.error(f"Operation: {op.describe()} failed",
                                        exc_info=True)
             raise e
         finally:
             self.append_to_history(op)
 
     def execute_with_retries(self, op_type, op):
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Executing operation: {op_type} with {self.retries} retries")
         if self.retries == 0:
             return op.execute(self.operation_ctx)
@@ -759,7 +759,7 @@ class AdminOperationsFuzzer():
                 return op.execute(self.operation_ctx)
             except Exception as e:
                 error = e
-                self.redpanda.logger.info(
+                self.funes.logger.info(
                     f"Operation: {op_type}, retries left: {self.retries-retry}/{self.retries}",
                     exc_info=True)
                 sleep(self.retries_interval)
@@ -768,27 +768,27 @@ class AdminOperationsFuzzer():
     def make_random_operation(self) -> Operation:
         op = random.choice(self.allowed_operations)
         actions = {
-            RedpandaAdminOperation.CREATE_TOPIC:
+            FunesAdminOperation.CREATE_TOPIC:
             lambda:
             CreateTopicOperation(self.prefix, self.max_partitions, self.
                                  min_replication, self.max_replication),
-            RedpandaAdminOperation.DELETE_TOPIC:
+            FunesAdminOperation.DELETE_TOPIC:
             lambda: DeleteTopicOperation(self.prefix),
-            RedpandaAdminOperation.UPDATE_TOPIC:
+            FunesAdminOperation.UPDATE_TOPIC:
             lambda: UpdateTopicOperation(self.prefix),
-            RedpandaAdminOperation.ADD_PARTITIONS:
+            FunesAdminOperation.ADD_PARTITIONS:
             lambda: AddPartitionsOperation(self.prefix),
-            RedpandaAdminOperation.CREATE_USER:
+            FunesAdminOperation.CREATE_USER:
             lambda: CreateUserOperation(self.prefix),
-            RedpandaAdminOperation.DELETE_USER:
+            FunesAdminOperation.DELETE_USER:
             lambda: DeleteUserOperation(self.prefix),
-            RedpandaAdminOperation.CREATE_ACLS:
+            FunesAdminOperation.CREATE_ACLS:
             lambda: CreateAclOperation(self.prefix),
-            RedpandaAdminOperation.UPDATE_CONFIG:
+            FunesAdminOperation.UPDATE_CONFIG:
             lambda: UpdateConfigOperation(),
-            RedpandaAdminOperation.PRODUCE_TO_TOPIC:
+            FunesAdminOperation.PRODUCE_TO_TOPIC:
             lambda: ProduceToTopic(self.prefix),
-            RedpandaAdminOperation.DELETE_RECORDS:
+            FunesAdminOperation.DELETE_RECORDS:
             lambda: DeleteRecords(self.prefix),
         }
         return (op, actions[op]())
@@ -797,7 +797,7 @@ class AdminOperationsFuzzer():
         if self._stopping.is_set():
             return
 
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"operations history: {json.dumps(self.history)}")
         self._stopping.set()
         self.thread.join()
@@ -811,7 +811,7 @@ class AdminOperationsFuzzer():
         def check():
             # Drop out immediately if the main loop errored out.
             if self.error:
-                self.redpanda.logger.error(
+                self.funes.logger.error(
                     f"wait: terminating for error {self.error}")
                 raise self.error
 
@@ -822,7 +822,7 @@ class AdminOperationsFuzzer():
                 return True
             elif self._stopping.is_set():
                 # We cannot ever reach the count, error out
-                self.redpanda.logger.error(f"wait: terminating for stop")
+                self.funes.logger.error(f"wait: terminating for stop")
                 raise RuntimeError(f"Stopped without observing progress")
             return False
 
@@ -837,7 +837,7 @@ class AdminOperationsFuzzer():
         def check():
             # Drop out immediately if the main loop errored out.
             if self.error:
-                self.redpanda.logger.error(
+                self.funes.logger.error(
                     f"wait: terminating for error {self.error}")
                 raise self.error
 
@@ -845,7 +845,7 @@ class AdminOperationsFuzzer():
                 return True
             elif self._stopping.is_set():
                 # We cannot ever reach the count, error out
-                self.redpanda.logger.error(f"wait: terminating for stop")
+                self.funes.logger.error(f"wait: terminating for stop")
                 raise RuntimeError(
                     f"Stopped without reaching target ({self.executed}/{count})"
                 )

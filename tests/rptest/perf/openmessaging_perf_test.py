@@ -9,19 +9,19 @@
 
 import statistics
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.openmessaging_benchmark import OpenMessagingBenchmark
 from ducktape.mark import parametrize
 
 
-class RedPandaOpenMessagingBenchmarkPerf(RedpandaTest):
+class FunesOpenMessagingBenchmarkPerf(FunesTest):
 
     BENCHMARK_WAIT_TIME_MIN = 10
 
     def __init__(self, ctx):
         self._ctx = ctx
-        super(RedPandaOpenMessagingBenchmarkPerf,
+        super(FunesOpenMessagingBenchmarkPerf,
               self).__init__(test_context=ctx, num_brokers=3)
 
     @cluster(num_nodes=6)
@@ -36,12 +36,12 @@ class RedPandaOpenMessagingBenchmarkPerf(RedpandaTest):
         # Make sure this is running in a dedicated environment as the perf
         # run validator metrics are based on a production grade deployment.
         # Check validator for specifics.
-        assert self.redpanda.dedicated_nodes
+        assert self.funes.dedicated_nodes
 
-        benchmark = OpenMessagingBenchmark(self._ctx, self.redpanda,
+        benchmark = OpenMessagingBenchmark(self._ctx, self.funes,
                                            driver_idx, workload_idx)
         benchmark.start()
         benchmark_time_min = benchmark.benchmark_time(
-        ) + RedPandaOpenMessagingBenchmarkPerf.BENCHMARK_WAIT_TIME_MIN
+        ) + FunesOpenMessagingBenchmarkPerf.BENCHMARK_WAIT_TIME_MIN
         benchmark.wait(timeout_sec=benchmark_time_min * 60)
         benchmark.check_succeed()

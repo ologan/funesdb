@@ -8,8 +8,8 @@
 # by the Apache License, Version 2.0
 
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.clients.sql_cat import SQLCat
 
 from rptest.clients.types import TopicSpec
 from rptest.tests.end_to_end import EndToEndTest
@@ -22,10 +22,10 @@ class TxFeatureFlagTest(EndToEndTest):
         Validate that transactions can be safely disabled after 
         the feature have been used
         '''
-        # start redpanda with tranasactions enabled, we use
+        # start funes with tranasactions enabled, we use
         # replication factor 1 for group topic to make
         # it unavailable when one of the nodes is down,
-        self.start_redpanda(num_nodes=3,
+        self.start_funes(num_nodes=3,
                             extra_rp_conf={
                                 "default_topic_replications": 1,
                                 "default_topic_partitions": 1,
@@ -39,14 +39,14 @@ class TxFeatureFlagTest(EndToEndTest):
 
         # produce some messages to tx_topic
 
-        kcat = KafkaCat(self.redpanda)
+        kcat = SQLCat(self.funes)
         kcat.produce_one(tx_topic.name, msg='test-msg', tx_id='test-tx-id')
 
         # disable transactions,
-        self.redpanda.stop()
+        self.funes.stop()
 
-        for n in self.redpanda.nodes:
-            self.redpanda.start_node(n,
+        for n in self.funes.nodes:
+            self.funes.start_node(n,
                                      override_cfg_params={
                                          "transactional_id_expiration_ms":
                                          1000,
@@ -68,6 +68,6 @@ class TxFeatureFlagTest(EndToEndTest):
                             producer_timeout_sec=300,
                             consumer_timeout_sec=300)
 
-        # make sure that all redpanda nodes are up and running
-        for n in self.redpanda.nodes:
-            assert self.redpanda.redpanda_pid(n) != None
+        # make sure that all funes nodes are up and running
+        for n in self.funes.nodes:
+            assert self.funes.funes_pid(n) != None

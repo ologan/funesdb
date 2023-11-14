@@ -12,7 +12,7 @@
 
 #include "cluster/fwd.h"
 #include "cluster/types.h"
-#include "kafka/server/partition_proxy.h"
+#include "sql/server/partition_proxy.h"
 #include "model/fundamental.h"
 #include "model/ktp.h"
 #include "model/metadata.h"
@@ -23,7 +23,7 @@
 
 /**
  * These are wrapper types for types defined outside this module, useful for
- * testing without spinning up a full Redpanda cluster.
+ * testing without spinning up a full Funes cluster.
  */
 
 namespace transform::rpc {
@@ -172,13 +172,13 @@ public:
       ss::shard_id shard_id,
       const model::ktp& ktp,
       ss::noncopyable_function<
-        ss::future<cluster::errc>(kafka::partition_proxy*)> fn);
+        ss::future<cluster::errc>(sql::partition_proxy*)> fn);
 
     virtual ss::future<cluster::errc> invoke_on_shard(
       ss::shard_id,
       const model::ntp&,
       ss::noncopyable_function<
-        ss::future<cluster::errc>(kafka::partition_proxy*)>)
+        ss::future<cluster::errc>(sql::partition_proxy*)>)
       = 0;
 
     virtual ss::future<find_coordinator_response>

@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -39,7 +39,7 @@ namespace cloud_storage {
 
 /// Search query type
 using async_view_search_query_t
-  = std::variant<model::offset, kafka::offset, model::timestamp>;
+  = std::variant<model::offset, sql::offset, model::timestamp>;
 
 std::ostream& operator<<(std::ostream&, const async_view_search_query_t&);
 
@@ -97,7 +97,7 @@ public:
       result<std::unique_ptr<async_manifest_view_cursor>, error_outcome>>
     get_retention_backlog() noexcept;
 
-    ss::future<result<std::optional<kafka::offset>, error_outcome>>
+    ss::future<result<std::optional<sql::offset>, error_outcome>>
     get_term_last_offset(model::term_id term) noexcept;
 
     bool is_empty() const noexcept;
@@ -172,7 +172,7 @@ private:
 
     /// Find index of the spillover manifest
     ///
-    /// \param query is a search query, either an offset, a kafka offset or a
+    /// \param query is a search query, either an offset, a sql offset or a
     ///              timestamp
     /// \return segment_meta struct that represents a spillover manifest or null
     std::optional<segment_meta>

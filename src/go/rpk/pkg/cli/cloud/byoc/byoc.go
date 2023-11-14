@@ -27,15 +27,15 @@ import (
 
 const (
 	flagCloudAPIToken  = "cloud-api-token"
-	flagRedpandaID     = "redpanda-id"
-	flagRedpandaIDDesc = "The redpanda ID of the cluster you are creating"
+	flagFunesID     = "funes-id"
+	flagFunesIDDesc = "The funes ID of the cluster you are creating"
 
 	applyCmd    = "apply"
 	destroyCmd  = "destroy"
 	validateCmd = "validate"
 )
 
-type ctxKeyRedpandaID struct{}
+type ctxKeyFunesID struct{}
 
 func init() {
 	// We manage the byoc plugin, and we install it under "rpk cloud byoc".
@@ -48,18 +48,18 @@ func init() {
 		run := cmd.Run
 		addBYOCFlags(cmd, p)
 		cmd.Run = func(cmd *cobra.Command, args []string) {
-			cfg, redpandaID, pluginArgs, err := parseBYOCFlags(fs, p, cmd, args)
+			cfg, funesID, pluginArgs, err := parseBYOCFlags(fs, p, cmd, args)
 			out.MaybeDieErr(err)
 
-			// --redpanda-id is only required in apply or destroy commands.
-			// For validate commands we don't need the redpanda-id, instead,
+			// --funes-id is only required in apply or destroy commands.
+			// For validate commands we don't need the funes-id, instead,
 			// we download the latest version always.
 			isValidate := slices.Contains(strings.Split(cmd.CommandPath(), " "), validateCmd)
-			if redpandaID == "" && !isValidate {
+			if funesID == "" && !isValidate {
 				isApply := slices.Contains(strings.Split(cmd.CommandPath(), " "), applyCmd)
 				isDestroy := slices.Contains(strings.Split(cmd.CommandPath(), " "), destroyCmd)
-				if cmd.Flags().Changed("redpanda-id") || isApply || isDestroy {
-					fmt.Fprint(os.Stderr, "Error: required --redpanda-id flag cannot be empty\n")
+				if cmd.Flags().Changed("funes-id") || isApply || isDestroy {
+					fmt.Fprint(os.Stderr, "Error: required --funes-id flag cannot be empty\n")
 					cmd.Usage()
 					os.Exit(1)
 				}
@@ -68,11 +68,11 @@ func init() {
 			}
 			// We require our plugin to always be the exact version
 			// pinned in the control plane except if it's the 'validate' command.
-			_, token, _, err := loginAndEnsurePluginVersion(cmd.Context(), fs, cfg, redpandaID, isValidate)
+			_, token, _, err := loginAndEnsurePluginVersion(cmd.Context(), fs, cfg, funesID, isValidate)
 			out.MaybeDie(err, "unable to ensure byoc plugin version: %v", err)
 			execArgs := append(pluginArgs, "--"+flagCloudAPIToken, token)
 			if !isValidate {
-				execArgs = append(execArgs, "--"+flagRedpandaID, redpandaID)
+				execArgs = append(execArgs, "--"+flagFunesID, funesID)
 			}
 
 			// Finally, exec.
@@ -88,7 +88,7 @@ func addBYOCFlags(cmd *cobra.Command, p *config.Params) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx = context.WithValue(ctx, ctxKeyRedpandaID{}, f.String(flagRedpandaID, "", flagRedpandaIDDesc))
+	ctx = context.WithValue(ctx, ctxKeyFunesID{}, f.String(flagFunesID, "", flagFunesIDDesc))
 	cmd.SetContext(ctx)
 	f.String(flagCloudAPIToken, "", "")
 	f.MarkHidden(flagCloudAPIToken)
@@ -106,33 +106,33 @@ func parseBYOCFlags(fs afero.Fs, p *config.Params, cmd *cobra.Command, args []st
 		return nil, "", nil, err
 	}
 
-	redpandaID := *(cmd.Context().Value(ctxKeyRedpandaID{}).(*string))
+	funesID := *(cmd.Context().Value(ctxKeyFunesID{}).(*string))
 	cfg, err := p.Load(fs)
 	if err != nil {
 		return nil, "", nil, err
 	}
-	return cfg, redpandaID, keepForPlugin, nil
+	return cfg, funesID, keepForPlugin, nil
 }
 
 // NewCommand returns a new byoc plugin command.
 func NewCommand(fs afero.Fs, p *config.Params, execFn func(string, []string) error) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "byoc",
-		Short: "Manage a Redpanda cloud BYOC agent",
-		Long: `Manage a Redpanda cloud BYOC agent
+		Short: "Manage a Funes cloud BYOC agent",
+		Long: `Manage a Funes cloud BYOC agent
 
-For BYOC, Redpanda installs an agent service in your owned cluster. The agent
+For BYOC, Funes installs an agent service in your owned cluster. The agent
 then proceeds to provision further infrastructure and eventually, a full
-Redpanda cluster.
+Funes cluster.
 
 The BYOC command runs Terraform to create and start the agent. You first need
-a redpanda-id (or cluster ID); this is used to get the details of how your
+a funes-id (or cluster ID); this is used to get the details of how your
 agent should be provisioned. You can create a BYOC cluster in our cloud UI
 and then come back to this command to complete the process.
 `,
 		DisableFlagParsing: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cfg, redpandaID, pluginArgs, err := parseBYOCFlags(fs, p, cmd, args)
+			cfg, funesID, pluginArgs, err := parseBYOCFlags(fs, p, cmd, args)
 			out.MaybeDieErr(err)
 
 			// We bind rpk to the plugin implementation a little
@@ -165,16 +165,16 @@ and then come back to this command to complete the process.
 				}
 			}
 
-			if !isKnown || (redpandaID == "" && !isValidate) {
+			if !isKnown || (funesID == "" && !isValidate) {
 				cmd.Help()
 				return
 			}
 
-			path, token, _, err := loginAndEnsurePluginVersion(cmd.Context(), fs, cfg, redpandaID, isValidate)
+			path, token, _, err := loginAndEnsurePluginVersion(cmd.Context(), fs, cfg, funesID, isValidate)
 			out.MaybeDie(err, "unable to ensure byoc plugin version: %v", err)
 			execArgs := append(pluginArgs, "--"+flagCloudAPIToken, token)
 			if !isValidate {
-				execArgs = append(execArgs, "--"+flagRedpandaID, redpandaID)
+				execArgs = append(execArgs, "--"+flagFunesID, funesID)
 			}
 
 			err = execFn(path, execArgs)

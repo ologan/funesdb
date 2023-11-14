@@ -94,8 +94,8 @@ struct test_msg1_new
 
 struct test_msg1_new_manual {
     using value_t = test_msg1_new_manual;
-    static constexpr auto redpanda_serde_version = serde::version_t{10};
-    static constexpr auto redpanda_serde_compat_version = serde::version_t{5};
+    static constexpr auto funes_serde_version = serde::version_t{10};
+    static constexpr auto funes_serde_compat_version = serde::version_t{5};
 
     bool operator==(test_msg1_new_manual const&) const = default;
 
@@ -109,8 +109,8 @@ static_assert(!serde::is_envelope<not_an_envelope>);
 static_assert(serde::is_envelope<test_msg1>);
 static_assert(serde::inherits_from_envelope<test_msg1_new>);
 static_assert(!serde::inherits_from_envelope<test_msg1_new_manual>);
-static_assert(test_msg1::redpanda_serde_version == 4);
-static_assert(test_msg1::redpanda_serde_compat_version == 0);
+static_assert(test_msg1::funes_serde_version == 4);
+static_assert(test_msg1::funes_serde_compat_version == 0);
 
 SEASTAR_THREAD_TEST_CASE(incompatible_version_throws) {
     BOOST_CHECK_THROW(

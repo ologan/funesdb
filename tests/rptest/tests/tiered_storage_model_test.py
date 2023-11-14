@@ -19,24 +19,24 @@ from ducktape.mark import matrix
 from ducktape.tests.test import TestContext
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cli_tools import SQLCliTools
+from rptest.clients.sql_cat import SQLCat
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.action_injector import random_process_kills
-from rptest.services.redpanda import RedpandaService
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import FunesService
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer, KgoVerifierRandomConsumer, KgoVerifierSeqConsumer
-from rptest.services.redpanda import SISettings, get_cloud_storage_type, make_redpanda_service, CHAOS_LOG_ALLOW_LIST, MetricsEndpoint
+from rptest.services.funes import SISettings, get_cloud_storage_type, make_funes_service, CHAOS_LOG_ALLOW_LIST, MetricsEndpoint
 from rptest.utils.si_utils import nodes_report_cloud_segments, BucketView, NTP
 from rptest.tests.tiered_storage_model import TestCase, TieredStorageEndToEndTest, get_tiered_storage_test_cases, TestRunStage, CONFIDENCE_THRESHOLD
 
 MAX_RETRIES = 20
 
 
-class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
+class TieredStorageTest(TieredStorageEndToEndTest, FunesTest):
 
     # Topic doesn't have tiered storage enabled by default
     topics = (
@@ -76,7 +76,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
 
         # The producer has some defaults which could be changed later
         self.producer_config = dict(context=self.test_context,
-                                    redpanda=self.redpanda,
+                                    funes=self.funes,
                                     topic=self.topic,
                                     msg_size=1024,
                                     msg_count=10000,
@@ -87,16 +87,16 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
 
         # Configurable defaults for the consumer
         self.consumer_config = dict(context=self.test_context,
-                                    redpanda=self.redpanda,
+                                    funes=self.funes,
                                     topic=self.topic,
                                     msg_size=None,
                                     debug_logs=True,
                                     trace_logs=True)
         self.timequery_map = {}
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
-        self.kafka_cat = KafkaCat(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
+        self.rpk = RpkTool(self.funes)
+        self.sql_cat = SQLCat(self.funes)
         self.thread_pool = ThreadPoolExecutor(max_workers=1024)
         self.public_metrics = defaultdict(int)
         self.private_metrics = defaultdict(int)
@@ -189,16 +189,16 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
             self._bg_validator_run(v)
 
     def _bg_metrics_pull(self, endpoint):
-        """Pull metrics from the redpanda node. This is needed to avoid pulling metrics
+        """Pull metrics from the funes node. This is needed to avoid pulling metrics
         from every validator individually. The validators are invoking functions of the
         test suite to find individual metrics."""
         try:
             if self.stop_flag:
                 return
             res = defaultdict(int)
-            for n in self.redpanda.nodes:
-                if n in self.redpanda._started:
-                    resp = self.redpanda.metrics(n, endpoint)
+            for n in self.funes.nodes:
+                if n in self.funes._started:
+                    resp = self.funes.metrics(n, endpoint)
                     for family in resp:
                         for sample in family.samples:
                             res[sample.name] += sample.value
@@ -223,7 +223,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
         try:
             if self.stop_flag:
                 return
-            self.bucket_view = BucketView(self.redpanda,
+            self.bucket_view = BucketView(self.funes,
                                           topics=self.topics,
                                           scan_segments=True)
             self.bucket_view._ensure_listing()
@@ -245,11 +245,11 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
         def tail_minus_f(node):
             self.logger.info(f"Running tail -f on {node.name}")
             try:
-                # Redpanda produces fairly minor amount of logs, so it's OK to just
+                # Funes produces fairly minor amount of logs, so it's OK to just
                 # grep all of them.
 
                 for line in node.account.ssh_capture(
-                        f"tail -f {RedpandaService.STDOUT_STDERR_CAPTURE}"):
+                        f"tail -f {FunesService.STDOUT_STDERR_CAPTURE}"):
                     for pattern, validators in self._log_patterns.items():
                         if re.search(pattern, line):
                             for v in validators:
@@ -259,7 +259,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
             except:
                 self.logger.error("Failed to grep logs", exc_info=True)
 
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             node = n
             self.logger.info(f"Starting log fetch on a node {node.name}")
             self.thread_pool.submit(lambda: tail_minus_f(node))
@@ -269,7 +269,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
         self.thread_pool.shutdown()
 
     def apply_config_overrides(self):
-        """Apply configuration overrides to the redpanda cluster."""
+        """Apply configuration overrides to the funes cluster."""
         self.logger.info(f"Applying config overrides {self.config_overrides}")
         needs_restart = False
         values = {}
@@ -278,7 +278,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
             if v['needs_restart']:
                 needs_restart = True
         if len(values) > 0:
-            self.redpanda.set_cluster_config(values=values,
+            self.funes.set_cluster_config(values=values,
                                              expect_restart=needs_restart)
         self.config_overrides = {}
 
@@ -288,7 +288,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
         return self.bucket_view
 
     def get_ntp(self):
-        return NTP("kafka", self.topic, 0)
+        return NTP("sql", self.topic, 0)
 
     def set_producer_parameters(self, **kwargs):
         self.logger.info(f"Update producer parameters {kwargs}")
@@ -309,24 +309,24 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
         )
         self.rpk.alter_topic_config(self.topic, config_name, config_value)
 
-    def get_redpanda_service(self):
-        return self.redpanda
+    def get_funes_service(self):
+        return self.funes
 
     def get_logger(self):
         return self.logger
 
-    def set_redpanda_cluster_config(self,
+    def set_funes_cluster_config(self,
                                     config_name,
                                     config_value,
                                     needs_restart: bool = False):
-        """Override configuration of the redpanda service. The configuration will be changed
-        later using the self.redpanda.set_cluster_config method. This method shouldn't be
+        """Override configuration of the funes service. The configuration will be changed
+        later using the self.funes.set_cluster_config method. This method shouldn't be
         called for the same config name twice."""
         self.config_overrides[config_name] = dict(value=config_value,
                                                   needs_restart=needs_restart)
 
-    def stop_redpanda_cluster(self):
-        self.redpanda.stop()
+    def stop_funes_cluster(self):
+        self.funes.stop()
 
     def get_public_metric(self, metric_name: str):
         value = self.public_metrics.get(metric_name)
@@ -397,8 +397,8 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
         self._build_timequery_map(num_produce_runs, original_fake_ts)
 
     def clean_up_cache(self):
-        for node in self.redpanda.nodes:
-            path = self.redpanda.cache_dir + "/*"
+        for node in self.funes.nodes:
+            path = self.funes.cache_dir + "/*"
             self.logger.info(f"removing all files in {path}")
             for line in node.account.ssh_capture(f"rm -rf  {path}"):
                 self.logger.info(f"rm command returned {line}")
@@ -449,7 +449,7 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
             self.logger.debug(
                 f"Timequery check for timestamp: {ts}, expected offset: {expected_offset}"
             )
-            actual_offset = self.kafka_cat.consume_one(
+            actual_offset = self.sql_cat.consume_one(
                 self.topic, 0, first_timestamp=ts)['offset']
             matches = expected_offset == actual_offset
             if not matches:
@@ -464,20 +464,20 @@ class TieredStorageTest(TieredStorageEndToEndTest, RedpandaTest):
             v.start(self)
 
     def transfer_topic_leadership(self):
-        leader = self.redpanda._admin.get_partition_leader(namespace='kafka',
+        leader = self.funes._admin.get_partition_leader(namespace='sql',
                                                            topic=self.topic,
                                                            partition=0)
-        broker_ids = [x['node_id'] for x in self.redpanda._admin.get_brokers()]
+        broker_ids = [x['node_id'] for x in self.funes._admin.get_brokers()]
         transfer_to = random.choice([n for n in broker_ids if n != leader])
-        self.redpanda._admin.transfer_leadership_to(namespace="kafka",
+        self.funes._admin.transfer_leadership_to(namespace="sql",
                                                     topic=self.topic,
                                                     partition=0,
                                                     target_id=transfer_to,
                                                     leader_id=leader)
-        self.redpanda._admin.await_stable_leader(
+        self.funes._admin.await_stable_leader(
             self.topic,
             partition=0,
-            namespace='kafka',
+            namespace='sql',
             timeout_s=30,
             backoff_s=2,
             check=lambda node_id: node_id == transfer_to)

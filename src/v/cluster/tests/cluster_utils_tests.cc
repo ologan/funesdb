@@ -180,7 +180,7 @@ FIXTURE_TEST(persisted_stm_kvstore_test, kvstore_test_fixture) {
     kvstore->start().get();
     auto make_snapshotter = [&kvstore, &test_logger]() {
         auto ntp = model::ntp(
-          model::kafka_namespace,
+          model::sql_namespace,
           model::topic(random_generators::gen_alphanum_string(10)),
           model::partition_id(0));
         prefix_logger logger(

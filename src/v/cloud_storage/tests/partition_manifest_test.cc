@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iobuf.h"
@@ -300,7 +300,7 @@ ss::logger test_log("partition_manifest_test");
 // the last offsets in the list referring to the exclusive end of the returned
 // manifest.
 partition_manifest
-manifest_for(std::vector<std::pair<model::offset, kafka::offset>> o) {
+manifest_for(std::vector<std::pair<model::offset, sql::offset>> o) {
     partition_manifest manifest;
     manifest
       .update(
@@ -325,24 +325,24 @@ manifest_for(std::vector<std::pair<model::offset, kafka::offset>> o) {
 
 } // anonymous namespace
 
-SEASTAR_THREAD_TEST_CASE(test_segment_contains_by_kafka_offset) {
-    // Returns true if a kafka::offset lookup returns the segment with the
+SEASTAR_THREAD_TEST_CASE(test_segment_contains_by_sql_offset) {
+    // Returns true if a sql::offset lookup returns the segment with the
     // expected base offsets.
     const auto check_offset = [](
                                 const partition_manifest& m,
-                                kafka::offset ko,
+                                sql::offset ko,
                                 model::offset expected_base_mo,
-                                kafka::offset expected_base_ko) {
+                                sql::offset expected_base_ko) {
         const auto it = m.segment_containing(ko);
         bool success = it != m.end()
                        // Check that the segment base offsets match the segment
                        // we were expecting...
                        && it->base_offset == expected_base_mo
-                       && it->base_kafka_offset() == expected_base_ko
-                       // ...and as a sanity check, make sure the kafka::offset
+                       && it->base_sql_offset() == expected_base_ko
+                       // ...and as a sanity check, make sure the sql::offset
                        // falls in the segment.
-                       && it->base_kafka_offset() <= ko
-                       && it->next_kafka_offset() > ko;
+                       && it->base_sql_offset() <= ko
+                       && it->next_sql_offset() > ko;
         if (success) {
             return true;
         }
@@ -352,7 +352,7 @@ SEASTAR_THREAD_TEST_CASE(test_segment_contains_by_kafka_offset) {
         }
         test_log.error(
           "segment {} doesn't match the expected base model::offset {} or "
-          "kafka::offset {}, or doesn't include "
+          "sql::offset {}, or doesn't include "
           "{} in its range",
           *it,
           expected_base_mo,
@@ -361,17 +361,17 @@ SEASTAR_THREAD_TEST_CASE(test_segment_contains_by_kafka_offset) {
         return false;
     };
 
-    // Returns true if a kafka::offset lookup returns that no such segment is
+    // Returns true if a sql::offset lookup returns that no such segment is
     // returned.
     const auto check_no_offset = [](
                                    const partition_manifest& m,
-                                   kafka::offset ko) {
+                                   sql::offset ko) {
         const auto it = m.segment_containing(ko);
         bool success = it == m.end();
         if (success) {
             return true;
         }
-        test_log.error("unexpected segment for kafka::offset {}: {}", ko, *it);
+        test_log.error("unexpected segment for sql::offset {}: {}", ko, *it);
         return false;
     };
 
@@ -379,56 +379,56 @@ SEASTAR_THREAD_TEST_CASE(test_segment_contains_by_kafka_offset) {
     //     [a    ][b    ][c    ]end
     // ko: 0      5      10     15
     partition_manifest full_manifest = manifest_for({
-      {model::offset(0), kafka::offset(0)},
-      {model::offset(10), kafka::offset(5)},
-      {model::offset(20), kafka::offset(10)},
-      {model::offset(30), kafka::offset(15)},
+      {model::offset(0), sql::offset(0)},
+      {model::offset(10), sql::offset(5)},
+      {model::offset(20), sql::offset(10)},
+      {model::offset(30), sql::offset(15)},
     });
     BOOST_REQUIRE(check_offset(
-      full_manifest, kafka::offset(0), model::offset(0), kafka::offset(0)));
+      full_manifest, sql::offset(0), model::offset(0), sql::offset(0)));
     BOOST_REQUIRE(check_offset(
-      full_manifest, kafka::offset(4), model::offset(0), kafka::offset(0)));
+      full_manifest, sql::offset(4), model::offset(0), sql::offset(0)));
     BOOST_REQUIRE(check_offset(
-      full_manifest, kafka::offset(5), model::offset(10), kafka::offset(5)));
+      full_manifest, sql::offset(5), model::offset(10), sql::offset(5)));
     BOOST_REQUIRE(check_offset(
-      full_manifest, kafka::offset(9), model::offset(10), kafka::offset(5)));
+      full_manifest, sql::offset(9), model::offset(10), sql::offset(5)));
     BOOST_REQUIRE(check_offset(
-      full_manifest, kafka::offset(10), model::offset(20), kafka::offset(10)));
+      full_manifest, sql::offset(10), model::offset(20), sql::offset(10)));
     BOOST_REQUIRE(check_offset(
-      full_manifest, kafka::offset(14), model::offset(20), kafka::offset(10)));
-    BOOST_REQUIRE(check_no_offset(full_manifest, kafka::offset(15)));
+      full_manifest, sql::offset(14), model::offset(20), sql::offset(10)));
+    BOOST_REQUIRE(check_no_offset(full_manifest, sql::offset(15)));
 
     // mo: 10     20     30
     //     [b    ][c    ]end
     // ko: 5      10     15
     partition_manifest truncated_manifest = manifest_for({
-      {model::offset(10), kafka::offset(5)},
-      {model::offset(20), kafka::offset(10)},
-      {model::offset(30), kafka::offset(15)},
+      {model::offset(10), sql::offset(5)},
+      {model::offset(20), sql::offset(10)},
+      {model::offset(30), sql::offset(15)},
     });
-    BOOST_REQUIRE(check_no_offset(truncated_manifest, kafka::offset(0)));
-    BOOST_REQUIRE(check_no_offset(truncated_manifest, kafka::offset(4)));
+    BOOST_REQUIRE(check_no_offset(truncated_manifest, sql::offset(0)));
+    BOOST_REQUIRE(check_no_offset(truncated_manifest, sql::offset(4)));
     BOOST_REQUIRE(check_offset(
       truncated_manifest,
-      kafka::offset(5),
+      sql::offset(5),
       model::offset(10),
-      kafka::offset(5)));
+      sql::offset(5)));
     BOOST_REQUIRE(check_offset(
       truncated_manifest,
-      kafka::offset(9),
+      sql::offset(9),
       model::offset(10),
-      kafka::offset(5)));
+      sql::offset(5)));
     BOOST_REQUIRE(check_offset(
       truncated_manifest,
-      kafka::offset(10),
+      sql::offset(10),
       model::offset(20),
-      kafka::offset(10)));
+      sql::offset(10)));
     BOOST_REQUIRE(check_offset(
       truncated_manifest,
-      kafka::offset(14),
+      sql::offset(14),
       model::offset(20),
-      kafka::offset(10)));
-    BOOST_REQUIRE(check_no_offset(full_manifest, kafka::offset(15)));
+      sql::offset(10)));
+    BOOST_REQUIRE(check_no_offset(full_manifest, sql::offset(15)));
 }
 
 SEASTAR_THREAD_TEST_CASE(test_segment_contains) {
@@ -483,39 +483,39 @@ SEASTAR_THREAD_TEST_CASE(test_segment_path) {
 
 SEASTAR_THREAD_TEST_CASE(test_manifest_name_parsing) {
     std::filesystem::path path
-      = "b0000000/meta/kafka/redpanda-test/4_2/manifest.json";
+      = "b0000000/meta/sql/funes-test/4_2/manifest.json";
     auto res = cloud_storage::get_partition_manifest_path_components(path);
     BOOST_REQUIRE_EQUAL(res->_origin, path);
-    BOOST_REQUIRE_EQUAL(res->_ns(), "kafka");
-    BOOST_REQUIRE_EQUAL(res->_topic(), "redpanda-test");
+    BOOST_REQUIRE_EQUAL(res->_ns(), "sql");
+    BOOST_REQUIRE_EQUAL(res->_topic(), "funes-test");
     BOOST_REQUIRE_EQUAL(res->_part(), 4);
     BOOST_REQUIRE_EQUAL(res->_rev(), 2);
 }
 
 SEASTAR_THREAD_TEST_CASE(test_manifest_name_parsing_failure_1) {
     std::filesystem::path path
-      = "b0000000/meta/kafka/redpanda-test/a_b/manifest.json";
+      = "b0000000/meta/sql/funes-test/a_b/manifest.json";
     auto res = cloud_storage::get_partition_manifest_path_components(path);
     BOOST_REQUIRE(res.has_value() == false);
 }
 
 SEASTAR_THREAD_TEST_CASE(test_manifest_name_parsing_failure_2) {
     std::filesystem::path path
-      = "b0000000/kafka/redpanda-test/4_2/manifest.json";
+      = "b0000000/sql/funes-test/4_2/manifest.json";
     auto res = cloud_storage::get_partition_manifest_path_components(path);
     BOOST_REQUIRE(res.has_value() == false);
 }
 
 SEASTAR_THREAD_TEST_CASE(test_manifest_name_parsing_failure_3) {
     std::filesystem::path path
-      = "b0000000/meta/kafka/redpanda-test//manifest.json";
+      = "b0000000/meta/sql/funes-test//manifest.json";
     auto res = cloud_storage::get_partition_manifest_path_components(path);
     BOOST_REQUIRE(res.has_value() == false);
 }
 
 SEASTAR_THREAD_TEST_CASE(test_manifest_name_parsing_failure_4) {
     std::filesystem::path path
-      = "b0000000/meta/kafka/redpanda-test/4_2/foo.bar";
+      = "b0000000/meta/sql/funes-test/4_2/foo.bar";
     auto res = cloud_storage::get_partition_manifest_path_components(path);
     BOOST_REQUIRE(res.has_value() == false);
 }
@@ -1369,9 +1369,9 @@ SEASTAR_THREAD_TEST_CASE(test_partition_manifest_start_offset_advance) {
     BOOST_REQUIRE(m.get_start_offset() == std::nullopt);
 }
 
-SEASTAR_THREAD_TEST_CASE(test_partition_manifest_start_kafka_offset_advance) {
+SEASTAR_THREAD_TEST_CASE(test_partition_manifest_start_sql_offset_advance) {
     partition_manifest m(manifest_ntp, model::initial_revision_id(0));
-    BOOST_REQUIRE(m.get_start_kafka_offset() == std::nullopt);
+    BOOST_REQUIRE(m.get_start_sql_offset() == std::nullopt);
     m.add(
       segment_name("0-1-v1.log"),
       partition_manifest::segment_meta{
@@ -1379,66 +1379,66 @@ SEASTAR_THREAD_TEST_CASE(test_partition_manifest_start_kafka_offset_advance) {
         .committed_offset = model::offset{99},
         .delta_offset = model::offset_delta{0},
       });
-    BOOST_REQUIRE(*m.get_start_kafka_offset() == kafka::offset(0));
+    BOOST_REQUIRE(*m.get_start_sql_offset() == sql::offset(0));
     m.add(
       segment_name("100-1-v1.log"),
       partition_manifest::segment_meta{
-        .base_offset = model::offset{100}, // kafka offset 90
+        .base_offset = model::offset{100}, // sql offset 90
         .committed_offset = model::offset{199},
         .delta_offset = model::offset_delta{10},
       });
     m.add(
       segment_name("200-2-v1.log"),
       partition_manifest::segment_meta{
-        .base_offset = model::offset{200}, // kafka offset 180
+        .base_offset = model::offset{200}, // sql offset 180
         .committed_offset = model::offset{299},
         .delta_offset = model::offset_delta{20},
       });
     m.add(
       segment_name("300-3-v1.log"),
       partition_manifest::segment_meta{
-        .base_offset = model::offset{300}, // kafka offset 270
+        .base_offset = model::offset{300}, // sql offset 270
         .committed_offset = model::offset{399},
         .delta_offset = model::offset_delta{30},
       });
 
-    BOOST_REQUIRE(m.advance_start_kafka_offset(kafka::offset(80)));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset_override(), kafka::offset(80));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), model::offset(0));
+    BOOST_REQUIRE(m.advance_start_sql_offset(sql::offset(80)));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset_override(), sql::offset(80));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), model::offset(0));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(0));
 
-    // Moving the start offset ahead of the kafka override removes the
+    // Moving the start offset ahead of the sql override removes the
     // override.
     BOOST_REQUIRE(m.advance_start_offset(model::offset(100)));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset_override(), kafka::offset{});
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), model::offset(90));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset_override(), sql::offset{});
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), model::offset(90));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(100));
 
-    BOOST_REQUIRE(m.advance_start_kafka_offset(kafka::offset(180)));
+    BOOST_REQUIRE(m.advance_start_sql_offset(sql::offset(180)));
     BOOST_REQUIRE_EQUAL(
-      m.get_start_kafka_offset_override(), kafka::offset(180));
+      m.get_start_sql_offset_override(), sql::offset(180));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(100));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), kafka::offset(90));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), sql::offset(90));
 
-    BOOST_REQUIRE(m.advance_start_kafka_offset(kafka::offset(200)));
+    BOOST_REQUIRE(m.advance_start_sql_offset(sql::offset(200)));
     BOOST_REQUIRE_EQUAL(
-      m.get_start_kafka_offset_override(), kafka::offset(200));
+      m.get_start_sql_offset_override(), sql::offset(200));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(100));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), kafka::offset(90));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), sql::offset(90));
 
-    BOOST_REQUIRE(m.advance_start_kafka_offset(kafka::offset(370)));
+    BOOST_REQUIRE(m.advance_start_sql_offset(sql::offset(370)));
     BOOST_REQUIRE_EQUAL(
-      m.get_start_kafka_offset_override(), kafka::offset(370));
+      m.get_start_sql_offset_override(), sql::offset(370));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(100));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), kafka::offset(90));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), sql::offset(90));
 
     // If trying to move back, it should no-op.
-    BOOST_REQUIRE(!m.advance_start_kafka_offset(kafka::offset(370)));
-    BOOST_REQUIRE(!m.advance_start_kafka_offset(kafka::offset(369)));
+    BOOST_REQUIRE(!m.advance_start_sql_offset(sql::offset(370)));
+    BOOST_REQUIRE(!m.advance_start_sql_offset(sql::offset(369)));
     BOOST_REQUIRE_EQUAL(
-      m.get_start_kafka_offset_override(), kafka::offset(370));
+      m.get_start_sql_offset_override(), sql::offset(370));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(100));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), kafka::offset(90));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), sql::offset(90));
 
     // Truncating should clean up any out-of-bounds segments, but shouldn't
     // affected the override.
@@ -1446,24 +1446,24 @@ SEASTAR_THREAD_TEST_CASE(test_partition_manifest_start_kafka_offset_advance) {
     m.truncate();
     BOOST_REQUIRE_EQUAL(3, m.size());
     BOOST_REQUIRE_EQUAL(
-      m.get_start_kafka_offset_override(), kafka::offset(370));
+      m.get_start_sql_offset_override(), sql::offset(370));
 
     // When we truncate at a specific offset, it shouldn't take into account
     // the override (callers may, but the manifest itself shouldn't).
     m.truncate(model::offset(200));
     BOOST_REQUIRE_EQUAL(2, m.size());
     BOOST_REQUIRE_EQUAL(
-      m.get_start_kafka_offset_override(), kafka::offset(370));
+      m.get_start_sql_offset_override(), sql::offset(370));
     BOOST_REQUIRE_EQUAL(m.get_start_offset(), model::offset(200));
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset(), kafka::offset(180));
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset(), sql::offset(180));
 
     // When we truncate past the override, the override is removed.
     auto m2 = m.truncate(model::offset(400));
     BOOST_REQUIRE_EQUAL(2, m2.size());
     BOOST_REQUIRE_EQUAL(0, m.size());
     BOOST_REQUIRE(m.get_start_offset() == std::nullopt);
-    BOOST_REQUIRE(m.get_start_kafka_offset() == std::nullopt);
-    BOOST_REQUIRE_EQUAL(m.get_start_kafka_offset_override(), kafka::offset{});
+    BOOST_REQUIRE(m.get_start_sql_offset() == std::nullopt);
+    BOOST_REQUIRE_EQUAL(m.get_start_sql_offset_override(), sql::offset{});
 }
 
 SEASTAR_THREAD_TEST_CASE(
@@ -1577,8 +1577,8 @@ struct metadata_stm_segment
 namespace old {
 struct segment_meta_v0 {
     using value_t = segment_meta_v0;
-    static constexpr serde::version_t redpanda_serde_version = 0;
-    static constexpr serde::version_t redpanda_serde_compat_version = 0;
+    static constexpr serde::version_t funes_serde_version = 0;
+    static constexpr serde::version_t funes_serde_compat_version = 0;
 
     bool is_compacted;
     size_t size_bytes;
@@ -1592,8 +1592,8 @@ struct segment_meta_v0 {
 };
 struct segment_meta_v1 {
     using value_t = segment_meta_v1;
-    static constexpr serde::version_t redpanda_serde_version = 1;
-    static constexpr serde::version_t redpanda_serde_compat_version = 0;
+    static constexpr serde::version_t funes_serde_version = 1;
+    static constexpr serde::version_t funes_serde_compat_version = 0;
 
     bool is_compacted;
     size_t size_bytes;
@@ -1916,13 +1916,13 @@ SEASTAR_THREAD_TEST_CASE(test_timequery_wide_range) {
 }
 
 /**
- * Nothing internally to redpanda guarantees anything about the relationship
+ * Nothing internally to funes guarantees anything about the relationship
  * between timestamps on different segments.  In CreateTime, the timestamps
  * are totally arbitrary and don't even have to be in any kind of order:
  * one segment's base_timestamp might be before a previous segment's
  * base_timestamp.
  *
- * There are no particular rules about how redpanda has to handle totally
+ * There are no particular rules about how funes has to handle totally
  * janky out of order timestamps, but simple overlaps should work fine.
  */
 SEASTAR_THREAD_TEST_CASE(test_timequery_overlaps) {
@@ -2067,11 +2067,11 @@ SEASTAR_THREAD_TEST_CASE(test_reset_manifest) {
 SEASTAR_THREAD_TEST_CASE(test_partition_manifest_v2_json) {
     // manifest_version::v2 gets generated by converting manifest.bin (serde) to
     // an equivalent json. the differences with v1 are only in the version
-    // number. (2, to distinguish from v1 that is generated by old redpanda)
+    // number. (2, to distinguish from v1 that is generated by old funes)
     constexpr static std::string_view v2_json = R"json(
 {
   "version": 2,
-  "namespace": "kafka",
+  "namespace": "sql",
   "topic": "panda-topic",
   "partition": 0,
   "revision": 21,

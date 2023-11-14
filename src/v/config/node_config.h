@@ -40,9 +40,9 @@ public:
     property<net::unresolved_address> rpc_server;
     property<tls_config> rpc_server_tls;
 
-    // Kafka RPC listener
-    one_or_many_property<config::broker_authn_endpoint> kafka_api;
-    one_or_many_property<endpoint_tls_config> kafka_api_tls;
+    // SQL RPC listener
+    one_or_many_property<config::broker_authn_endpoint> sql_api;
+    one_or_many_property<endpoint_tls_config> sql_api_tls;
 
     // Admin API listener
     one_or_many_property<model::broker_endpoint> admin;
@@ -65,7 +65,7 @@ public:
 
     property<std::optional<uint32_t>> crash_loop_limit;
 
-    // If true, permit any version of redpanda to start, even
+    // If true, permit any version of funes to start, even
     // if potentially incompatible with existing system state.
     property<bool> upgrade_override_checks;
     property<std::optional<size_t>> memory_allocation_warning_threshold;
@@ -74,7 +74,7 @@ public:
     // to the configuration at `storage_failure_injection_config_path`.
     property<bool> storage_failure_injection_enabled;
 
-    // If true, start redpanda in "metadata only" mode, skipping loading
+    // If true, start funes in "metadata only" mode, skipping loading
     // user partitions and allowing only metadata operations.
     property<bool> recovery_mode_enabled;
 
@@ -88,7 +88,7 @@ public:
     }
 
     std::filesystem::path strict_data_dir_file_path() const {
-        return data_directory().path / ".redpanda_data_dir";
+        return data_directory().path / ".funes_data_dir";
     }
 
     std::filesystem::path disk_benchmark_path() const {
@@ -107,10 +107,10 @@ public:
         }
     }
 
-    std::vector<model::broker_endpoint> advertised_kafka_api() const {
-        if (_advertised_kafka_api().empty()) {
+    std::vector<model::broker_endpoint> advertised_sql_api() const {
+        if (_advertised_sql_api().empty()) {
             std::vector<model::broker_endpoint> eps;
-            auto api = kafka_api();
+            auto api = sql_api();
             eps.reserve(api.size());
             std::transform(
               std::make_move_iterator(api.begin()),
@@ -121,12 +121,12 @@ public:
               });
             return eps;
         }
-        return _advertised_kafka_api();
+        return _advertised_sql_api();
     }
 
     const one_or_many_property<model::broker_endpoint>&
-    advertised_kafka_api_property() {
-        return _advertised_kafka_api;
+    advertised_sql_api_property() {
+        return _advertised_sql_api;
     }
 
     net::unresolved_address advertised_rpc_api() const {
@@ -147,7 +147,7 @@ public:
 
 private:
     property<std::optional<net::unresolved_address>> _advertised_rpc_api;
-    one_or_many_property<model::broker_endpoint> _advertised_kafka_api;
+    one_or_many_property<model::broker_endpoint> _advertised_sql_api;
     std::filesystem::path _cfg_file_path;
 };
 

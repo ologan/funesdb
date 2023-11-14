@@ -23,7 +23,7 @@ const ss::sstring valid_schema = R"(
   "seed": 0,
   "ntps": [
     {
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test",
       "partition": 1,
       "failure_configs": {
@@ -44,7 +44,7 @@ const ss::sstring missing_seed_schema = R"(
 {
   "ntps": [
     {
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test",
       "partition": 1,
       "failure_configs": {
@@ -65,7 +65,7 @@ const ss::sstring invalid_op_schema = R"(
 {
   "ntps": [
     {
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test",
       "partition": 1,
       "failure_configs": {
@@ -86,7 +86,7 @@ const ss::sstring invalid_probs_schema = R"(
 {
   "ntps": [
     {
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test",
       "partition": 1,
       "failure_configs": {
@@ -107,7 +107,7 @@ const ss::sstring invalid_batch_schema = R"(
 {
   "ntps": [
     {
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test",
       "partition": 1,
       "failure_configs": {
@@ -177,7 +177,7 @@ SEASTAR_THREAD_TEST_CASE(file_sanitizer_config_parse_test) {
     auto cfg = storage::make_finjector_file_config(valid_path).get();
     BOOST_REQUIRE(cfg.has_value());
 
-    model::ntp ntp{"kafka", "test", 1};
+    model::ntp ntp{"sql", "test", 1};
     const auto& ntp_cfg = cfg->get_config_for_ntp(ntp);
     BOOST_REQUIRE(ntp_cfg.has_value());
 

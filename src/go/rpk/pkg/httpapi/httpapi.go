@@ -93,7 +93,7 @@ func (cl *Client) setHeader(k, v string) {
 func Host(host string) Opt { return func(cl *Client) { cl.host = host } }
 
 // UserAgent sets the User-Agent header to use in all requests, overriding the
-// default "redpanda".
+// default "funes".
 func UserAgent(ua string) Opt {
 	return func(cl *Client) {
 		cl.setHeader("User-Agent", ua)
@@ -135,7 +135,7 @@ func ReqTimeout(timeout time.Duration) Opt { return func(cl *Client) { cl.reqTim
 // The default headers are:
 //
 //	Accept: application/json
-//	User-Agent: redpanda
+//	User-Agent: funes
 //
 // Setting a value to empty deletes the header.
 func Headers(kvs ...string) Opt {
@@ -172,7 +172,7 @@ func Err4xx(err4xxFn func(statusCode int) error) Opt {
 func NewClient(opts ...Opt) *Client {
 	cl := &Client{
 		headers: map[string]string{
-			"user-agent": "redpanda",
+			"user-agent": "funes",
 			"accept":     "application/json", // canonicalize as lowercase for Headers fn interaction
 		},
 		retries:    10,

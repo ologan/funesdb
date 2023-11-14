@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -21,7 +21,7 @@
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "model/namespace.h"
-#include "redpanda/tests/fixture.h"
+#include "funes/tests/fixture.h"
 
 #include <seastar/core/future.hh>
 #include <seastar/core/shared_ptr.hh>
@@ -133,10 +133,10 @@ public:
     void verify_manifest_content(const ss::sstring& manifest_content);
 };
 
-/// Archiver fixture that contains S3 mock and full redpanda stack.
+/// Archiver fixture that contains S3 mock and full funes stack.
 class archiver_fixture
   : public http_imposter_fixture
-  , public redpanda_thread_fixture
+  , public funes_thread_fixture
   , public segment_matcher<archiver_fixture> {
 public:
     archiver_fixture();

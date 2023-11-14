@@ -6,7 +6,7 @@
 // As of the Change Date specified in that file, in accordance with
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
-#define BOOST_TEST_MODULE kafka_security
+#define BOOST_TEST_MODULE sql_security
 #include "random/generators.h"
 #include "security/scram_algorithm.h"
 #include "utils/base64.h"
@@ -21,9 +21,9 @@ namespace security {
 
 /*
  * Test coverage includes all of the relevant test cases found in upstream
- * kafka's ScramMessagesTest. Some use cases are not included which are only
- * relevant for client implementations. Comments from kafka about any test case
- * are surrounded by <kafka>...</kafka>.
+ * sql's ScramMessagesTest. Some use cases are not included which are only
+ * relevant for client implementations. Comments from sql about any test case
+ * are surrounded by <sql>...</sql>.
  */
 
 static auto valid_extensions() {
@@ -62,8 +62,8 @@ static auto make_nonce() {
 BOOST_AUTO_TEST_CASE(client_first_message_valid) {
     const auto nonce = make_nonce();
 
-    // <kafka>Default format used by Kafka client: only user and nonce are
-    // specified</kafka>
+    // <sql>Default format used by SQL client: only user and nonce are
+    // specified</sql>
     {
         client_first_message m(
           bytes(ssx::sformat("n,,n=testuser,r={}", nonce).c_str()));
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
         BOOST_REQUIRE_EQUAL(m.authzid(), "");
     }
 
-    // <kafka>Username containing comma, encoded as =2C</kafka>
+    // <sql>Username containing comma, encoded as =2C</sql>
     {
         client_first_message m(
           bytes(ssx::sformat("n,,n=test=2Cuser,r={}", nonce).c_str()));
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
         BOOST_REQUIRE_EQUAL(m.username_normalized(), "test,user");
     }
 
-    // <kafka>Username containing equals, encoded as =3D</kafka>
+    // <sql>Username containing equals, encoded as =3D</sql>
     {
         client_first_message m(
           bytes(ssx::sformat("n,,n=test=3Duser,r={}", nonce).c_str()));
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
         BOOST_REQUIRE_EQUAL(m.username_normalized(), "test=user");
     }
 
-    // <kafka>Optional authorization id specified</kafka>
+    // <sql>Optional authorization id specified</sql>
     {
         client_first_message m(bytes(
           ssx::sformat("n,a=testauthzid,n=testuser,r={}", nonce).c_str()));
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
         BOOST_REQUIRE(!m.token_authenticated());
     }
 
-    // <kafka>Optional reserved value specified</kafka>
+    // <sql>Optional reserved value specified</sql>
     for (auto reserved : valid_reserved()) {
         client_first_message m(bytes(
           ssx::sformat("n,,{},n=testuser,r={}", reserved, nonce).c_str()));
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
         BOOST_REQUIRE(!m.token_authenticated());
     }
 
-    // <kafka>Optional extension specified</kafka>
+    // <sql>Optional extension specified</sql>
     for (auto extension : valid_extensions()) {
         client_first_message m(bytes(
           ssx::sformat("n,,n=testuser,r={},{}", nonce, extension).c_str()));
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
         BOOST_REQUIRE(!m.token_authenticated());
     }
 
-    // <kafka>optional tokenauth specified as extensions</kafka>
+    // <sql>optional tokenauth specified as extensions</sql>
     {
         client_first_message m(bytes(
           ssx::sformat("n,,n=testuser,r={},tokenauth=true", nonce).c_str()));
@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_valid) {
 BOOST_AUTO_TEST_CASE(client_first_message_invalid) {
     const auto nonce = make_nonce();
 
-    // <kafka>Invalid entry in gs2-header</kafka>
+    // <sql>Invalid entry in gs2-header</sql>
     BOOST_REQUIRE_EXCEPTION(
       client_first_message(
         bytes(ssx::sformat("n,x=something,n=testuser,r={}", nonce).c_str())),
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_invalid) {
                  != std::string::npos;
       });
 
-    // <kafka>Invalid reserved entry</kafka>
+    // <sql>Invalid reserved entry</sql>
     for (auto reserved : invalid_reserved()) {
         BOOST_REQUIRE_EXCEPTION(
           client_first_message(bytes(
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(client_first_message_invalid) {
           });
     }
 
-    // <kafka>Invalid extension</kafka>
+    // <sql>Invalid extension</sql>
     for (auto extension : invalid_extensions()) {
         BOOST_REQUIRE_EXCEPTION(
           client_first_message(bytes(
@@ -201,8 +201,8 @@ BOOST_AUTO_TEST_CASE(client_final_message_valid) {
     auto channel_binding = random_base64_bytes();
     auto proof = random_base64_bytes();
 
-    // <kafka>Default format used by Kafka client: channel-binding, nonce and
-    // proof are specified</kafka>
+    // <sql>Default format used by SQL client: channel-binding, nonce and
+    // proof are specified</sql>
     {
         client_final_message m(
           bytes(ssx::sformat("c={},r={},p={}", channel_binding, nonce, proof)
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(client_final_message_valid) {
         BOOST_REQUIRE_EQUAL(m.nonce(), nonce);
     }
 
-    // <kafka>Optional extension specified</kafka>
+    // <sql>Optional extension specified</sql>
     for (auto extension : valid_extensions()) {
         client_final_message m(
           bytes(ssx::sformat(
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(client_final_message_invalid) {
     auto channel_binding = random_base64_bytes();
     auto proof = random_base64_bytes();
 
-    // <kafka>Invalid channel binding</kafka>
+    // <sql>Invalid channel binding</sql>
     BOOST_REQUIRE_EXCEPTION(
       client_final_message(
         bytes(ssx::sformat("c=ab,r={},p={}", nonce, proof).c_str())),
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(client_final_message_invalid) {
                  != std::string::npos;
       });
 
-    // <kafka>Invalid proof</kafka>
+    // <sql>Invalid proof</sql>
     BOOST_REQUIRE_EXCEPTION(
       client_final_message(
         bytes(ssx::sformat("c={},r={},p=123", channel_binding, nonce).c_str())),
@@ -258,7 +258,7 @@ BOOST_AUTO_TEST_CASE(client_final_message_invalid) {
                  != std::string::npos;
       });
 
-    // <kafka>Invalid extensions</kafka>
+    // <sql>Invalid extensions</sql>
     for (auto extension : invalid_extensions()) {
         BOOST_REQUIRE_EXCEPTION(
           client_final_message(bytes(

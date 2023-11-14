@@ -35,7 +35,7 @@ type (
 			} `json:"listeners"`
 		} `json:"status"`
 	}
-	// VirtualClusters is a set of Redpanda virtual clusters.
+	// VirtualClusters is a set of Funes virtual clusters.
 	VirtualClusters []VirtualCluster
 )
 

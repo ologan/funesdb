@@ -10,10 +10,10 @@
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 
-class ControllerRecoveryTest(RedpandaTest):
+class ControllerRecoveryTest(FunesTest):
     """
     Test controller failover.
     """
@@ -21,11 +21,11 @@ class ControllerRecoveryTest(RedpandaTest):
         """
         stop controller node and wait for failover
         """
-        prev = self.redpanda.controller()
-        self.redpanda.stop_node(prev)
+        prev = self.funes.controller()
+        self.funes.stop_node(prev)
 
         def new_controller_elected():
-            curr = self.redpanda.controller()
+            curr = self.funes.controller()
             return curr and curr != prev
 
         wait_until(new_controller_elected,
@@ -36,10 +36,10 @@ class ControllerRecoveryTest(RedpandaTest):
         return prev
 
     def _restart(self, controller):
-        self.redpanda.start_node(controller)
+        self.funes.start_node(controller)
 
         wait_until(
-            lambda: self.redpanda.healthy(),
+            lambda: self.funes.healthy(),
             timeout_sec=20,
             backoff_sec=2,
             err_msg=f"Cluster did not become healthy after {controller} restart"

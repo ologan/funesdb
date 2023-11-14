@@ -9,17 +9,17 @@
 import time
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
-from rptest.services.redpanda import RedpandaService, FAILURE_INJECTION_LOG_ALLOW_LIST
-from rptest.services.redpanda_monitor import RedpandaMonitor
+from rptest.services.funes import FunesService, FAILURE_INJECTION_LOG_ALLOW_LIST
+from rptest.services.funes_monitor import FunesMonitor
 from rptest.services.storage_failure_injection import FailureInjectionConfig, NTPFailureInjectionConfig, FailureConfig, NTP, Operation, BatchType
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.util import expect_exception
 from ducktape.utils.util import wait_until
 
 
-class StorageFailureInjectionTest(RedpandaTest):
+class StorageFailureInjectionTest(FunesTest):
     ntp: NTP = NTP(topic="ftest", partition=0)
 
     def __init__(self, test_context):
@@ -41,36 +41,36 @@ class StorageFailureInjectionTest(RedpandaTest):
     @cluster(num_nodes=2, log_allow_list=FAILURE_INJECTION_LOG_ALLOW_LIST)
     def test_storage_failure_injection(self):
         """
-        Simple test that enables storage failure injection for a redpanda node.
+        Simple test that enables storage failure injection for a funes node.
         It can be used as a template for more complex failure injection tests.
         Roughly it performs the following:
         1. Set up a failure injection configuration
             * generate config
             * write config to file
             * prepare node level finject config
-        2. Start the RedpandaMonitor service to bring the node back after the crash
+        2. Start the FunesMonitor service to bring the node back after the crash
         3. Enable failure injection via the admin API and watch the node crash and come back
         """
-        lonely_node = self.redpanda.nodes[0]
+        lonely_node = self.funes.nodes[0]
 
         fail_cfg = self.generate_failure_injection_config()
-        self.redpanda.set_up_failure_injection(finject_cfg=fail_cfg,
+        self.funes.set_up_failure_injection(finject_cfg=fail_cfg,
                                                enabled=False,
                                                nodes=[lonely_node],
                                                tolerate_crashes=True)
 
-        self.redpanda.start()
-        RedpandaMonitor(self.test_context, self.redpanda).start()
+        self.funes.start()
+        FunesMonitor(self.test_context, self.funes).start()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(self.ntp.topic, partitions=1, replicas=1)
 
         rpk.produce(self.ntp.topic, key="don't", msg="crash")
 
-        Admin(self.redpanda).set_storage_failure_injection(lonely_node,
+        Admin(self.funes).set_storage_failure_injection(lonely_node,
                                                            value=True)
 
-        # Perform a few writes and expect Redpanda to crash.
+        # Perform a few writes and expect Funes to crash.
         # An error should be injected when the first write is dispatched
         # to disk. That should happen as part of handling the first request.
         # Subsequent produce requests are a convenient way of detecting the crash.
@@ -90,7 +90,7 @@ class StorageFailureInjectionTest(RedpandaTest):
             time.sleep(1)
 
         if exception is None:
-            assert False, "Expected produce to trigger an assertion within Redpanda"
+            assert False, "Expected produce to trigger an assertion within Funes"
 
         wait_until(
             lambda: next(rpk.describe_topic(self.ntp.topic)).high_watermark ==
@@ -111,5 +111,5 @@ class StorageFailureInjectionTest(RedpandaTest):
                    backoff_sec=1,
                    err_msg="HWM did not advance after crash")
 
-        # Assert that the node was restarted by RedpandaMonitor
-        assert self.redpanda.count_log_node(lonely_node, "Welcome") == 2
+        # Assert that the node was restarted by FunesMonitor
+        assert self.funes.count_log_node(lonely_node, "Welcome") == 2

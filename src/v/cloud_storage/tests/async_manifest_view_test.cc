@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iostream.h"
@@ -774,7 +774,7 @@ FIXTURE_TEST(test_async_manifest_view_retention, async_manifest_view_fixture) {
     BOOST_REQUIRE_EQUAL(rr5.value().delta, prefix_delta);
 
     // Check case when the start offset in the archive is advanced past
-    // start kafka offset override.
+    // start sql offset override.
     auto cur_res
       = view.get_cursor(*view.stm_manifest().get_start_offset()).get();
     BOOST_REQUIRE(!cur_res.has_error());
@@ -783,13 +783,13 @@ FIXTURE_TEST(test_async_manifest_view_retention, async_manifest_view_fixture) {
     cur->next().get();
     prefix_base_offset = cur->manifest()->begin()->base_offset;
     prefix_delta = cur->manifest()->begin()->delta_offset;
-    stm_manifest.advance_start_kafka_offset(prefix_base_offset - prefix_delta);
+    stm_manifest.advance_start_sql_offset(prefix_base_offset - prefix_delta);
     vlog(
       test_log.info,
-      "Triggering offset-based retention, current start kafka offset "
+      "Triggering offset-based retention, current start sql offset "
       "override: "
       "{}, expected offset: {}, expected delta: {}",
-      stm_manifest.get_start_kafka_offset_override(),
+      stm_manifest.get_start_sql_offset_override(),
       prefix_base_offset,
       prefix_delta);
 
@@ -923,7 +923,7 @@ FIXTURE_TEST(
       std::next(stm_manifest.get_spillover_map().begin())->segment_term,
       model::term_id{3});
 
-    // Query the last offset for each term (epoch in Kafka speak) and
+    // Query the last offset for each term (epoch in SQL speak) and
     // verify against expectations.
     auto first_term_query = view.get_term_last_offset(model::term_id{1}).get();
     BOOST_REQUIRE(first_term_query.has_value());

@@ -79,7 +79,7 @@ ss::future<> local_monitor::stop() {
 ss::future<> local_monitor::update_state() {
     // grab new snapshot of local state
     auto new_state = local_state{
-      .redpanda_version = application_version(ss::sstring(redpanda_version())),
+      .funes_version = application_version(ss::sstring(funes_version())),
       .uptime = std::chrono::duration_cast<std::chrono::milliseconds>(
         ss::engine().uptime()),
       .recovery_mode_enabled = config::node().recovery_mode_enabled(),

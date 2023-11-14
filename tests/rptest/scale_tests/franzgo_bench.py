@@ -11,13 +11,13 @@ from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 from rptest.services.compatibility.example_runner import ExampleRunner
 import rptest.services.compatibility.franzgo_examples as FranzGoExamples
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import SecurityConfig
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import SecurityConfig
 from rptest.clients.types import TopicSpec
 import math
 
 
-class FranzGoBase(RedpandaTest):
+class FranzGoBase(FunesTest):
     """
     Test FranzGo bench example.
     Not using any other example because bench tests the same
@@ -51,13 +51,13 @@ class FranzGoBase(RedpandaTest):
         self.logger.debug(self._timeout)
 
         franzgo_producer = FranzGoExamples.FranzGoBenchProduce(
-            self.redpanda, self.topic, self._max_records, self._enable_sasl)
+            self.funes, self.topic, self._max_records, self._enable_sasl)
         self._producer = ExampleRunner(self._ctx,
                                        franzgo_producer,
                                        timeout_sec=self._timeout)
 
         franzgo_consumer = FranzGoExamples.FranzGoBenchConsume(
-            self.redpanda, self.topic, self._max_records, self._enable_sasl,
+            self.funes, self.topic, self._max_records, self._enable_sasl,
             group)
         self._consumer = ExampleRunner(self._ctx,
                                        franzgo_consumer,

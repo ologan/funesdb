@@ -295,24 +295,24 @@ func (ss *seedServers) UnmarshalYAML(n *yaml.Node) error {
 
 // Custom unmarshallers for all the config related types.
 
-func (y *RedpandaYaml) UnmarshalYAML(n *yaml.Node) error {
+func (y *FunesYaml) UnmarshalYAML(n *yaml.Node) error {
 	var internal struct {
-		Redpanda             RedpandaNodeConfig `yaml:"redpanda"`
+		Funes             FunesNodeConfig `yaml:"funes"`
 		Rpk                  RpkNodeConfig      `yaml:"rpk"`
-		Pandaproxy           *Pandaproxy        `yaml:"pandaproxy"`
-		PandaproxyClient     *KafkaClient       `yaml:"pandaproxy_client"`
+		Funesproxy           *Funesproxy        `yaml:"funesproxy"`
+		FunesproxyClient     *SQLClient       `yaml:"funesproxy_client"`
 		SchemaRegistry       *SchemaRegistry    `yaml:"schema_registry"`
-		SchemaRegistryClient *KafkaClient       `yaml:"schema_registry_client"`
+		SchemaRegistryClient *SQLClient       `yaml:"schema_registry_client"`
 
 		Other map[string]interface{} `yaml:",inline"`
 	}
 	if err := n.Decode(&internal); err != nil {
 		return err
 	}
-	y.Redpanda = internal.Redpanda
+	y.Funes = internal.Funes
 	y.Rpk = internal.Rpk
-	y.Pandaproxy = internal.Pandaproxy
-	y.PandaproxyClient = internal.PandaproxyClient
+	y.Funesproxy = internal.Funesproxy
+	y.FunesproxyClient = internal.FunesproxyClient
 	y.SchemaRegistry = internal.SchemaRegistry
 	y.SchemaRegistryClient = internal.SchemaRegistryClient
 	y.Other = internal.Other
@@ -323,7 +323,7 @@ func (y *RedpandaYaml) UnmarshalYAML(n *yaml.Node) error {
 // once is used to ensure that we only print the rpc_server_tls bug warning once.
 var once sync.Once
 
-func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
+func (rpc *FunesNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 	var internal struct {
 		Directory                  weakString                `yaml:"data_directory"`
 		ID                         *weakInt                  `yaml:"node_id"`
@@ -331,8 +331,8 @@ func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 		EmptySeedStartsCluster     *weakBool                 `yaml:"empty_seed_starts_cluster"`
 		SeedServers                seedServers               `yaml:"seed_servers"`
 		RPCServer                  SocketAddress             `yaml:"rpc_server"`
-		KafkaAPI                   namedAuthNSocketAddresses `yaml:"kafka_api"`
-		KafkaAPITLS                serverTLSArray            `yaml:"kafka_api_tls"`
+		SQLAPI                   namedAuthNSocketAddresses `yaml:"sql_api"`
+		SQLAPITLS                serverTLSArray            `yaml:"sql_api_tls"`
 		AdminAPI                   namedSocketAddresses      `yaml:"admin"`
 		AdminAPITLS                serverTLSArray            `yaml:"admin_api_tls"`
 		CoprocSupervisorServer     SocketAddress             `yaml:"coproc_supervisor_server"`
@@ -340,7 +340,7 @@ func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 		DashboardDir               weakString                `yaml:"dashboard_dir"`
 		CloudStorageCacheDirectory weakString                `yaml:"cloud_storage_cache_directory"`
 		AdvertisedRPCAPI           *SocketAddress            `yaml:"advertised_rpc_api"`
-		AdvertisedKafkaAPI         namedSocketAddresses      `yaml:"advertised_kafka_api"`
+		AdvertisedSQLAPI         namedSocketAddresses      `yaml:"advertised_sql_api"`
 		DeveloperMode              weakBool                  `yaml:"developer_mode"`
 		RecoveryModeEnabled        weakBool                  `yaml:"recovery_mode_enabled"`
 		CrashLoopLimit             *weakInt                  `yaml:"crash_loop_limit"`
@@ -351,11 +351,11 @@ func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 		return err
 	}
 
-	// redpanda won't recognize rpc_server_tls if is a list.
+	// funes won't recognize rpc_server_tls if is a list.
 	v := reflect.ValueOf(internal.Other["rpc_server_tls"])
 	if v.Kind() == reflect.Slice {
 		once.Do(func() {
-			fmt.Fprintf(os.Stderr, "WARNING: Due to an old rpk bug, your redpanda.yaml's redpanda.rpc_server_tls property is an array, and redpanda reads the field as a struct. rpk cannot automatically fix this: brokers would not be able to rejoin the cluster during a rolling upgrade. To enable TLS on broker RPC ports, you must turn off your cluster, switch the redpanda.rpc_server_tls field to a struct, and then turn your cluster back on. To switch from a list to a struct, replace the single dash under redpanda.rpc_server_tls with a space. This message will continue to appear while redpanda.rpc_server_tls exists and is an array\n")
+			fmt.Fprintf(os.Stderr, "WARNING: Due to an old rpk bug, your funes.yaml's funes.rpc_server_tls property is an array, and funes reads the field as a struct. rpk cannot automatically fix this: brokers would not be able to rejoin the cluster during a rolling upgrade. To enable TLS on broker RPC ports, you must turn off your cluster, switch the funes.rpc_server_tls field to a struct, and then turn your cluster back on. To switch from a list to a struct, replace the single dash under funes.rpc_server_tls with a space. This message will continue to appear while funes.rpc_server_tls exists and is an array\n")
 
 			// We only care for the first element in the list (if there is any),
 			// we parse the value and check if it's a valid TLS config and print
@@ -375,7 +375,7 @@ func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 						t.KeyFile,
 					))
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "WARNING: Your redpanda.yaml's redpanda.rpc_server_tls is detected to be invalid. Please validate your certs before trying to enable TLS on on your RPC port: %v\n", err)
+					fmt.Fprintf(os.Stderr, "WARNING: Your funes.yaml's funes.rpc_server_tls is detected to be invalid. Please validate your certs before trying to enable TLS on on your RPC port: %v\n", err)
 				}
 			}
 		})
@@ -387,8 +387,8 @@ func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 	rpc.EmptySeedStartsCluster = (*bool)(internal.EmptySeedStartsCluster)
 	rpc.SeedServers = internal.SeedServers
 	rpc.RPCServer = internal.RPCServer
-	rpc.KafkaAPI = internal.KafkaAPI
-	rpc.KafkaAPITLS = internal.KafkaAPITLS
+	rpc.SQLAPI = internal.SQLAPI
+	rpc.SQLAPITLS = internal.SQLAPITLS
 	rpc.AdminAPI = internal.AdminAPI
 	rpc.AdminAPITLS = internal.AdminAPITLS
 	rpc.CoprocSupervisorServer = internal.CoprocSupervisorServer
@@ -396,7 +396,7 @@ func (rpc *RedpandaNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 	rpc.DashboardDir = string(internal.DashboardDir)
 	rpc.CloudStorageCacheDirectory = string(internal.CloudStorageCacheDirectory)
 	rpc.AdvertisedRPCAPI = internal.AdvertisedRPCAPI
-	rpc.AdvertisedKafkaAPI = internal.AdvertisedKafkaAPI
+	rpc.AdvertisedSQLAPI = internal.AdvertisedSQLAPI
 	rpc.DeveloperMode = bool(internal.DeveloperMode)
 	rpc.RecoveryModeEnabled = bool(internal.RecoveryModeEnabled)
 	rpc.CrashLoopLimit = (*int)(internal.CrashLoopLimit)
@@ -411,7 +411,7 @@ func (rpkc *RpkNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 		// Deprecated 2021-07-1
 		SASL *SASL `yaml:"sasl"`
 
-		KafkaAPI                 RpkKafkaAPI     `yaml:"kafka_api"`
+		SQLAPI                 RpkSQLAPI     `yaml:"sql_api"`
 		AdminAPI                 RpkAdminAPI     `yaml:"admin_api"`
 		AdditionalStartFlags     weakStringArray `yaml:"additional_start_flags"`
 		TuneNetwork              weakBool        `yaml:"tune_network"`
@@ -440,13 +440,13 @@ func (rpkc *RpkNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 	}
 
 	// backcompat, immediately convert to new tls
-	rpkc.KafkaAPI = internal.KafkaAPI
+	rpkc.SQLAPI = internal.SQLAPI
 	rpkc.AdminAPI = internal.AdminAPI
-	if rpkc.KafkaAPI.TLS == nil {
-		rpkc.KafkaAPI.TLS = internal.TLS
+	if rpkc.SQLAPI.TLS == nil {
+		rpkc.SQLAPI.TLS = internal.TLS
 	}
-	if rpkc.KafkaAPI.SASL == nil {
-		rpkc.KafkaAPI.SASL = internal.SASL
+	if rpkc.SQLAPI.SASL == nil {
+		rpkc.SQLAPI.SASL = internal.SASL
 	}
 	if rpkc.AdminAPI.TLS == nil {
 		rpkc.AdminAPI.TLS = internal.TLS
@@ -475,7 +475,7 @@ func (rpkc *RpkNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-func (r *RpkKafkaAPI) UnmarshalYAML(n *yaml.Node) error {
+func (r *RpkSQLAPI) UnmarshalYAML(n *yaml.Node) error {
 	var internal struct {
 		Brokers weakStringArray `yaml:"brokers"`
 		TLS     *TLS            `yaml:"tls"`
@@ -503,24 +503,24 @@ func (r *RpkAdminAPI) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-func (p *Pandaproxy) UnmarshalYAML(n *yaml.Node) error {
+func (p *Funesproxy) UnmarshalYAML(n *yaml.Node) error {
 	var internal struct {
-		PandaproxyAPI           namedAuthNSocketAddresses `yaml:"pandaproxy_api"`
-		PandaproxyAPITLS        serverTLSArray            `yaml:"pandaproxy_api_tls"`
-		AdvertisedPandaproxyAPI namedSocketAddresses      `yaml:"advertised_pandaproxy_api"`
+		FunesproxyAPI           namedAuthNSocketAddresses `yaml:"funesproxy_api"`
+		FunesproxyAPITLS        serverTLSArray            `yaml:"funesproxy_api_tls"`
+		AdvertisedFunesproxyAPI namedSocketAddresses      `yaml:"advertised_funesproxy_api"`
 		Other                   map[string]interface{}    `yaml:",inline"`
 	}
 	if err := n.Decode(&internal); err != nil {
 		return err
 	}
-	p.PandaproxyAPI = internal.PandaproxyAPI
-	p.PandaproxyAPITLS = internal.PandaproxyAPITLS
-	p.AdvertisedPandaproxyAPI = internal.AdvertisedPandaproxyAPI
+	p.FunesproxyAPI = internal.FunesproxyAPI
+	p.FunesproxyAPITLS = internal.FunesproxyAPITLS
+	p.AdvertisedFunesproxyAPI = internal.AdvertisedFunesproxyAPI
 	p.Other = internal.Other
 	return nil
 }
 
-func (k *KafkaClient) UnmarshalYAML(n *yaml.Node) error {
+func (k *SQLClient) UnmarshalYAML(n *yaml.Node) error {
 	var internal struct {
 		Brokers       socketAddresses        `yaml:"brokers"`
 		BrokerTLS     ServerTLS              `yaml:"broker_tls"`
@@ -594,7 +594,7 @@ func (ss *SeedServer) UnmarshalYAML(n *yaml.Node) error {
 		return err
 	}
 	if internal.NodeID != nil {
-		fmt.Println("redpanda yaml: redpanda.seed_server.node_id is deprecated and unused")
+		fmt.Println("funes yaml: funes.seed_server.node_id is deprecated and unused")
 	}
 
 	if internal.Address != "" || internal.Port != 0 {
@@ -605,7 +605,7 @@ func (ss *SeedServer) UnmarshalYAML(n *yaml.Node) error {
 		nestedZero := reflect.DeepEqual(nested, SocketAddress{})
 
 		if !embeddedZero && !nestedZero && !reflect.DeepEqual(embedded, nested) {
-			return errors.New("redpanda.yaml redpanda.seed_server: nested host differs from address and port fields; only one must be set")
+			return errors.New("funes.yaml funes.seed_server: nested host differs from address and port fields; only one must be set")
 		}
 
 		ss.untabbed = true // This means that we are unmarshalling an older version.

@@ -26,7 +26,7 @@ func newDeleteUserCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		Short: "Delete a SASL user",
 		Long: `Delete a SASL user.
 
-This command deletes the specified SASL account from Redpanda. This does not
+This command deletes the specified SASL account from Funes. This does not
 delete any ACLs that may exist for this user.
 `,
 		Args: cobra.MaximumNArgs(1),

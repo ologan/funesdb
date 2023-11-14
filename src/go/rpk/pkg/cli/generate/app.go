@@ -27,7 +27,7 @@ import (
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/adminapi"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	rpkos "github.com/redpanda-data/redpanda/src/go/rpk/pkg/os"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
@@ -84,7 +84,7 @@ func newAppCmd(fs afero.Fs, p *config.Params) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "app",
-		Short: "Generate a sample application to connect with Redpanda",
+		Short: "Generate a sample application to connect with Funes",
 		Long:  appHelpText,
 		Run: func(cmd *cobra.Command, args []string) {
 			p, err := p.LoadVirtualProfile(fs)
@@ -108,11 +108,11 @@ func newAppCmd(fs afero.Fs, p *config.Params) *cobra.Command {
 				out.MaybeDieErr(err)
 			}
 			data := tmplData{
-				SeedServer: p.KafkaAPI.Brokers,
+				SeedServer: p.SQLAPI.Brokers,
 				Username:   user,
 				Password:   pass,
-				IsTLS:      p.KafkaAPI.TLS != nil,
-				ScramBits:  scramBits(p.KafkaAPI.SASL),
+				IsTLS:      p.SQLAPI.TLS != nil,
+				ScramBits:  scramBits(p.SQLAPI.SASL),
 			}
 
 			f, ok := fileTplMap[lang]
@@ -163,7 +163,7 @@ func runInteractive(ctx context.Context, fs afero.Fs, p *config.RpkProfile) (lan
 		"Skip":                            optSkip,
 	}
 	if p.HasSASLCredentials() {
-		msg := fmt.Sprintf("Use existing profile user [%s]", p.KafkaAPI.SASL.User)
+		msg := fmt.Sprintf("Use existing profile user [%s]", p.SQLAPI.SASL.User)
 		optMap[msg] = optExisting
 	}
 
@@ -196,7 +196,7 @@ func runInteractive(ctx context.Context, fs afero.Fs, p *config.RpkProfile) (lan
 		}
 		return lang, user, pass, nil
 	case optExisting:
-		return lang, p.KafkaAPI.SASL.User, p.KafkaAPI.SASL.Password, nil
+		return lang, p.SQLAPI.SASL.User, p.SQLAPI.SASL.Password, nil
 	case optSkip:
 		return lang, "", "", nil
 	}
@@ -226,8 +226,8 @@ func runWithFlags(ctx context.Context, fs afero.Fs, p *config.RpkProfile, langFl
 		}
 	} else {
 		if p.HasSASLCredentials() {
-			user = p.KafkaAPI.SASL.User
-			pass = p.KafkaAPI.SASL.Password
+			user = p.SQLAPI.SASL.User
+			pass = p.SQLAPI.SASL.Password
 		}
 	}
 	return
@@ -242,9 +242,9 @@ func createUser(ctx context.Context, fs afero.Fs, p *config.RpkProfile, user, pa
 	if err != nil {
 		return fmt.Errorf("unable to create user %q: %v", user, err)
 	}
-	adm, err := kafka.NewAdmin(fs, p)
+	adm, err := sql.NewAdmin(fs, p)
 	if err != nil {
-		return fmt.Errorf("unable to initialize kafka client: %v", err)
+		return fmt.Errorf("unable to initialize sql client: %v", err)
 	}
 	// Read-Write ACL:
 	b := kadm.NewACLs().
@@ -351,11 +351,11 @@ func printInstructions(fs afero.Fs, dir, lang string) error {
 	return nil
 }
 
-const appHelpText = `Generate a sample application to connect with Redpanda.
+const appHelpText = `Generate a sample application to connect with Funes.
 
 This command generates a starter application to produce and consume from the
 settings defined in the rpk profile. Its goal is to get you producing and
-consuming quickly with Redpanda in a language that is familiar to you.
+consuming quickly with Funes in a language that is familiar to you.
 
 By default, this will run interactively, prompting you to select a language and
 a user with which to create your application. To use this without interactivity,

@@ -222,7 +222,7 @@ metrics_reporter::build_metrics_snapshot() {
         }
         auto& metrics = it->second;
 
-        metrics.version = report.local_state.redpanda_version;
+        metrics.version = report.local_state.funes_version;
         metrics.logical_version = report.local_state.logical_version;
         metrics.disks.reserve(report.local_state.shared_disk() ? 1 : 2);
         auto transform_disk = [](storage::disk& d) -> node_disk_space {
@@ -242,8 +242,8 @@ metrics_reporter::build_metrics_snapshot() {
     for (const auto& [tp_ns, md] : topics) {
         // do not include internal topics
         if (
-          tp_ns.ns == model::redpanda_ns
-          || tp_ns.ns == model::kafka_internal_namespace) {
+          tp_ns.ns == model::funes_ns
+          || tp_ns.ns == model::sql_internal_namespace) {
             continue;
         }
 
@@ -261,13 +261,13 @@ metrics_reporter::build_metrics_snapshot() {
     snapshot.original_logical_version
       = _feature_table.local().get_original_version();
 
-    snapshot.has_kafka_gssapi = absl::c_any_of(
+    snapshot.has_sql_gssapi = absl::c_any_of(
       config::shard_local_cfg().sasl_mechanisms(),
       [](auto const& mech) { return mech == "GSSAPI"; });
 
-    auto env_value = std::getenv("REDPANDA_ENVIRONMENT");
+    auto env_value = std::getenv("FUNES_ENVIRONMENT");
     if (env_value) {
-        snapshot.redpanda_environment = ss::sstring(env_value).substr(
+        snapshot.funes_environment = ss::sstring(env_value).substr(
           0, metrics_snapshot::max_size_for_rp_env);
     }
 
@@ -523,14 +523,14 @@ void rjson_serialize(
         rjson_serialize(w, m);
     }
     w.EndArray();
-    w.Key("has_kafka_gssapi");
-    w.Bool(snapshot.has_kafka_gssapi);
+    w.Key("has_sql_gssapi");
+    w.Bool(snapshot.has_sql_gssapi);
 
     w.Key("config");
     config::shard_local_cfg().to_json_for_metrics(w);
 
-    w.Key("redpanda_environment");
-    w.String(snapshot.redpanda_environment);
+    w.Key("funes_environment");
+    w.String(snapshot.funes_environment);
 
     w.Key("id_hash");
     w.String(snapshot.id_hash);

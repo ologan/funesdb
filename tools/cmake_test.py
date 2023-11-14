@@ -67,8 +67,8 @@ class BacktraceCapture(threading.Thread):
         ==1799059==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x5634332b2b5a bp 0x7fe9bd0edb70 sp 0x7fe9bd0ed5a0 T1)
         ==1799059==The signal is caused by a READ memory access.
         ==1799059==Hint: address points to the zero page.
-            #0 0x5634332b2b5a  (/home/vectorized/redpanda/vbuild/debug/clang/bin/ssx_unit_rpunit+0x29e5b5a)
-            #1 0x5634333064df  (/home/vectorized/redpanda/vbuild/debug/clang/bin/ssx_unit_rpunit+0x2a394df)
+            #0 0x5634332b2b5a  (/home/vectorized/funes/vbuild/debug/clang/bin/ssx_unit_rpunit+0x29e5b5a)
+            #1 0x5634333064df  (/home/vectorized/funes/vbuild/debug/clang/bin/ssx_unit_rpunit+0x2a394df)
 
         Example 2: SEGV backtrace on null pointer deref in a release build
 
@@ -300,7 +300,7 @@ class TestRunner():
                      args=self.test_args)
         logger.info(cmd)
 
-        # setup llvm symbolizer. first look for location in ci, then in redpanda
+        # setup llvm symbolizer. first look for location in ci, then in funes
         # vbuild directory. if none, then asan will look in PATH
         env = os.environ.copy()
         llvm_symbolizer = shutil.which("llvm-symbolizer",

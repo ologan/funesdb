@@ -16,13 +16,13 @@ from rptest.services.cluster import cluster
 from rptest.clients.rpk import RpkException, RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.failure_injector import FailureInjector, FailureSpec
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
+from rptest.services.sql_cli_consumer import SQLCliConsumer
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.services.rpk_producer import RpkProducer
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.util import wait_until_result
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
@@ -40,7 +40,7 @@ class ConsumerOffsetsConsistencyTest(PreallocNodesTest):
                              *args,
                              node_prealloc_count=1,
                              **kwargs)
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
     @property
     def timeout_sec(self):
@@ -107,11 +107,11 @@ class ConsumerOffsetsConsistencyTest(PreallocNodesTest):
         topic = TopicSpec(partition_count=64, replication_factor=3)
         self.client().create_topic([topic])
         # set new members join timeout to 5 seconds to make the test execution faster
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"group_new_member_join_timeout": 5000})
 
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        topic.name,
                                        self.msg_size,
                                        self.msg_count,
@@ -126,7 +126,7 @@ class ConsumerOffsetsConsistencyTest(PreallocNodesTest):
 
         consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic.name,
             self.msg_size,
             readers=3,
@@ -144,10 +144,10 @@ class ConsumerOffsetsConsistencyTest(PreallocNodesTest):
         self.successes = 0
 
         def fi_worker():
-            with FailureInjector(self.redpanda) as f_injector:
+            with FailureInjector(self.funes) as f_injector:
                 last_success = 0
                 while not stop_ev.is_set():
-                    node = random.choice(self.redpanda.started_nodes())
+                    node = random.choice(self.funes.started_nodes())
                     f_injector.inject_failure(
                         FailureSpec(node=node,
                                     type=random.choice([

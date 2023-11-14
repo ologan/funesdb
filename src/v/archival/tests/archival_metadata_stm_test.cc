@@ -773,7 +773,7 @@ FIXTURE_TEST(test_archival_stm_spillover, archival_metadata_stm_fixture) {
 }
 
 FIXTURE_TEST(
-  test_archival_stm_truncate_kafka_offset, archival_metadata_stm_fixture) {
+  test_archival_stm_truncate_sql_offset, archival_metadata_stm_fixture) {
     wait_for_confirmed_leader();
     std::vector<cloud_storage::segment_meta> m;
     m.push_back(segment_meta{
@@ -822,26 +822,26 @@ FIXTURE_TEST(
     BOOST_REQUIRE_EQUAL(
       archival_stm->manifest().get_archive_start_offset(), model::offset(0));
 
-    // Truncate by kafka offset inside the archive
+    // Truncate by sql offset inside the archive
     archival_stm
-      ->truncate(kafka::offset(200), ss::lowres_clock::now() + 10s, never_abort)
+      ->truncate(sql::offset(200), ss::lowres_clock::now() + 10s, never_abort)
       .get();
-    // The start kafka offset doesn't change, only the override changes.
+    // The start sql offset doesn't change, only the override changes.
     BOOST_REQUIRE_EQUAL(
-      archival_stm->manifest().get_start_kafka_offset_override(),
+      archival_stm->manifest().get_start_sql_offset_override(),
       model::offset(200));
     BOOST_REQUIRE_EQUAL(
-      archival_stm->get_start_kafka_offset(), kafka::offset(1000));
+      archival_stm->get_start_sql_offset(), sql::offset(1000));
     BOOST_REQUIRE_EQUAL(archival_stm->get_start_offset(), model::offset(1000));
 
     archival_stm
       ->truncate(
-        kafka::offset(1200), ss::lowres_clock::now() + 10s, never_abort)
+        sql::offset(1200), ss::lowres_clock::now() + 10s, never_abort)
       .get();
     BOOST_REQUIRE_EQUAL(
-      archival_stm->get_start_kafka_offset(), kafka::offset(1000));
+      archival_stm->get_start_sql_offset(), sql::offset(1000));
     BOOST_REQUIRE_EQUAL(
-      archival_stm->manifest().get_start_kafka_offset_override(),
+      archival_stm->manifest().get_start_sql_offset_override(),
       model::offset(1200));
     BOOST_REQUIRE_EQUAL(archival_stm->get_start_offset(), model::offset(1000));
 
@@ -851,8 +851,8 @@ FIXTURE_TEST(
         model::offset(2000), ss::lowres_clock::now() + 10s, never_abort)
       .get();
     BOOST_REQUIRE_EQUAL(
-      archival_stm->manifest().get_start_kafka_offset_override(),
-      kafka::offset{});
+      archival_stm->manifest().get_start_sql_offset_override(),
+      sql::offset{});
     BOOST_REQUIRE_EQUAL(archival_stm->get_start_offset(), model::offset(2000));
 }
 

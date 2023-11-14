@@ -9,7 +9,7 @@ def main():
 
     def generate_options():
         parser = argparse.ArgumentParser(
-            description='Redpanda Consumer Group Mapper')
+            description='Funes Consumer Group Mapper')
         parser.add_argument('group_id',
                             type=str,
                             help='Id of the group to map')
@@ -28,7 +28,7 @@ def main():
     xx.update(options.group_id)
 
     partition_id = jump.hash(xx.intdigest(), options.partition_count)
-    print(f"kafka/__consumer_offsets/{partition_id}")
+    print(f"sql/__consumer_offsets/{partition_id}")
 
 
 if __name__ == '__main__':

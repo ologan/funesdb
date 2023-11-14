@@ -15,12 +15,12 @@ from rptest.services.cluster import cluster
 
 from rptest.clients.rpk import RpkException, RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.services.kafka_cli_consumer import KafkaCliConsumer
+from rptest.services.sql_cli_consumer import SQLCliConsumer
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
 from rptest.services.rpk_producer import RpkProducer
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from ducktape.utils.util import wait_until
 from rptest.utils.mode_checks import skip_debug_mode
 
@@ -40,7 +40,7 @@ class NodeFolderDeletionTest(PreallocNodesTest):
     def test_deleting_node_folder(self):
 
         # new bootstrap
-        self.redpanda.start(auto_assign_node_id=True,
+        self.funes.start(auto_assign_node_id=True,
                             omit_seeds_on_idx_one=False)
         topics = []
         for i in range(5):
@@ -52,7 +52,7 @@ class NodeFolderDeletionTest(PreallocNodesTest):
         msg_cnt = 400000
 
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        topic.name,
                                        msg_size,
                                        msg_cnt,
@@ -67,7 +67,7 @@ class NodeFolderDeletionTest(PreallocNodesTest):
 
         consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic.name,
             msg_size,
             readers=3,
@@ -79,25 +79,25 @@ class NodeFolderDeletionTest(PreallocNodesTest):
                    timeout_sec=120,
                    backoff_sec=0.5)
         # explicitly skip node 0 as this is a seed server and its id doesn't change
-        to_stop = random.choice(self.redpanda.nodes[1:])
-        id = self.redpanda.node_id(to_stop)
+        to_stop = random.choice(self.funes.nodes[1:])
+        id = self.funes.node_id(to_stop)
 
         # remove node data folder
-        self.redpanda.stop_node(to_stop)
-        self.redpanda.clean_node(to_stop)
+        self.funes.stop_node(to_stop)
+        self.funes.clean_node(to_stop)
         # start node back up
-        self.redpanda.start_node(to_stop,
+        self.funes.start_node(to_stop,
                                  auto_assign_node_id=True,
                                  omit_seeds_on_idx_one=False)
         # assert that node id has changed
-        assert id != self.redpanda.node_id(to_stop, force_refresh=True)
+        assert id != self.funes.node_id(to_stop, force_refresh=True)
         wait_until(lambda: producer.produce_status.acked > 200000,
                    timeout_sec=120,
                    backoff_sec=0.5)
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         # decommission a node that has been cleared
         admin.decommission_broker(id)
-        waiter = NodeDecommissionWaiter(self.redpanda,
+        waiter = NodeDecommissionWaiter(self.funes,
                                         id,
                                         self.logger,
                                         progress_timeout=60)

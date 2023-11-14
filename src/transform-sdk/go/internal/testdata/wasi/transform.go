@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	redpanda.OnRecordWritten(wasiTransform)
+	funes.OnRecordWritten(wasiTransform)
 }
 
 type WasiInfo struct {
@@ -34,7 +34,7 @@ type WasiInfo struct {
 	RandomNumber int
 }
 
-func wasiTransform(e redpanda.WriteEvent) ([]redpanda.Record, error) {
+func wasiTransform(e funes.WriteEvent) ([]funes.Record, error) {
 	w := &WasiInfo{
 		Args:         os.Args,
 		Env:          os.Environ(),
@@ -45,5 +45,5 @@ func wasiTransform(e redpanda.WriteEvent) ([]redpanda.Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []redpanda.Record{{Value: b}}, nil
+	return []funes.Record{{Value: b}}, nil
 }

@@ -38,7 +38,7 @@ def make_aws_handler(token_ttl):
             'Type': 'AWS-HMAC',
             'AccessKeyId': 'panda-user',
             'SecretAccessKey': 'panda-secret',
-            'Token': '__REDPANDA_SKIP_IAM_TOKEN_x',
+            'Token': '__FUNES_SKIP_IAM_TOKEN_x',
         }
 
         def get_canned_credentials(self):
@@ -100,7 +100,7 @@ def make_sts_handler(token_ttl):
     <Credentials>
       <AccessKeyId>panda-user</AccessKeyId>
       <SecretAccessKey>panda-secret</SecretAccessKey>
-      <SessionToken>__REDPANDA_SKIP_IAM_TOKEN_x</SessionToken>
+      <SessionToken>__FUNES_SKIP_IAM_TOKEN_x</SessionToken>
       <Expiration>{}</Expiration>
     </Credentials>
   </AssumeRoleWithWebIdentityResult>

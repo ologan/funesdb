@@ -31,10 +31,10 @@ public:
     allocation_state(
       config::binding<uint32_t> partitions_per_shard,
       config::binding<uint32_t> partitions_reserve_shard0,
-      config::binding<std::vector<ss::sstring>> internal_kafka_topics)
+      config::binding<std::vector<ss::sstring>> internal_sql_topics)
       : _partitions_per_shard(std::move(partitions_per_shard))
       , _partitions_reserve_shard0(std::move(partitions_reserve_shard0))
-      , _internal_kafka_topics(std::move(internal_kafka_topics)) {}
+      , _internal_sql_topics(std::move(internal_sql_topics)) {}
 
     // Allocation nodes
     void register_node(node_ptr);
@@ -86,7 +86,7 @@ private:
 
     config::binding<uint32_t> _partitions_per_shard;
     config::binding<uint32_t> _partitions_reserve_shard0;
-    config::binding<std::vector<ss::sstring>> _internal_kafka_topics;
+    config::binding<std::vector<ss::sstring>> _internal_sql_topics;
 
     raft::group_id _highest_group{0};
     underlying_t _nodes;

@@ -13,13 +13,13 @@ from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 from rptest.clients.rpk import RpkTool
 from rptest.services.failure_injector import FailureInjector, FailureSpec
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.tests.funes_test import FunesTest
 
 
-class MetadataTest(RedpandaTest):
+class MetadataTest(FunesTest):
     def controller_present(self):
-        return self.redpanda.controller() is not None
+        return self.funes.controller() is not None
 
     @cluster(num_nodes=3)
     def test_metadata_request_contains_all_brokers(self):
@@ -27,10 +27,10 @@ class MetadataTest(RedpandaTest):
         Check if broker list returned from metadata request is complete
         """
         wait_until(lambda: self.controller_present, 10, 1)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         nodes = rpk.cluster_info()
         assert len(nodes) == 3
-        all_ids = [self.redpanda.idx(n) for n in self.redpanda.nodes]
+        all_ids = [self.funes.idx(n) for n in self.funes.nodes]
         returned_node_ids = [n.id for n in nodes]
         assert sorted(all_ids) == sorted(returned_node_ids)
 
@@ -44,35 +44,35 @@ class MetadataTest(RedpandaTest):
         """
         # validate initial conditions
         wait_until(lambda: self.controller_present, 10, 1)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         nodes = rpk.cluster_info()
         assert len(nodes) == 3
-        redpanda_ids = [self.redpanda.idx(n) for n in self.redpanda.nodes]
+        funes_ids = [self.funes.idx(n) for n in self.funes.nodes]
         node_ids = [n.id for n in nodes]
-        assert sorted(redpanda_ids) == sorted(node_ids)
+        assert sorted(funes_ids) == sorted(node_ids)
 
         def get_node():
             if node == 'controller':
-                return self.redpanda.controller()
+                return self.funes.controller()
             else:
-                n = self.redpanda.nodes[0]
-                while n == self.redpanda.controller():
-                    n = random.choice(self.redpanda.nodes)
+                n = self.funes.nodes[0]
+                while n == self.funes.controller():
+                    n = random.choice(self.funes.nodes)
                 return n
 
         node = get_node()
-        node_id = self.redpanda.idx(node)
-        self.redpanda.logger.info(
+        node_id = self.funes.idx(node)
+        self.funes.logger.info(
             f"Injecting failure on node {node.account.hostname} with id: {node_id}",
         )
-        with FailureInjector(self.redpanda) as fi:
+        with FailureInjector(self.funes) as fi:
             if failure == "isolate":
                 fi.inject_failure(
                     FailureSpec(FailureSpec.FAILURE_ISOLATE, node))
             else:
-                self.redpanda.stop_node(node)
+                self.funes.stop_node(node)
 
-            rpk = RpkTool(self.redpanda)
+            rpk = RpkTool(self.funes)
 
             def contains_only_alive_nodes():
                 nodes = rpk.cluster_info()

@@ -1,10 +1,10 @@
 # Copyright 2021 Redpanda Data, Inc.
 #
-# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# Licensed as a Funes Enterprise file under the Funes Community
 # License (the "License"); you may not use this file except in compliance with
 # the License. You may obtain a copy of the License at
 #
-# https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+# https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
 
 import json
 import os
@@ -17,13 +17,13 @@ from typing import DefaultDict
 
 from ducktape.mark import matrix
 
-from rptest.clients.kafka_cat import KafkaCat
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cat import SQLCat
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RedpandaService, SISettings, get_cloud_storage_type
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import FunesService, SISettings, get_cloud_storage_type
+from rptest.tests.funes_test import FunesTest
 from rptest.util import (
     segments_count,
     produce_until_segments,
@@ -41,9 +41,9 @@ MANIFEST_BIN_EXTENSION = ".bin"
 
 LOG_EXTENSION = ".log"
 
-CONTROLLER_LOG_PREFIX = os.path.join(RedpandaService.DATA_DIR, "redpanda")
+CONTROLLER_LOG_PREFIX = os.path.join(FunesService.DATA_DIR, "funes")
 
-# Log errors expected when connectivity between redpanda and the S3
+# Log errors expected when connectivity between funes and the S3
 # backend is disrupted
 CONNECTION_ERROR_LOGS = [
     "archival - .*Failed to create archivers",
@@ -101,8 +101,8 @@ def _get_name_version(path):
 
 
 def _parse_normalized_segment_path_v1(path, md5, segment_size):
-    """Parse path like 'kafka/panda-topic/1_8/3319-1-v1.log' and
-    return the components - topic: panda-topic, ns: kafka, partition: 1
+    """Parse path like 'sql/panda-topic/1_8/3319-1-v1.log' and
+    return the components - topic: panda-topic, ns: sql, partition: 1
     revision: 8, base offset: 3319, term: 1"""
     items = path.split('/')
     ns = items[0]
@@ -123,8 +123,8 @@ def _parse_normalized_segment_path_v1(path, md5, segment_size):
 
 
 def _parse_normalized_segment_path_v2_v3(path, md5, segment_size):
-    """Parse path like 'kafka/panda-topic/1_8/3319-3421-2817-1-v1.log' and
-    return the components - topic: panda-topic, ns: kafka, partition: 1
+    """Parse path like 'sql/panda-topic/1_8/3319-3421-2817-1-v1.log' and
+    return the components - topic: panda-topic, ns: sql, partition: 1
     revision: 8, base offset: 3319, committed offset 3421, size 2817 term: 1
     """
     items = path.split('/')
@@ -188,7 +188,7 @@ def make_index_path(path: str) -> str:
     return f'{path}.index'
 
 
-class ArchivalTest(RedpandaTest):
+class ArchivalTest(FunesTest):
     log_segment_size = 1048576  # 1MB
     log_compaction_interval_ms = 10000
 
@@ -218,23 +218,23 @@ class ArchivalTest(RedpandaTest):
 
         self._s3_port = self.si_settings.cloud_storage_api_endpoint_port
 
-        self.kafka_tools = KafkaCliTools(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
+        self.sql_tools = SQLCliTools(self.funes)
+        self.rpk = RpkTool(self.funes)
 
     def setUp(self):
         super().setUp()  # topic is created here
 
         # enable archival for topic
         for topic in self.topics:
-            self.rpk.alter_topic_config(topic.name, 'redpanda.remote.write',
+            self.rpk.alter_topic_config(topic.name, 'funes.remote.write',
                                         'true')
 
     @cluster(num_nodes=3)
     @matrix(cloud_storage_type=get_cloud_storage_type())
     def test_write(self, cloud_storage_type):
-        """Simple smoke test, write data to redpanda and check if the
+        """Simple smoke test, write data to funes and check if the
         data hit the S3 storage bucket"""
-        self.kafka_tools.produce(self.topic, 10000, 1024)
+        self.sql_tools.produce(self.topic, 10000, 1024)
         validate(self._quick_verify, self.logger, 90)
 
     @cluster(num_nodes=3, log_allow_list=CONNECTION_ERROR_LOGS)
@@ -242,13 +242,13 @@ class ArchivalTest(RedpandaTest):
     def test_isolate(self, cloud_storage_type):
         """Verify that our isolate/rejoin facilities actually work"""
 
-        with firewall_blocked(self.redpanda.nodes, self._s3_port):
-            self.kafka_tools.produce(self.topic, 10000, 1024)
+        with firewall_blocked(self.funes.nodes, self._s3_port):
+            self.sql_tools.produce(self.topic, 10000, 1024)
             time.sleep(10)  # can't busy wait here
 
             # Topic manifest can be present in the bucket because topic is created before
             # firewall is blocked. No segments or partition manifest should be present.
-            bucket_content = BucketView(self.redpanda, topics=self.topics)
+            bucket_content = BucketView(self.funes, topics=self.topics)
 
             # Any partition manifests must contain no segments
             for ntp, manifest in bucket_content.partition_manifests.items():
@@ -264,7 +264,7 @@ class ArchivalTest(RedpandaTest):
 
         # Firewall is unblocked, segment uploads should proceed
         def data_uploaded():
-            bucket_content = BucketView(self.redpanda, topics=self.topics)
+            bucket_content = BucketView(self.funes, topics=self.topics)
             has_segments = bucket_content.segment_objects > 0
 
             if not has_segments:
@@ -284,7 +284,7 @@ class ArchivalTest(RedpandaTest):
 
             return has_segments and has_segments_in_manifest and not bucket_content.ignored_objects
 
-        self.redpanda.wait_until(
+        self.funes.wait_until(
             data_uploaded,
             timeout_sec=90,
             backoff_sec=5,
@@ -293,10 +293,10 @@ class ArchivalTest(RedpandaTest):
     @cluster(num_nodes=3, log_allow_list=CONNECTION_ERROR_LOGS)
     @matrix(cloud_storage_type=get_cloud_storage_type())
     def test_reconnect(self, cloud_storage_type):
-        """Disconnect redpanda from S3, write data, connect redpanda to S3
+        """Disconnect funes from S3, write data, connect funes to S3
         and check that the data is uploaded"""
-        with firewall_blocked(self.redpanda.nodes, self._s3_port):
-            self.kafka_tools.produce(self.topic, 10000, 1024)
+        with firewall_blocked(self.funes.nodes, self._s3_port):
+            self.sql_tools.produce(self.topic, 10000, 1024)
             time.sleep(10)  # sleep is needed because we need to make sure that
             # reconciliation loop kicked in and started uploading
             # data, otherwse we can rejoin before archival storage
@@ -306,12 +306,12 @@ class ArchivalTest(RedpandaTest):
     @cluster(num_nodes=3, log_allow_list=CONNECTION_ERROR_LOGS)
     @matrix(cloud_storage_type=get_cloud_storage_type())
     def test_one_node_reconnect(self, cloud_storage_type):
-        """Disconnect one redpanda node from S3, write data, connect redpanda to S3
+        """Disconnect one funes node from S3, write data, connect funes to S3
         and check that the data is uploaded"""
-        self.kafka_tools.produce(self.topic, 1000, 1024)
+        self.sql_tools.produce(self.topic, 1000, 1024)
         leaders = list(self._get_partition_leaders().values())
         with firewall_blocked(leaders[0:1], self._s3_port):
-            self.kafka_tools.produce(self.topic, 9000, 1024)
+            self.sql_tools.produce(self.topic, 9000, 1024)
             time.sleep(10)  # sleep is needed because we need to make sure that
             # reconciliation loop kicked in and started uploading
             # data, otherwse we can rejoin before archival storage
@@ -321,10 +321,10 @@ class ArchivalTest(RedpandaTest):
     @cluster(num_nodes=3, log_allow_list=CONNECTION_ERROR_LOGS)
     @matrix(cloud_storage_type=get_cloud_storage_type())
     def test_connection_drop(self, cloud_storage_type):
-        """Disconnect redpanda from S3 during the active upload, restore connection
+        """Disconnect funes from S3 during the active upload, restore connection
         and check that everything is uploaded"""
-        self.kafka_tools.produce(self.topic, 10000, 1024)
-        with firewall_blocked(self.redpanda.nodes, self._s3_port):
+        self.sql_tools.produce(self.topic, 10000, 1024)
+        with firewall_blocked(self.funes.nodes, self._s3_port):
             time.sleep(10)  # sleep is needed because we need to make sure that
             # reconciliation loop kicked in and started uploading
             # data, otherwse we can rejoin before archival storage
@@ -334,16 +334,16 @@ class ArchivalTest(RedpandaTest):
     @cluster(num_nodes=3, log_allow_list=CONNECTION_ERROR_LOGS)
     @matrix(cloud_storage_type=get_cloud_storage_type())
     def test_connection_flicker(self, cloud_storage_type):
-        """Disconnect redpanda from S3 during the active upload for short period of time
+        """Disconnect funes from S3 during the active upload for short period of time
         during upload and check that everything is uploaded"""
         con_enabled = True
         for _ in range(0, 20):
             # upload data in batches
             if con_enabled:
-                with firewall_blocked(self.redpanda.nodes, self._s3_port):
-                    self.kafka_tools.produce(self.topic, 500, 1024)
+                with firewall_blocked(self.funes.nodes, self._s3_port):
+                    self.sql_tools.produce(self.topic, 500, 1024)
             else:
-                self.kafka_tools.produce(self.topic, 500, 1024)
+                self.sql_tools.produce(self.topic, 500, 1024)
             con_enabled = not con_enabled
             time.sleep(1)
         time.sleep(10)
@@ -354,15 +354,15 @@ class ArchivalTest(RedpandaTest):
     def test_single_partition_leadership_transfer(self, cloud_storage_type):
         """Start uploading data, restart leader node of the partition 0 to trigger the
         leadership transfer, continue upload, verify S3 bucket content"""
-        self.kafka_tools.produce(self.topic, 5000, 1024)
+        self.sql_tools.produce(self.topic, 5000, 1024)
         time.sleep(5)
         leaders = self._get_partition_leaders()
         node = leaders[0]
-        self.redpanda.stop_node(node)
+        self.funes.stop_node(node)
         time.sleep(1)
-        self.redpanda.start_node(node)
+        self.funes.start_node(node)
         time.sleep(5)
-        self.kafka_tools.produce(self.topic, 5000, 1024)
+        self.sql_tools.produce(self.topic, 5000, 1024)
         validate(self._cross_node_verify, self.logger, 90)
 
     @cluster(num_nodes=3)
@@ -370,16 +370,16 @@ class ArchivalTest(RedpandaTest):
     def test_all_partitions_leadership_transfer(self, cloud_storage_type):
         """Start uploading data, restart leader nodes of all partitions to trigger the
         leadership transfer, continue upload, verify S3 bucket content"""
-        self.kafka_tools.produce(self.topic, 5000, 1024)
+        self.sql_tools.produce(self.topic, 5000, 1024)
         time.sleep(5)
         leaders = self._get_partition_leaders()
         for ip, node in leaders.items():
             self.logger.debug(f"going to restart node {ip}")
-            self.redpanda.stop_node(node)
+            self.funes.stop_node(node)
             time.sleep(1)
-            self.redpanda.start_node(node)
+            self.funes.start_node(node)
         time.sleep(5)
-        self.kafka_tools.produce(self.topic, 5000, 1024)
+        self.sql_tools.produce(self.topic, 5000, 1024)
         validate(self._cross_node_verify, self.logger, 90)
 
     @cluster(num_nodes=3)
@@ -387,14 +387,14 @@ class ArchivalTest(RedpandaTest):
     def test_timeboxed_uploads(self, acks, cloud_storage_type):
         """This test checks segment upload time limit. The feature is enabled in the
         configuration. The configuration defines maximum time interval between uploads.
-        If the option is set then redpanda will start uploading a segment partially if
+        If the option is set then funes will start uploading a segment partially if
         configured amount of time passed since previous upload and the segment has some
         new data.
         The test sets the timeout value to 1s. Then it uploads data in batches with delays
         between the batches. The segment size is set to 1GiB. We upload 10MiB total. So
         normally, there won't be any data uploaded to Minio. But since the time limit for
         a segment is set to 1s we will see a bunch of segments in the bucket. The offsets
-        of the segments won't align with the segment in the redpanda data directory. But
+        of the segments won't align with the segment in the funes data directory. But
         their respective offset ranges should align and the sizes should make sense.
         """
 
@@ -404,7 +404,7 @@ class ArchivalTest(RedpandaTest):
         # expect that the bucket won't have 9 segments with 1000 offsets.
         # The actual segments will be larger.
         for _ in range(0, 10):
-            self.kafka_tools.produce(self.topic, 1000, 1024, acks)
+            self.sql_tools.produce(self.topic, 1000, 1024, acks)
             time.sleep(1)
         time.sleep(5)
 
@@ -413,7 +413,7 @@ class ArchivalTest(RedpandaTest):
             ntps = set()
             sizes = {}
 
-            for node in self.redpanda.nodes:
+            for node in self.funes.nodes:
                 lst = self.segment_paths_from_checksums(node)
                 segments = defaultdict(int)
                 sz = defaultdict(int)
@@ -429,7 +429,7 @@ class ArchivalTest(RedpandaTest):
 
             # Download manifest for partitions
             for ntp in ntps:
-                manifest = BucketView(self.redpanda).get_partition_manifest(
+                manifest = BucketView(self.funes).get_partition_manifest(
                     ntp.to_ntp())
                 self.logger.info(f"downloaded manifest {manifest}")
                 segments = []
@@ -464,7 +464,7 @@ class ArchivalTest(RedpandaTest):
         restarts once the segments have been archived.
         """
         local_retention = 5 * self.log_segment_size
-        self.kafka_tools.alter_topic_config(
+        self.sql_tools.alter_topic_config(
             self.topic,
             {
                 TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES:
@@ -472,8 +472,8 @@ class ArchivalTest(RedpandaTest):
             },
         )
 
-        with firewall_blocked(self.redpanda.nodes, self._s3_port):
-            produce_until_segments(redpanda=self.redpanda,
+        with firewall_blocked(self.funes.nodes, self._s3_port):
+            produce_until_segments(funes=self.funes,
                                    topic=self.topic,
                                    partition_idx=0,
                                    count=10,
@@ -484,19 +484,19 @@ class ArchivalTest(RedpandaTest):
             # segments to the cloud storage).
             time.sleep(3 * self.log_compaction_interval_ms / 1000.0)
             counts = list(
-                segments_count(self.redpanda, self.topic, partition_idx=0))
+                segments_count(self.funes, self.topic, partition_idx=0))
             self.logger.info(f"node segment counts: {counts}")
-            assert len(counts) == len(self.redpanda.nodes)
+            assert len(counts) == len(self.funes.nodes)
             assert all(c >= 10 for c in counts)
 
         # Check that eviction restarts after we restored the connection to cloud
         # storage.
-        wait_for_local_storage_truncate(redpanda=self.redpanda,
+        wait_for_local_storage_truncate(funes=self.funes,
                                         topic=self.topic,
                                         target_bytes=local_retention)
 
     def _get_partition_leaders(self):
-        kcat = KafkaCat(self.redpanda)
+        kcat = SQLCat(self.funes)
         m = kcat.metadata()
         self.logger.info(f"kcat.metadata() == {m}")
         brokers = {}
@@ -504,7 +504,7 @@ class ArchivalTest(RedpandaTest):
             id = b['id']
             ip = b['name']
             ip = ip[:ip.index(':')]
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 n_ip = n.account.hostname
                 self.logger.debug(f"matching {n_ip} over {ip}")
                 if n_ip == ip:
@@ -550,7 +550,7 @@ class ArchivalTest(RedpandaTest):
         - Download and verify partition manifest;
         - Partition manifest has all segments and metadata like committed offset
           and base offset. We can also retrieve MD5 hash of every segment;
-        - Load segment metadata for every redpanda node.
+        - Load segment metadata for every funes node.
         - Scan every node's metadata and match segments with manifest, on success
           remove matched segment from the partition manifest.
         The goal #1 is to remove all segments from the manifest. The goal #2 is to
@@ -560,25 +560,25 @@ class ArchivalTest(RedpandaTest):
         - The base offset and md5 hashes are the same;
         - The committed offset of both segments are the same, md5 hashes are different,
           and base offset of the segment from manifest is larger than base offset of the
-          segment from redpanda node. In this case we should also compare the data
+          segment from funes node. In this case we should also compare the data
           directly by scanning both segments.
         """
         nodes = {}
         ntps = set()
 
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             lst = self.segment_paths_from_checksums(node)
             nodes[node.account.hostname] = lst
             for it in lst:
                 ntps.add(it.ntp)
 
         # Download metadata from S3
-        remote = self._get_redpanda_s3_checksums()
+        remote = self._get_funes_s3_checksums()
 
         # Download manifest for partitions
         manifests = {}
         for ntp in ntps:
-            manifest = BucketView(self.redpanda).get_partition_manifest(ntp)
+            manifest = BucketView(self.funes).get_partition_manifest(ntp)
             manifests[ntp] = manifest
             self._verify_manifest(ntp, manifest, remote)
 
@@ -682,7 +682,7 @@ class ArchivalTest(RedpandaTest):
             assert (last_offset + 1) in ntp_offsets
 
     def segment_paths_from_checksums(self, node):
-        checksums = self._get_redpanda_log_segment_checksums(node)
+        checksums = self._get_funes_log_segment_checksums(node)
         self.logger.info(
             f"Node: {node.account.hostname} checksums: {checksums}")
         lst = [
@@ -695,17 +695,17 @@ class ArchivalTest(RedpandaTest):
     def _quick_verify(self):
         """Verification algorithm that works only if no leadership
         transfer happened during the run. It works by looking up all
-        segments from the remote storage in local redpanda storages.
+        segments from the remote storage in local funes storages.
         It's done by using md5 hashes of the nodes.
         """
         local = defaultdict(set)
-        for node in self.redpanda.nodes:
-            checksums = self._get_redpanda_log_segment_checksums(node)
+        for node in self.funes.nodes:
+            checksums = self._get_funes_log_segment_checksums(node)
             self.logger.info(
                 f"Node: {node.account.hostname} checksums: {checksums}")
             for k, v in checksums.items():
                 local[k].add(v)
-        remote = self._get_redpanda_s3_checksums()
+        remote = self._get_funes_s3_checksums()
         self.logger.info(f"S3 checksums: {remote}")
         self.logger.info(f"Local checksums: {local}")
         assert len(local) != 0
@@ -770,7 +770,7 @@ class ArchivalTest(RedpandaTest):
         # Download manifest for partitions
         manifests = {}
         for ntp in local_partitions.keys():
-            manifest = BucketView(self.redpanda).get_partition_manifest(ntp)
+            manifest = BucketView(self.funes).get_partition_manifest(ntp)
             manifests[ntp] = manifest
             self._verify_manifest(ntp, manifest, remote)
 
@@ -784,10 +784,10 @@ class ArchivalTest(RedpandaTest):
                 missing_partitions += 1
         assert missing_partitions == 0
 
-    def _get_redpanda_log_segment_checksums(self, node):
+    def _get_funes_log_segment_checksums(self, node):
         """Get MD5 checksums of log segments that match the topic. The paths are
         normalized (<namespace>/<topic>/<partition>_<rev>/...)."""
-        checksums = self.redpanda.data_checksum(node)
+        checksums = self.funes.data_checksum(node)
 
         # Filter out all unwanted paths
         def included(path):
@@ -796,14 +796,14 @@ class ArchivalTest(RedpandaTest):
 
         # Remove data dir from path
         def normalize_path(path):
-            return os.path.relpath(path, RedpandaService.DATA_DIR)
+            return os.path.relpath(path, FunesService.DATA_DIR)
 
         return {
             normalize_path(path): value
             for path, value in checksums.items() if included(path)
         }
 
-    def _get_redpanda_s3_checksums(self):
+    def _get_funes_s3_checksums(self):
         """Get MD5 checksums of log segments stored in S3 (minio). The paths are
         normalized (<namespace>/<topic>/<partition>_<rev>/...)."""
         def normalize(path):
@@ -834,10 +834,10 @@ class ArchivalTest(RedpandaTest):
         """Compute md5 checksum of the last 'tail_bytes' of the file located
         on a node."""
         node = None
-        for n in self.redpanda.nodes:
+        for n in self.funes.nodes:
             if n.account.hostname == hostname:
                 node = n
-        full_path = os.path.join(RedpandaService.DATA_DIR, normalized_path)
+        full_path = os.path.join(FunesService.DATA_DIR, normalized_path)
         cmd = f"tail -c {tail_bytes} {full_path} | md5sum"
         line = node.account.ssh_output(cmd)
         tokens = line.split()

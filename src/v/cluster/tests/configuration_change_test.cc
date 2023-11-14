@@ -77,7 +77,7 @@ FIXTURE_TEST(test_single_node_update, cluster_test_fixture) {
     wait_for_controller_leadership(node_id).get();
 
     remove_node_application(node_id);
-    // Change kafka port from 9092 to 15000
+    // Change sql port from 9092 to 15000
     node = create_node_application(node_id, 15000, 13000);
 
     tests::cooperative_spin_wait_with_timeout(5s, [this, node_id] {
@@ -87,7 +87,7 @@ FIXTURE_TEST(test_single_node_update, cluster_test_fixture) {
             return false;
         }
 
-        return meta->broker.kafka_advertised_listeners()[0].address
+        return meta->broker.sql_advertised_listeners()[0].address
                == net::unresolved_address("127.0.0.1", 15000);
     }).get0();
 }

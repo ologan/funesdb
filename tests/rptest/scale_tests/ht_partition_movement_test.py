@@ -28,7 +28,7 @@ class HighThroughputPartitionMovementTest(PreallocNodesTest,
                          *args,
                          **kwargs)
 
-        if not self.redpanda.dedicated_nodes:
+        if not self.funes.dedicated_nodes:
             # Mini mode, for developers working on the test on their workstation.
             # (not for use in CI)
             self._partitions = 16
@@ -46,7 +46,7 @@ class HighThroughputPartitionMovementTest(PreallocNodesTest,
     def _start_producer(self, topic_name):
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             self._message_size,
             self._message_cnt,
@@ -60,7 +60,7 @@ class HighThroughputPartitionMovementTest(PreallocNodesTest,
     def _start_consumer(self, topic_name):
         self.consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             topic_name,
             self._message_size,
             readers=self._consumers,

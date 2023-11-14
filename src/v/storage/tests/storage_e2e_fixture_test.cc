@@ -7,8 +7,8 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
 
-#include "kafka/server/tests/produce_consume_utils.h"
-#include "redpanda/tests/fixture.h"
+#include "sql/server/tests/produce_consume_utils.h"
+#include "funes/tests/fixture.h"
 #include "test_utils/fixture.h"
 #include "test_utils/scoped_config.h"
 
@@ -21,7 +21,7 @@
 using namespace std::chrono_literals;
 using std::vector;
 
-struct storage_e2e_fixture : public redpanda_thread_fixture {
+struct storage_e2e_fixture : public funes_thread_fixture {
     scoped_config test_local_cfg;
 };
 
@@ -30,7 +30,7 @@ namespace {
 // Produces to the given fixture's partition for 10 seconds.
 ss::future<> produce_to_fixture(
   storage_e2e_fixture* fix, model::topic topic_name, int* incomplete) {
-    tests::kafka_produce_transport producer(co_await fix->make_kafka_client());
+    tests::sql_produce_transport producer(co_await fix->make_sql_client());
     co_await producer.start();
     const int cardinality = 10;
     auto now = ss::lowres_clock::now();
@@ -48,13 +48,13 @@ FIXTURE_TEST(test_compaction_segment_ms, storage_e2e_fixture) {
     test_local_cfg.get("log_segment_ms_min")
       .set_value(std::chrono::duration_cast<std::chrono::milliseconds>(1ms));
     const auto topic_name = model::topic("tapioca");
-    const auto ntp = model::ntp(model::kafka_namespace, topic_name, 0);
+    const auto ntp = model::ntp(model::sql_namespace, topic_name, 0);
 
     cluster::topic_properties props;
     props.retention_duration = tristate<std::chrono::milliseconds>(
       tristate<std::chrono::milliseconds>{});
     props.segment_ms = tristate<std::chrono::milliseconds>(1s);
-    add_topic({model::kafka_namespace, topic_name}, 1, props).get();
+    add_topic({model::sql_namespace, topic_name}, 1, props).get();
     wait_for_leader(ntp).get();
 
     stress_config cfg;

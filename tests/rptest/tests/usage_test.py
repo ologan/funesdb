@@ -11,14 +11,14 @@ import re
 import time
 import random
 import operator
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 from rptest.clients.rpk import RpkTool
 from requests.exceptions import HTTPError
 from rptest.services.cluster import cluster
 from rptest.utils.si_utils import BucketView
-from rptest.services.redpanda import SISettings
+from rptest.services.funes import SISettings
 from ducktape.utils.util import wait_until
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 
@@ -26,7 +26,7 @@ from datetime import datetime
 from functools import reduce
 
 from rptest.services.admin import Admin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 from rptest.utils.functional import flat_map, flatten
 
@@ -60,8 +60,8 @@ class UsageWindow:
 def parse_usage_response(usage_response):
     def parse_usage_window(e):
         return UsageWindow(e['begin_timestamp'], e['end_timestamp'], e['open'],
-                           e['kafka_bytes_sent_count'],
-                           e['kafka_bytes_received_count'],
+                           e['sql_bytes_sent_count'],
+                           e['sql_bytes_received_count'],
                            e['cloud_storage_bytes_gauge'])
 
     return [parse_usage_window(e) for e in usage_response]
@@ -107,9 +107,9 @@ def assert_usage_consistency(node, a, b):
                 assert a_value.bytes_in_cloud_storage == x.bytes_in_cloud_storage, f"Failed bytes_in_cs compare node: {node} a: {str(a_value)} b:{str(x)}"
 
 
-class UsageTest(RedpandaTest):
+class UsageTest(FunesTest):
     """
-    Tests that the usage endpoint is tracking kafka metrics
+    Tests that the usage endpoint is tracking sql metrics
     """
     topics = (TopicSpec(), )
 
@@ -122,7 +122,7 @@ class UsageTest(RedpandaTest):
                                         log_level='debug',
                                         extra_rp_conf=self._settings)
         self._ctx = test_context
-        self._admin = Admin(self.redpanda)
+        self._admin = Admin(self.funes)
         # Dict[NodeName, v1/usage_response] cached history of responses
         # used to validate future usage requests against historical ones to
         # detect for any inconsistencies
@@ -184,7 +184,7 @@ class UsageTest(RedpandaTest):
                     raise RuntimeError("Empty response received")
                 return response
             except Exception as e:
-                self.redpanda.logger.error(
+                self.funes.logger.error(
                     f"Error making v1/usage request: {e}")
                 retries -= 1
                 time.sleep(1)
@@ -251,7 +251,7 @@ class UsageTest(RedpandaTest):
 
         # validate() checks results are ordered newest to oldest and the timestamps
         # are multiples of the window interval
-        nodes = self.redpanda.nodes if only_nodes is None else only_nodes
+        nodes = self.funes.nodes if only_nodes is None else only_nodes
         return flat_map(
             lambda x: validate(x.name, self._get_usage(x, include_open)),
             nodes)
@@ -259,24 +259,24 @@ class UsageTest(RedpandaTest):
     def _calculate_total_usage(self, results=None):
         # Total number of ingress/egress bytes across entire cluster
         def all_bytes(x):
-            kafka_ingress = x.bytes_sent
-            kafka_egress = x.bytes_received
-            return kafka_ingress + kafka_egress
+            sql_ingress = x.bytes_sent
+            sql_egress = x.bytes_received
+            return sql_ingress + sql_egress
 
         if results is None:
             results = self._get_all_usage()
 
-        # Some traffic over the kafka port should be expected at startup
+        # Some traffic over the sql port should be expected at startup
         # but not a large amount
         return reduce(lambda acc, x: acc + all_bytes(x), results, 0)
 
     def _produce_and_consume_data(self, records=10240, size=512):
-        # Test some data is recorded as activity over kafka port begins
-        producer = KafkaCliTools(self.redpanda)
+        # Test some data is recorded as activity over sql port begins
+        producer = SQLCliTools(self.funes)
         producer.produce(self.topic, records, size, acks=1)
         total_produced = records * size
 
-        consumer = RpkConsumer(self._ctx, self.redpanda, self.topic)
+        consumer = RpkConsumer(self._ctx, self.funes, self.topic)
         consumer.start()
         self._bytes_received = 0
 
@@ -295,18 +295,18 @@ class UsageTest(RedpandaTest):
         def search_log_lines(node):
             lines = []
             for line in node.account.ssh_capture(
-                    f"grep \"{pattern}\" {RedpandaService.STDOUT_STDERR_CAPTURE} || true",
+                    f"grep \"{pattern}\" {FunesService.STDOUT_STDERR_CAPTURE} || true",
                     timeout_sec=60):
                 lines.append(line.strip())
             return lines
 
-        return [search_log_lines(node) for node in self.redpanda.nodes]
+        return [search_log_lines(node) for node in self.funes.nodes]
 
     def _validate_timer_interval(self):
         log_lines = self._grab_log_lines("Usage based billing window_close*")
 
         assert len(log_lines) > 0, "Debug logging not enabled"
-        self.redpanda.logger.debug(f"Log lines: {log_lines}")
+        self.funes.logger.debug(f"Log lines: {log_lines}")
 
         # Remove the first element as it is expected to not be aligned
         log_lines = flatten([xs[1:] for xs in log_lines])
@@ -335,13 +335,13 @@ class UsageTest(RedpandaTest):
         response = self._get_all_usage()
         assert len(response) >= 2, f"Not enough windows observed, {response}"
 
-        # Some traffic over the kafka port should be expected at startup
+        # Some traffic over the sql port should be expected at startup
         # but not a large amount
         total_data = self._calculate_total_usage()
 
         iterations = 1
         prev_usage = self._get_all_usage()
-        producer = KafkaCliTools(self.redpanda)
+        producer = SQLCliTools(self.funes)
         while iterations < (self.num_windows + 7):
             producer.produce(self.topic, (512 * iterations), 512, acks=1)
             time.sleep(1)
@@ -378,15 +378,15 @@ class UsageTest(RedpandaTest):
         usage_pre_restart = self._calculate_total_usage(
             self._get_all_usage(include_open=True,
                                 allow_gaps=True,
-                                only_nodes=[self.redpanda.nodes[0]]))
+                                only_nodes=[self.funes.nodes[0]]))
 
-        self.redpanda.restart_nodes([self.redpanda.nodes[0]])
+        self.funes.restart_nodes([self.funes.nodes[0]])
 
         # Compare values pre/post restart to ensure data was persisted to disk
         usage_post_restart = self._calculate_total_usage(
             self._get_all_usage(include_open=True,
                                 allow_gaps=True,
-                                only_nodes=[self.redpanda.nodes[0]]))
+                                only_nodes=[self.funes.nodes[0]]))
         assert usage_post_restart >= usage_pre_restart, f"Usage post restart: {usage_post_restart} Usage pre restart: {usage_pre_restart}"
 
     @cluster(num_nodes=3)
@@ -418,7 +418,7 @@ class UsageTest(RedpandaTest):
                 assert (r.end - r.begin) == self.window_interval
 
 
-class UsageTestCloudStorageMetrics(RedpandaTest):
+class UsageTestCloudStorageMetrics(FunesTest):
     message_size = 32 * 1024  # 32KiB
     log_segment_size = 256 * 1024  # 256KiB
     produce_byte_rate_per_ntp = 512 * 1024  # 512 KiB
@@ -445,7 +445,7 @@ class UsageTestCloudStorageMetrics(RedpandaTest):
             fast_uploads=True)
 
         # Parameters to ensure timely reporting of cloud usage stats via
-        # the kafka::usage_manager
+        # the sql::usage_manager
         extra_rp_conf = dict(health_monitor_max_metadata_age=2000,
                              enable_usage=True,
                              usage_num_windows=30,
@@ -458,8 +458,8 @@ class UsageTestCloudStorageMetrics(RedpandaTest):
                              extra_rp_conf=extra_rp_conf,
                              si_settings=self.si_settings)
 
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
         self.s3_port = self.si_settings.cloud_storage_api_endpoint_port
 
     def _create_producers(self) -> list[KgoVerifierProducer]:
@@ -474,7 +474,7 @@ class UsageTestCloudStorageMetrics(RedpandaTest):
                              f"{bps / 1024}KiB/s on topic={topic.name}")
             producers.append(
                 KgoVerifierProducer(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic,
                                     msg_size=self.message_size,
                                     msg_count=msg_count,
@@ -499,7 +499,7 @@ class UsageTestCloudStorageMetrics(RedpandaTest):
         for p in producers:
             p.wait()
 
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
 
         def check_usage():
             # Check that the usage reporting system has reported correct values
@@ -507,7 +507,7 @@ class UsageTestCloudStorageMetrics(RedpandaTest):
                 no_archive=True)
             # Only active leader will have latest value of cs_bytes
             reported_usages = flat_map(lambda node: self.admin.get_usage(node),
-                                       self.redpanda.nodes)
+                                       self.funes.nodes)
             reported_usages = [
                 x['cloud_storage_bytes_gauge'] for x in reported_usages
             ]
@@ -515,7 +515,7 @@ class UsageTestCloudStorageMetrics(RedpandaTest):
             self.logger.info(
                 f"Expected {manifest_usage} bytes of cloud storage usage")
             self.logger.info(
-                f"Max reported usages via kafka/usage_manager: {max(reported_usages)}"
+                f"Max reported usages via sql/usage_manager: {max(reported_usages)}"
             )
             return manifest_usage in reported_usages
 

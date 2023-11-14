@@ -530,13 +530,13 @@ service::do_collect_node_health_report(get_node_health_request req) {
           .error = map_health_monitor_error_code(res.error())};
     }
     auto report = std::move(res.value());
-    // clear all revision ids to prevent sending them to old versioned redpanda
+    // clear all revision ids to prevent sending them to old versioned funes
     // nodes
     if (req.decoded_version > get_node_health_request::revision_id_version) {
         clear_partition_revisions(report);
     }
     // clear all partition sizes to prevent sending them to old versioned
-    // redpanda nodes
+    // funes nodes
     if (req.decoded_version > get_node_health_request::size_bytes_version) {
         clear_partition_sizes(report);
     }
@@ -558,7 +558,7 @@ service::do_get_cluster_health_report(get_cluster_health_request req) {
           .error = map_health_monitor_error_code(res.error())};
     }
     auto report = std::move(res.value());
-    // clear all revision ids to prevent sending them to old versioned redpanda
+    // clear all revision ids to prevent sending them to old versioned funes
     // nodes
     if (req.decoded_version > get_cluster_health_request::revision_id_version) {
         for (auto& r : report.node_reports) {
@@ -567,7 +567,7 @@ service::do_get_cluster_health_report(get_cluster_health_request req) {
     }
 
     // clear all partition sizes to prevent sending them to old versioned
-    // redpanda nodes
+    // funes nodes
     if (req.decoded_version > get_cluster_health_request::size_bytes_version) {
         for (auto& r : report.node_reports) {
             clear_partition_sizes(r);

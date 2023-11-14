@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/segment_chunk_api.h"
@@ -75,7 +75,7 @@ ss::future<> segment_chunks::start() {
     for (const auto& [koff, file_offset] : ix) {
         vlog(
           _ctxlog.trace,
-          "adding chunk metadata at file offset: {} [kafka offset {}]",
+          "adding chunk metadata at file offset: {} [sql offset {}]",
           file_offset,
           koff);
         _chunks[file_offset] = segment_chunk{

@@ -18,9 +18,9 @@ import (
 func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "topic",
-		Short: "Create, delete, produce to and consume from Redpanda topics",
+		Short: "Create, delete, produce to and consume from Funes topics",
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	cmd.AddCommand(
 		newAddPartitionsCommand(fs, p),
 		newAlterConfigCommand(fs, p),

@@ -78,7 +78,7 @@ public:
     }
 
     bool is_valid_batch_crc() const {
-        // crc is calculated as a uint32_t but because of kafka we carry around
+        // crc is calculated as a uint32_t but because of sql we carry around
         // a signed type in the batch structure
         return (uint32_t)_header.crc == _crc.value();
     }

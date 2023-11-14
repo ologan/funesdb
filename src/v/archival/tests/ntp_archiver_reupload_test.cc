@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "archival/tests/service_fixture.h"
@@ -23,7 +23,7 @@ using namespace archival;
 
 inline ss::logger test_log("test");
 
-static const auto manifest_namespace = model::ns("kafka");
+static const auto manifest_namespace = model::ns("sql");
 static const auto manifest_topic = model::topic("test-topic");
 static const auto manifest_partition = model::partition_id(42);
 static const auto manifest_ntp = model::ntp(
@@ -50,7 +50,7 @@ static void verify_stm_manifest(
 
 static constexpr std::string_view misaligned_lco = R"json({
 "version": 1,
-"namespace": "kafka",
+"namespace": "sql",
 "topic": "test-topic",
 "partition": 42,
 "revision": 0,
@@ -81,7 +81,7 @@ static constexpr std::string_view misaligned_lco = R"json({
 
 static constexpr std::string_view gap_manifest = R"json({
 "version": 1,
-"namespace": "kafka",
+"namespace": "sql",
 "topic": "test-topic",
 "partition": 42,
 "revision": 0,

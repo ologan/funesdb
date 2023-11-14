@@ -46,17 +46,17 @@ partition_allocator::partition_allocator(
   config::binding<std::optional<int32_t>> fds_per_partition,
   config::binding<uint32_t> partitions_per_shard,
   config::binding<uint32_t> partitions_reserve_shard0,
-  config::binding<std::vector<ss::sstring>> internal_kafka_topics,
+  config::binding<std::vector<ss::sstring>> internal_sql_topics,
   config::binding<bool> enable_rack_awareness)
   : _state(std::make_unique<allocation_state>(
-    partitions_per_shard, partitions_reserve_shard0, internal_kafka_topics))
+    partitions_per_shard, partitions_reserve_shard0, internal_sql_topics))
   , _allocation_strategy(simple_allocation_strategy())
   , _members(members)
   , _memory_per_partition(std::move(memory_per_partition))
   , _fds_per_partition(std::move(fds_per_partition))
   , _partitions_per_shard(std::move(partitions_per_shard))
   , _partitions_reserve_shard0(std::move(partitions_reserve_shard0))
-  , _internal_kafka_topics(std::move(internal_kafka_topics))
+  , _internal_sql_topics(std::move(internal_sql_topics))
   , _enable_rack_awareness(std::move(enable_rack_awareness)) {}
 
 allocation_constraints partition_allocator::default_constraints(
@@ -114,7 +114,7 @@ result<allocated_partition> partition_allocator::allocate_new_partition(
  * Check cluster-wide limits on total partition count vs available
  * system resources.  This is the 'sanity' check that the user doesn't
  * try and create a million partitions with only 8192 file handles, etc.
- * Without this check, a partition creation command could make a redpanda
+ * Without this check, a partition creation command could make a funes
  * cluster unavailable by exhausting available resources.
  *
  * - These limits are heuristic, and are configurable/disable-able via
@@ -170,7 +170,7 @@ std::error_code partition_allocator::check_cluster_limits(
             min_core_count = std::min(min_core_count, b_properties.cores);
         }
 
-        // In redpanda <= 21.11.x, available_memory_gb and available_disk_gb
+        // In funes <= 21.11.x, available_memory_gb and available_disk_gb
         // are not populated.  If they're zero we skip the check later.
         if (min_memory_bytes == 0) {
             min_memory_bytes = b_properties.available_memory_gb * 1_GiB;
@@ -455,7 +455,7 @@ partition_allocator::apply_snapshot(const controller_snapshot& snap) {
     auto new_state = std::make_unique<allocation_state>(
       _partitions_per_shard,
       _partitions_reserve_shard0,
-      _internal_kafka_topics);
+      _internal_sql_topics);
 
     for (const auto& [id, node] : snap.members.nodes) {
         allocation_node::state state;

@@ -16,10 +16,10 @@ from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.services.rpk_producer import RpkProducer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 
-class RpkGroupCommandsTest(RedpandaTest):
+class RpkGroupCommandsTest(FunesTest):
     def __init__(self, test_ctx, *args, **kwargs):
         self._ctx = test_ctx
         super(RpkGroupCommandsTest, self).__init__(
@@ -29,7 +29,7 @@ class RpkGroupCommandsTest(RedpandaTest):
         )
 
     def _rpk_produce_to_topic(self, topic, n=10, create_topic=True):
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
         if create_topic:
             self.rpk.create_topic(topic)
 
@@ -41,7 +41,7 @@ class RpkGroupCommandsTest(RedpandaTest):
         self.topic_spec = TopicSpec(partition_count=p_cnt, name=topic_name)
         self.client().create_topic(specs=self.topic_spec)
         # produce some messages to the topic
-        self.producer = RpkProducer(self._ctx, self.redpanda,
+        self.producer = RpkProducer(self._ctx, self.funes,
                                     self.topic_spec.name, 128, 500)
         self.producer.start()
 
@@ -83,10 +83,10 @@ class RpkGroupCommandsTest(RedpandaTest):
         self.setup_producer(3, topic)
 
         group_1 = "test-g1"
-        consumer = RpkConsumer(self._ctx, self.redpanda, topic, group=group_1)
+        consumer = RpkConsumer(self._ctx, self.funes, topic, group=group_1)
         consumer.start()
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         wait_until(lambda: rpk.group_describe(group_1).state == "Stable",
                    timeout_sec=30,
@@ -99,7 +99,7 @@ class RpkGroupCommandsTest(RedpandaTest):
     def test_empty_group_describe(self):
         """
         Check for group describe when the group is empty.
-        Reproduce: https://github.com/redpanda-data/redpanda/commit/ab6a99162056e2980ebf873ed7192878419769ae
+        Reproduce: https://github.com/redpanda-data/funes/commit/ab6a99162056e2980ebf873ed7192878419769ae
         """
         topic = "test_group"
         self._rpk_produce_to_topic(topic, 20)

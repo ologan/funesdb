@@ -40,9 +40,9 @@ struct compat_version {
 template<typename T, typename Version, typename CompatVersion>
 struct envelope {
     using value_t = T;
-    static constexpr auto redpanda_serde_version = Version::v;
-    static constexpr auto redpanda_serde_compat_version = CompatVersion::v;
-    static constexpr auto redpanda_inherits_from_envelope = true;
+    static constexpr auto funes_serde_version = Version::v;
+    static constexpr auto funes_serde_compat_version = CompatVersion::v;
+    static constexpr auto funes_inherits_from_envelope = true;
 
     // The operator definitions below may look strange, but they have the role
     // of ensuring that serde types (which inherit from envelope) do not use
@@ -86,10 +86,10 @@ template<typename T, typename Version, typename CompatVersion>
 struct checksum_envelope {
     bool operator==(checksum_envelope const&) const = default;
     using value_t = T;
-    static constexpr auto redpanda_serde_version = Version::v;
-    static constexpr auto redpanda_serde_compat_version = CompatVersion::v;
-    static constexpr auto redpanda_inherits_from_envelope = true;
-    static constexpr auto redpanda_serde_build_checksum = true;
+    static constexpr auto funes_serde_version = Version::v;
+    static constexpr auto funes_serde_compat_version = CompatVersion::v;
+    static constexpr auto funes_inherits_from_envelope = true;
+    static constexpr auto funes_serde_build_checksum = true;
 };
 
 // Overhead of the envelope in bytes: a checksummed envelope is
@@ -99,15 +99,15 @@ static constexpr std::size_t checksum_envelope_header_size
 
 template<typename T, typename Version = const serde::version_t&>
 concept is_envelope = requires {
-    { T::redpanda_serde_version } -> std::same_as<Version>;
-    { T::redpanda_serde_compat_version } -> std::same_as<Version>;
+    { T::funes_serde_version } -> std::same_as<Version>;
+    { T::funes_serde_compat_version } -> std::same_as<Version>;
 };
 
 template<typename T>
 concept is_checksum_envelope = is_envelope<T>
-                               && T::redpanda_serde_build_checksum;
+                               && T::funes_serde_build_checksum;
 
 template<typename T>
-concept inherits_from_envelope = T::redpanda_inherits_from_envelope;
+concept inherits_from_envelope = T::funes_inherits_from_envelope;
 
 } // namespace serde

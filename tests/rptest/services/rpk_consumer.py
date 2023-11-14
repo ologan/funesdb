@@ -25,7 +25,7 @@ MSG_TOKEN = "_"
 class RpkConsumer(BackgroundThreadService):
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic,
                  partitions=[],
                  offset='oldest',
@@ -42,7 +42,7 @@ class RpkConsumer(BackgroundThreadService):
                  tls_cert: Optional[tls.Certificate] = None,
                  tls_enabled: Optional[bool] = None):
         super(RpkConsumer, self).__init__(context, num_nodes=1)
-        self._redpanda = redpanda
+        self._funes = funes
         self._topic = topic
         self._partitions = partitions
         self._offset = offset
@@ -84,9 +84,9 @@ class RpkConsumer(BackgroundThreadService):
             node.account.mkdirs(os.path.dirname(self._tls_cert.ca.crt))
             node.account.copy_to(self._tls_cert.ca.crt, self._tls_cert.ca.crt)
 
-        # if testing redpanda cloud, override with default superuser
-        if hasattr(redpanda, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
-            security_config = redpanda.security_config()
+        # if testing funes cloud, override with default superuser
+        if hasattr(funes, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
+            security_config = funes.security_config()
             self._mechanism = security_config.get('sasl_mechanism', None)
             self._user = security_config.get('sasl_plain_username', None)
             self._pass = security_config.get('sasl_plain_password', None)
@@ -106,7 +106,7 @@ class RpkConsumer(BackgroundThreadService):
                     break
 
                 err = e
-                self._redpanda.logger.error(
+                self._funes.logger.error(
                     f"Consumer failed with error: '{e}'. Retrying in {self._retry_sec} seconds."
                 )
                 attempt += 1
@@ -120,7 +120,7 @@ class RpkConsumer(BackgroundThreadService):
             self.error = err
 
     def stop_node(self, node):
-        self._redpanda.logger.info(
+        self._funes.logger.info(
             f"Stopping RpkConsumer on ({node.account.hostname})")
         self._stopping.set()
         try:
@@ -134,8 +134,8 @@ class RpkConsumer(BackgroundThreadService):
     def _consume(self, node):
         # NOTE: since this runs on separate nodes from the service, the binary
         # path used by each node may differ from that returned by
-        # redpanda.find_binary(), e.g. if using a RedpandaInstaller.
-        rp_install_path_root = self._redpanda._context.globals.get(
+        # funes.find_binary(), e.g. if using a FunesInstaller.
+        rp_install_path_root = self._funes._context.globals.get(
             "rp_install_path_root", None)
         rpk_binary = f"{rp_install_path_root}/bin/rpk"
         # Important to use --read-committed, because otherwise the output parsing would have
@@ -143,7 +143,7 @@ class RpkConsumer(BackgroundThreadService):
         cmd = '%s topic consume --read-committed --offset %s --pretty-print=false --brokers %s %s' % (
             rpk_binary,
             self._offset,
-            self._redpanda.brokers(),
+            self._funes.brokers(),
             self._topic,
         )
 

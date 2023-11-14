@@ -35,7 +35,7 @@ const (
 	denyHostFlag       = "deny-host"
 	operationFlag      = "operation"
 
-	kafkaCluster = "kafka-cluster"
+	sqlCluster = "sql-cluster"
 )
 
 var (
@@ -218,10 +218,10 @@ func (a *acls) backcompat(list bool) error {
 	}
 
 	if parsedType == kmsg.ACLResourceTypeCluster {
-		if a.resourceName != "" && a.resourceName != kafkaCluster {
+		if a.resourceName != "" && a.resourceName != sqlCluster {
 			return fmt.Errorf("invalid name for %s", resourceNameFlag)
 		}
-		a.resourceName = kafkaCluster
+		a.resourceName = sqlCluster
 	}
 	if len(a.resourceName) == 0 {
 		return fmt.Errorf("invalid empty %s", resourceNameFlag)

@@ -14,8 +14,8 @@
 #include "cluster/persisted_stm.h"
 #include "config/configuration.h"
 #include "features/feature_table.h"
-#include "kafka/protocol/errors.h"
-#include "kafka/types.h"
+#include "sql/protocol/errors.h"
+#include "sql/types.h"
 #include "model/fundamental.h"
 #include "model/record.h"
 #include "model/timestamp.h"
@@ -70,20 +70,20 @@ struct tm_transaction {
     };
 
     struct tx_group {
-        kafka::group_id group_id;
+        sql::group_id group_id;
         model::term_id etag;
     };
 
     // id of an application executing a transaction. in the early
-    // drafts of Kafka protocol transactional_id used to be named
+    // drafts of SQL protocol transactional_id used to be named
     // application_id
-    kafka::transactional_id id;
+    sql::transactional_id id;
     // another misnomer in fact producer_identity identifies a
     // session of transactional_id'ed application as any given
     // moment there maybe only one session per tx.id
     model::producer_identity pid;
     // Inforamtion about last producer_identity who worked with this
-    // transaction. It is needed for restore producer after redpanda failures
+    // transaction. It is needed for restore producer after funes failures
     model::producer_identity last_pid;
     // tx_seq identifues a transactions within a session so a
     // triple (transactional_id, producer_identity, tx_seq) uniquely
@@ -129,7 +129,7 @@ struct tm_transaction {
         }
     }
 
-    std::string_view get_kafka_status() const {
+    std::string_view get_sql_status() const {
         switch (status) {
         case tx_status::ongoing: {
             if (groups.empty() && partitions.empty()) {
@@ -144,8 +144,8 @@ struct tm_transaction {
         case tx_status::aborting:
             return "PrepareAbort";
         case tx_status::killed:
-            // https://issues.apache.org/jira/browse/KAFKA-6119
-            // https://github.com/apache/kafka/commit/501a5e262702bcc043724cb9e1f536e16a66399e
+            // https://issues.apache.org/jira/browse/SQL-6119
+            // https://github.com/apache/sql/commit/501a5e262702bcc043724cb9e1f536e16a66399e
             return "PrepareEpochFence";
         case tx_status::ready:
             return "Empty";
@@ -176,7 +176,7 @@ struct tm_transaction {
 class tm_stm_cache_entry {
 public:
     model::term_id term;
-    absl::node_hash_map<kafka::transactional_id, tm_transaction> txes;
+    absl::node_hash_map<sql::transactional_id, tm_transaction> txes;
 };
 
 class tm_stm_cache {
@@ -193,28 +193,28 @@ public:
 
     void clear_log();
 
-    std::optional<tm_transaction> find(model::term_id, kafka::transactional_id);
+    std::optional<tm_transaction> find(model::term_id, sql::transactional_id);
 
-    std::optional<tm_transaction> find_mem(kafka::transactional_id tx_id);
+    std::optional<tm_transaction> find_mem(sql::transactional_id tx_id);
 
-    std::optional<tm_transaction> find_log(kafka::transactional_id tx_id);
+    std::optional<tm_transaction> find_log(sql::transactional_id tx_id);
 
     void set_log(tm_transaction);
     // It is important that we unlink entries from _log_txes before
     // destroying the entries themselves so that the safe link does not
     // assert.
-    void erase_log(kafka::transactional_id);
+    void erase_log(sql::transactional_id);
 
     fragmented_vector<tm_transaction> get_log_transactions();
 
-    void set_mem(model::term_id, kafka::transactional_id, tm_transaction);
+    void set_mem(model::term_id, sql::transactional_id, tm_transaction);
 
-    void erase_mem(kafka::transactional_id);
+    void erase_mem(sql::transactional_id);
 
     template<typename Func>
-    absl::btree_set<kafka::transactional_id>
+    absl::btree_set<sql::transactional_id>
     filter_all_txid_by_tx(Func&& func) {
-        absl::btree_set<kafka::transactional_id> ids;
+        absl::btree_set<sql::transactional_id> ids;
         for (auto& [id, entry] : _log_txes) {
             if (func(entry.tx)) {
                 ids.insert(id);
@@ -265,7 +265,7 @@ private:
     // so the cache groups the txes by the leader's term to preserve
     // last tx per each term
     absl::node_hash_map<model::term_id, tm_stm_cache_entry> _state;
-    absl::node_hash_map<kafka::transactional_id, tx_wrapper> _log_txes;
+    absl::node_hash_map<sql::transactional_id, tx_wrapper> _log_txes;
     // when a node is a leader _mem_term contains its term to let find_mem
     // fetch txes without specifying it
     std::optional<model::term_id> _mem_term;
@@ -300,14 +300,14 @@ struct tm_transaction_v1 {
     };
 
     struct tx_group {
-        kafka::group_id group_id;
+        sql::group_id group_id;
         model::term_id etag;
     };
 
     // id of an application executing a transaction. in the early
-    // drafts of Kafka protocol transactional_id used to be named
+    // drafts of SQL protocol transactional_id used to be named
     // application_id
-    kafka::transactional_id id;
+    sql::transactional_id id;
     // another misnomer in fact producer_identity identifies a
     // session of transactional_id'ed application as any given
     // moment there maybe only one session per tx.id
@@ -387,11 +387,11 @@ struct tm_transaction_v0 {
     };
 
     struct tx_group {
-        kafka::group_id group_id;
+        sql::group_id group_id;
         model::term_id etag;
     };
 
-    kafka::transactional_id id;
+    sql::transactional_id id;
     model::producer_identity pid;
     model::tx_seq tx_seq;
     model::term_id etag;

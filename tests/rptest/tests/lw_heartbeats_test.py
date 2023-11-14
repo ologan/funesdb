@@ -13,8 +13,8 @@ import time
 from ducktape.utils.util import wait_until
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import MetricsEndpoint
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import MetricsEndpoint
+from rptest.tests.funes_test import FunesTest
 
 
 @dataclass
@@ -23,16 +23,16 @@ class HeartbeatMetrics:
     full_beats: int
 
 
-class LwHeartbeatsTest(RedpandaTest):
+class LwHeartbeatsTest(FunesTest):
     def get_heartbeat_metrics(self):
         lw_beats = sum([
-            sample.value for sample in self.redpanda.metrics_sample(
+            sample.value for sample in self.funes.metrics_sample(
                 "lightweight_heartbeat_requests",
                 metrics_endpoint=MetricsEndpoint.METRICS).samples
         ])
 
         full_beats = sum([
-            sample.value for sample in self.redpanda.metrics_sample(
+            sample.value for sample in self.funes.metrics_sample(
                 "full_heartbeat_requests",
                 metrics_endpoint=MetricsEndpoint.METRICS).samples
         ])

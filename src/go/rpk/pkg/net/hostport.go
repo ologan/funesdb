@@ -102,7 +102,7 @@ func splitSchemeHostPort(h string) (scheme, host, port string, err error) {
 //
 // For schemes, we relax RFC3986 section 3.1 by also allowing underscores after
 // the first alphabetic character. This allows us to parse "PLAINTEXT_HOST",
-// which is technically invalid, but which Kafka uses.
+// which is technically invalid, but which SQL uses.
 // https://datatracker.ietf.org/doc/html/rfc3986#section-3.1
 var schemeHostPortRe = regexp.MustCompile(`^(?:([a-zA-Z][a-zA-Z0-9+._-]*)://)?(.*?)(?::(\d+))?(?:/)?$`)
 

@@ -1,17 +1,17 @@
 # Copyright 2023 Redpanda Data, Inc.
 #
-# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# Licensed as a Funes Enterprise file under the Funes Community
 # License (the "License"); you may not use this file except in compliance with
 # the License. You may obtain a copy of the License at
 #
-# https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+# https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
 
 from rptest.clients.rpk import RpkTool
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierSeqConsumer
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.services.redpanda import MetricsEndpoint, SISettings
+from rptest.tests.funes_test import FunesTest
+from rptest.services.funes import MetricsEndpoint, SISettings
 from rptest.util import firewall_blocked, wait_until_result
 from rptest.utils.si_utils import BucketView, NTPR
 from rptest.clients.types import TopicSpec
@@ -54,7 +54,7 @@ def cloud_storage_usage_check(test):
 
     def check():
         try:
-            bucket_view = BucketView(test.redpanda)
+            bucket_view = BucketView(test.funes)
             manifest_usage = bucket_view.cloud_log_size_for_ntp(test.topic, 0)
             test.logger.debug(
                 f"Cloud log usage inferred from manifests: {manifest_usage}")
@@ -162,7 +162,7 @@ class PartitionStatusValidator:
         if not manifest:
             return "cloud_log_start_offset" not in status and "cloud_log_last_offset" not in status
 
-        cloud_log_start = BucketView.kafka_start_offset(manifest)
+        cloud_log_start = BucketView.sql_start_offset(manifest)
         reported_start = status.get("cloud_log_start_offset", None)
 
         if cloud_log_start != reported_start:
@@ -171,7 +171,7 @@ class PartitionStatusValidator:
             )
             return False
 
-        cloud_log_last = BucketView.kafka_last_offset(manifest)
+        cloud_log_last = BucketView.sql_last_offset(manifest)
         reported_last = status.get("cloud_log_last_offset", None)
 
         if cloud_log_last != reported_last:
@@ -184,7 +184,7 @@ class PartitionStatusValidator:
 
 
 def cloud_storage_status_endpoint_check(test):
-    bucket_view = BucketView(test.redpanda)
+    bucket_view = BucketView(test.funes)
     reported_status_sliding_window = deque(maxlen=5)
     validator = PartitionStatusValidator(test)
 
@@ -197,7 +197,7 @@ def cloud_storage_status_endpoint_check(test):
                 test.topic, 0)
             reported_status_sliding_window.append(status)
 
-            ntpr = NTPR(ns="kafka",
+            ntpr = NTPR(ns="sql",
                         topic=test.topic,
                         partition=0,
                         revision=test._initial_revision)
@@ -218,7 +218,7 @@ def cloud_storage_status_endpoint_check(test):
         retry_on_exc=True)
 
 
-class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
+class CloudStorageTimingStressTest(FunesTest, PartitionMovementMixin):
     """
     The tests in this class are intended to be generic cloud storage test.
     They use a workload that enables all operations on the cloud storage log
@@ -270,8 +270,8 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
                              log_level="trace",
                              si_settings=self.si_settings)
 
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
         self.checks = []
 
     def _create_producer(self,
@@ -285,7 +285,7 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
 
         key_set_cardinality = 10 if 'compact' in cleanup_policy else None
         return KgoVerifierProducer(self.test_context,
-                                   self.redpanda,
+                                   self.funes,
                                    self.topic,
                                    msg_size=self.message_size,
                                    msg_count=msg_count,
@@ -304,7 +304,7 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
             f"Will consume at {bps / self.mib}MiB/s from topic={self.topic}")
 
         return KgoVerifierSeqConsumer(self.test_context,
-                                      self.redpanda,
+                                      self.funes,
                                       self.topic,
                                       msg_size=self.message_size,
                                       max_throughput_mb=int(bps // self.mib),
@@ -319,7 +319,7 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
 
             manifest = None
             try:
-                bucket = BucketView(self.redpanda)
+                bucket = BucketView(self.funes)
                 manifest = bucket.manifest_for_ntpr(self.topic, partition.id,
                                                     self._initial_revision)
             except Exception as e:
@@ -330,14 +330,14 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
             top_segment = max(manifest['segments'].values(),
                               key=lambda seg: seg['base_offset'])
             uploaded_raft_offset = top_segment['committed_offset']
-            uploaded_kafka_offset = uploaded_raft_offset - top_segment[
+            uploaded_sql_offset = uploaded_raft_offset - top_segment[
                 'delta_offset_end']
             self.logger.info(
-                f"Remote HWM {uploaded_kafka_offset} (raft {uploaded_raft_offset}), local hwm {hwm}"
+                f"Remote HWM {uploaded_sql_offset} (raft {uploaded_raft_offset}), local hwm {hwm}"
             )
 
             # -1 because uploaded offset is inclusive, hwm is exclusive
-            if uploaded_kafka_offset < (hwm - 1):
+            if uploaded_sql_offset < (hwm - 1):
                 return False
 
         return True
@@ -393,7 +393,7 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
             retry_on_exc=True)
 
     def prologue(self, cleanup_policy):
-        self.redpanda.set_cluster_config_to_null(
+        self.funes.set_cluster_config_to_null(
             "cloud_storage_manifest_max_upload_interval_sec")
 
         self.topic_spec.cleanup_policy = cleanup_policy
@@ -423,14 +423,14 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
         self.producer.wait()
         self.consumer.wait()
 
-        assert self.redpanda.metric_sum(
+        assert self.funes.metric_sum(
             "vectorized_cloud_storage_successful_downloads_total") > 0
 
-        assert self.redpanda.metric_sum(
-            "redpanda_cloud_storage_spillover_manifest_uploads_total",
+        assert self.funes.metric_sum(
+            "funes_cloud_storage_spillover_manifest_uploads_total",
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS) > 0
 
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
         bucket_view.assert_segments_deleted(self.topic, partition=0)
 
         if "compact" in cleanup_policy:
@@ -440,8 +440,8 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
         else:
             # Adjacent segment merging is disabled on compacted topics, so
             # check if it occurred only on non-compacted topics.
-            assert self.redpanda.metric_sum(
-                "redpanda_cloud_storage_jobs_local_segment_reuploads",
+            assert self.funes.metric_sum(
+                "funes_cloud_storage_jobs_local_segment_reuploads",
                 metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS) > 0
 
     def register_check(self, name, check_fn):
@@ -487,7 +487,7 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
         num_nodes=5,
         log_allow_list=[
             # Reader might hit the tail of the log that is being reaped
-            # https://github.com/redpanda-data/redpanda/issues/10851
+            # https://github.com/redpanda-data/funes/issues/10851
             r"Error in hydraton loop: .*Connection reset by peer",
             r"failed to hydrate chunk.*Connection reset by peer",
             r"failed to hydrate chunk.*NotFound",
@@ -511,7 +511,7 @@ class CloudStorageTimingStressTest(RedpandaTest, PartitionMovementMixin):
     @cluster(
         num_nodes=5,
         log_allow_list=[
-            # https://github.com/redpanda-data/redpanda/issues/10851
+            # https://github.com/redpanda-data/funes/issues/10851
             r"Error in hydraton loop: .*Connection reset by peer",
             r"failed to hydrate chunk.*Connection reset by peer",
             r"failed to hydrate chunk.*NotFound",

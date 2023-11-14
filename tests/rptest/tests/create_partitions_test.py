@@ -10,12 +10,12 @@ import random
 
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 from rptest.clients.types import TopicSpec
 
 
-class CreatePartitionsTest(RedpandaTest):
+class CreatePartitionsTest(FunesTest):
     def __init__(self, test_context):
         super().__init__(test_context=test_context,
                          extra_rp_conf={

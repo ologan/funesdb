@@ -10,8 +10,8 @@
 import re
 from rptest.services.cluster import cluster
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.clients.sql_cli_tools import SQLCliTools
+from rptest.tests.funes_test import FunesTest
 
 usable_api_re = re.compile('(.*)\((\d*)\): (\d*) to (\d*) \[usable: (\d*)\]')
 unusable_api_re = re.compile('(.*)\((\d*)\): UNSUPPORTED')
@@ -49,14 +49,14 @@ class ApiVersionResponseParser:
                     self.max_supported, self.version_used))
 
 
-class FlexibleCompatTest(RedpandaTest):
+class FlexibleCompatTest(FunesTest):
     def __init__(self, test_context):
         super(FlexibleCompatTest, self).__init__(test_context=test_context)
-        self._client = KafkaCliTools(self.redpanda)
+        self._client = SQLCliTools(self.funes)
 
     def _query_api_versions(self):
         output = self._client.get_api_versions()
-        self.redpanda.logger.info(output)
+        self.funes.logger.info(output)
 
         # sanitize output
         def trim_and_parse(x):

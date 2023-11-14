@@ -7,7 +7,7 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
 
-// package adminapi provides a client to interact with Redpanda's admin server.
+// package adminapi provides a client to interact with Funes's admin server.
 package adminapi
 
 import (
@@ -75,7 +75,7 @@ type GenericErrorBody struct {
 	Code    int    `json:"code"`
 }
 
-// AdminAPI is a client to interact with Redpanda's admin server.
+// AdminAPI is a client to interact with Funes's admin server.
 type AdminAPI struct {
 	urls                []string
 	brokerIDToUrlsMutex sync.Mutex
@@ -89,9 +89,9 @@ type AdminAPI struct {
 
 func getAuth(p *config.RpkProfile) (Auth, error) {
 	switch {
-	case p.KafkaAPI.SASL != nil && p.KafkaAPI.SASL.Mechanism != CloudOIDC:
-		return &BasicAuth{Username: p.KafkaAPI.SASL.User, Password: p.KafkaAPI.SASL.Password}, nil
-	case p.KafkaAPI.SASL != nil && p.KafkaAPI.SASL.Mechanism == CloudOIDC:
+	case p.SQLAPI.SASL != nil && p.SQLAPI.SASL.Mechanism != CloudOIDC:
+		return &BasicAuth{Username: p.SQLAPI.SASL.User, Password: p.SQLAPI.SASL.Password}, nil
+	case p.SQLAPI.SASL != nil && p.SQLAPI.SASL.Mechanism == CloudOIDC:
 		a := p.CurrentAuth()
 		if a == nil || len(a.AuthToken) == 0 {
 			return nil, errors.New("no current auth found, please login with 'rpk cloud login'")
@@ -183,7 +183,7 @@ func newAdminAPI(urls []string, auth Auth, tlsConfig *tls.Config, forCloud bool)
 	// Use a retrying HTTP client to handle that gracefully.
 	client := pester.New()
 
-	// Backoff is the default redpanda raft election timeout: this enables us
+	// Backoff is the default funes raft election timeout: this enables us
 	// to cleanly retry on 503s due to leadership changes in progress.
 	client.Backoff = func(retry int) time.Duration {
 		maxJitter := 100
@@ -285,7 +285,7 @@ func (a *AdminAPI) mapBrokerIDsToURLs(ctx context.Context) {
 
 // GetLeaderID returns the broker ID of the leader of the Admin API.
 func (a *AdminAPI) GetLeaderID(ctx context.Context) (*int, error) {
-	pa, err := a.GetPartition(ctx, "redpanda", "controller", 0)
+	pa, err := a.GetPartition(ctx, "funes", "controller", 0)
 	if pa.LeaderID == -1 {
 		return nil, ErrNoAdminAPILeader
 	}
@@ -346,7 +346,7 @@ func (a *AdminAPI) sendAny(ctx context.Context, method, path string, body, into 
 	return err
 }
 
-// sendToLeader sends a single request to the leader of the Admin API for Redpanda >= 21.11.1
+// sendToLeader sends a single request to the leader of the Admin API for Funes >= 21.11.1
 // otherwise, it broadcasts the request.
 func (a *AdminAPI) sendToLeader(
 	ctx context.Context, method, path string, body, into interface{},
@@ -387,7 +387,7 @@ func (a *AdminAPI) sendToLeader(
 			// Got a leader ID, check if it's resolvable
 			leaderURL, err = a.brokerIDToURL(ctx, *leaderID)
 			if err != nil && len(a.brokerIDToUrls) == 0 {
-				// Could not map any IDs: probably this is an old redpanda
+				// Could not map any IDs: probably this is an old funes
 				// with no node_config endpoint.  Fall back to broadcast.
 				return a.sendAll(ctx, method, path, body, into)
 			} else if err == nil {
@@ -457,7 +457,7 @@ func (a *AdminAPI) sendOne(
 // sendAll sends a request to all URLs in the admin client. The first successful
 // response will be unmarshalled into `into` if it is non-nil.
 //
-// As of v21.11.1, the Redpanda admin API redirects requests to the leader based
+// As of v21.11.1, the Funes admin API redirects requests to the leader based
 // on certain assumptions about all nodes listening on the same admin port, and
 // that the admin API is available on the same IP address as the internal RPC
 // interface.
@@ -465,7 +465,7 @@ func (a *AdminAPI) sendOne(
 // with each other about where they're actually listening for the admin API.
 //
 // Unfortunately these assumptions do not match all environments in which
-// Redpanda is deployed, hence, we need to reintroduce the sendAll method and
+// Funes is deployed, hence, we need to reintroduce the sendAll method and
 // broadcast on writes to the Admin API.
 func (a *AdminAPI) sendAll(rootCtx context.Context, method, path string, body, into interface{}) error {
 	var (

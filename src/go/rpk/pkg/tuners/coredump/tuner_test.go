@@ -19,7 +19,7 @@ import (
 )
 
 func TestTune(t *testing.T) {
-	testDir := "/var/lib/redpanda/coredumps"
+	testDir := "/var/lib/funes/coredumps"
 	tests := []struct {
 		name string
 		pre  func(afero.Fs) error

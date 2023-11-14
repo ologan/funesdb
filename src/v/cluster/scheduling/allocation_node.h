@@ -36,7 +36,7 @@ public:
       uint32_t /*cpus*/,
       config::binding<uint32_t> /*partitions_per_shard*/,
       config::binding<uint32_t> /*partitions_reserve_shard0*/,
-      config::binding<std::vector<ss::sstring>> /*internal_kafka_topics*/);
+      config::binding<std::vector<ss::sstring>> /*internal_sql_topics*/);
 
     allocation_node(allocation_node&& o) noexcept = default;
     allocation_node& operator=(allocation_node&&) = delete;
@@ -151,7 +151,7 @@ private:
 
     config::binding<uint32_t> _partitions_per_shard;
     config::binding<uint32_t> _partitions_reserve_shard0;
-    config::binding<std::vector<ss::sstring>> _internal_kafka_topics;
+    config::binding<std::vector<ss::sstring>> _internal_sql_topics;
     // Keep track of how much weight we applied to shard0,
     // to enable runtime updates
     int32_t _shard0_reserved{0};

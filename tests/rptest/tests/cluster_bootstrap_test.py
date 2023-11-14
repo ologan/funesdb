@@ -12,26 +12,26 @@ from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
 from requests.exceptions import ConnectionError
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
-from rptest.services.redpanda_installer import (RedpandaInstaller,
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST
+from rptest.services.funes_installer import (FunesInstaller,
                                                 wait_for_num_versions)
 from rptest.util import expect_exception
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 
-def set_seeds_for_cluster(redpanda, num_seeds):
-    seeds = [redpanda.nodes[i] for i in range(num_seeds)]
-    redpanda.set_seed_servers(seeds)
+def set_seeds_for_cluster(funes, num_seeds):
+    seeds = [funes.nodes[i] for i in range(num_seeds)]
+    funes.set_seed_servers(seeds)
 
 
-class ClusterBootstrapNew(RedpandaTest):
+class ClusterBootstrapNew(FunesTest):
     """
     Tests verifying new cluster bootstrap in Seed Driven Cluster Bootstrap mode
     """
     def __init__(self, test_context):
         super(ClusterBootstrapNew, self).__init__(test_context=test_context,
                                                   num_brokers=3)
-        self.admin = self.redpanda._admin
+        self.admin = self.funes._admin
 
     def setUp(self):
         # Defer startup to test body.
@@ -43,31 +43,31 @@ class ClusterBootstrapNew(RedpandaTest):
         Test that empty_seed_starts_cluster=False prevents root-driven
         bootstrap from occurring.
         """
-        for node in self.redpanda.nodes:
-            self.redpanda.set_extra_node_conf(
+        for node in self.funes.nodes:
+            self.funes.set_extra_node_conf(
                 node, {"empty_seed_starts_cluster": False})
 
         # setup seed servers on the other two nodes to prevent them from joining
         # cluster point the nodes to node 0
-        for node in self.redpanda.nodes[1:]:
-            self.redpanda.set_seed_servers([self.redpanda.nodes[0]])
+        for node in self.funes.nodes[1:]:
+            self.funes.set_seed_servers([self.funes.nodes[0]])
 
         try:
-            self.redpanda.start(omit_seeds_on_idx_one=True)
+            self.funes.start(omit_seeds_on_idx_one=True)
             assert False, "Should have been unable to start"
         except ducktape.errors.TimeoutError:
             # The cluster should be unable to start.
             pass
 
-        for node in self.redpanda.nodes:
-            idx = self.redpanda.idx(node)
+        for node in self.funes.nodes:
+            idx = self.funes.idx(node)
 
             # None of the nodes was configured in a way that could get past attempting
             # to join a cluster: node 1 has no seed servers, and nodes 2,3 are not in
             # their seed servers so do not self-identify as founders
             with expect_exception(ConnectionError, lambda _: True):
                 # Try connecting to the admin API
-                self.redpanda._admin.get_cluster_uuid(node)
+                self.funes._admin.get_cluster_uuid(node)
 
     @cluster(num_nodes=3)
     @matrix(num_seeds=[1, 2, 3],
@@ -75,49 +75,49 @@ class ClusterBootstrapNew(RedpandaTest):
             empty_seed_starts_cluster=[False, True])
     def test_three_node_bootstrap(self, num_seeds, auto_assign_node_ids,
                                   empty_seed_starts_cluster):
-        set_seeds_for_cluster(self.redpanda, num_seeds)
-        for node in self.redpanda.nodes:
-            self.redpanda.set_extra_node_conf(
+        set_seeds_for_cluster(self.funes, num_seeds)
+        for node in self.funes.nodes:
+            self.funes.set_extra_node_conf(
                 node, {"empty_seed_starts_cluster": empty_seed_starts_cluster})
-        self.redpanda.start(auto_assign_node_id=auto_assign_node_ids,
+        self.funes.start(auto_assign_node_id=auto_assign_node_ids,
                             omit_seeds_on_idx_one=False)
         node_ids_per_idx = {}
-        for n in self.redpanda.nodes:
-            idx = self.redpanda.idx(n)
-            node_ids_per_idx[idx] = self.redpanda.node_id(n)
+        for n in self.funes.nodes:
+            idx = self.funes.idx(n)
+            node_ids_per_idx[idx] = self.funes.node_id(n)
 
         brokers = self.admin.get_brokers()
         assert 3 == len(brokers), f"Got {len(brokers)} brokers"
 
         # Restart our nodes and make sure our node IDs persist across restarts.
-        self.redpanda.restart_nodes(self.redpanda.nodes,
+        self.funes.restart_nodes(self.funes.nodes,
                                     auto_assign_node_id=auto_assign_node_ids,
                                     omit_seeds_on_idx_one=False)
         for idx in node_ids_per_idx:
-            n = self.redpanda.get_node(idx)
+            n = self.funes.get_node(idx)
             expected_node_id = node_ids_per_idx[idx]
-            node_id = self.redpanda.node_id(n)
+            node_id = self.funes.node_id(n)
             assert expected_node_id == node_id, f"Expected {expected_node_id} but got {node_id}"
 
 
-class ClusterBootstrapUpgrade(RedpandaTest):
+class ClusterBootstrapUpgrade(FunesTest):
     """
     Tests verifying upgrade of cluster from a pre-Seed-Driven-Bootstrap version
     """
     def __init__(self, test_context):
         super(ClusterBootstrapUpgrade,
               self).__init__(test_context=test_context, num_brokers=3)
-        self.installer = self.redpanda._installer
-        self.admin = self.redpanda._admin
+        self.installer = self.funes._installer
+        self.admin = self.funes._admin
 
     def setUp(self):
         prev_version = self.installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD)
-        # NOTE: `rpk redpanda admin brokers list` requires versions v22.1.x and
+            FunesInstaller.HEAD)
+        # NOTE: `rpk funes admin brokers list` requires versions v22.1.x and
         # above.
         _, self.oldversion_str = self.installer.install(
-            self.redpanda.nodes, prev_version)
-        set_seeds_for_cluster(self.redpanda, 3)
+            self.funes.nodes, prev_version)
+        set_seeds_for_cluster(self.funes, 3)
         super(ClusterBootstrapUpgrade, self).setUp()
 
     @cluster(num_nodes=3)
@@ -126,11 +126,11 @@ class ClusterBootstrapUpgrade(RedpandaTest):
                                                     empty_seed_starts_cluster):
         # Upgrade the cluster to begin using the new binary, but don't change
         # any configs yet.
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        self.redpanda.rolling_restart_nodes(self.redpanda.nodes)
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        self.funes.rolling_restart_nodes(self.funes.nodes)
 
         # Now update the configs.
-        self.redpanda.rolling_restart_nodes(self.redpanda.nodes,
+        self.funes.rolling_restart_nodes(self.funes.nodes,
                                             override_cfg_params={
                                                 "empty_seed_starts_cluster":
                                                 empty_seed_starts_cluster
@@ -142,8 +142,8 @@ class ClusterBootstrapUpgrade(RedpandaTest):
     def test_change_bootstrap_configs_during_upgrade(
             self, empty_seed_starts_cluster):
         # Upgrade the cluster as we change the configs node-by-node.
-        self.installer.install(self.redpanda.nodes, RedpandaInstaller.HEAD)
-        self.redpanda.rolling_restart_nodes(self.redpanda.nodes,
+        self.installer.install(self.funes.nodes, FunesInstaller.HEAD)
+        self.funes.rolling_restart_nodes(self.funes.nodes,
                                             override_cfg_params={
                                                 "empty_seed_starts_cluster":
                                                 empty_seed_starts_cluster

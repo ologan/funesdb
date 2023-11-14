@@ -13,27 +13,27 @@ import urllib.parse
 
 from ducktape.utils.util import wait_until
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
 from rptest.utils.utf8 import CONTROL_CHARS_MAP
 
 
-class LogLevelTest(RedpandaTest):
+class LogLevelTest(FunesTest):
     initial_log_level = "trace"
 
     def __init__(self, *args, **kwargs):
         # Set an explicit log level rather than relying on the externally
-        # configurable redpanda log level, so that the test knows where
+        # configurable funes log level, so that the test knows where
         # it will start.
         super().__init__(*args, log_level=self.initial_log_level, **kwargs)
 
     @cluster(num_nodes=3)
     def test_get_loggers(self):
-        admin = Admin(self.redpanda)
-        node = self.redpanda.nodes[0]
+        admin = Admin(self.funes)
+        node = self.funes.nodes[0]
         loggers = admin.get_loggers(node)
         # Check for some basic loggers.
-        expected_loggers = ["storage", "httpd", "kafka", "io"]
+        expected_loggers = ["storage", "httpd", "sql", "io"]
         assert all([l in loggers for l in expected_loggers
                     ]), "Expected at least {expected_loggers}: {loggers}"
 
@@ -43,7 +43,7 @@ class LogLevelTest(RedpandaTest):
             if logger == "assert":
                 continue
 
-            with self.redpanda.monitor_log(node) as mon:
+            with self.funes.monitor_log(node) as mon:
                 admin.set_log_level(logger, "info")
                 mon.wait_until(f"Set log level for {{{logger}}}: .* -> info",
                                timeout_sec=5,
@@ -52,11 +52,11 @@ class LogLevelTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_log_level_control(self):
-        admin = Admin(self.redpanda)
-        node = self.redpanda.nodes[0]
+        admin = Admin(self.funes)
+        node = self.funes.nodes[0]
 
         # set to warn level. message seen at trace
-        with self.redpanda.monitor_log(node) as mon:
+        with self.funes.monitor_log(node) as mon:
             admin.set_log_level("admin_api_server", "warn")
             mon.wait_until(
                 f"Set log level for {{admin_api_server}}: {self.initial_log_level} -> warn",
@@ -66,7 +66,7 @@ class LogLevelTest(RedpandaTest):
 
         # set to debug. log level at warn, so shouldn't see it
         try:
-            with self.redpanda.monitor_log(node) as mon:
+            with self.funes.monitor_log(node) as mon:
                 admin.set_log_level("admin_api_server", "debug")
                 mon.wait_until(
                     "Set log level for {admin_api_server}: warn -> debug",
@@ -78,7 +78,7 @@ class LogLevelTest(RedpandaTest):
             pass
 
         # should now see it again
-        with self.redpanda.monitor_log(node) as mon:
+        with self.funes.monitor_log(node) as mon:
             admin.set_log_level("admin_api_server", "info")
             mon.wait_until(
                 "Set log level for {admin_api_server}: debug -> info",
@@ -86,7 +86,7 @@ class LogLevelTest(RedpandaTest):
                 backoff_sec=1,
                 err_msg="Never saw message")
 
-        with self.redpanda.monitor_log(node) as mon:
+        with self.funes.monitor_log(node) as mon:
             admin.set_log_level("admin_api_server", "debug", expires=5)
             mon.wait_until(
                 f"Expiring log level for {{admin_api_server}} to {self.initial_log_level}",
@@ -96,12 +96,12 @@ class LogLevelTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_invalid_logger_name(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         logger = 'test\nlog'
 
         def check_log_for_invalid_parameter(val: str):
             pattern = f'Parameter contained invalid control characters: {val}'
-            wait_until(lambda: self.redpanda.search_log_any(pattern),
+            wait_until(lambda: self.funes.search_log_any(pattern),
                        timeout_sec=5)
 
         try:

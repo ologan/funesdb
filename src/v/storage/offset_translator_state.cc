@@ -62,9 +62,9 @@ int64_t offset_translator_state::delta(model::offset o) const {
         // increasing at the base offset. This means that for all records in the
         // gap, data offset is equal to the data offset of the *next* data
         // record. A heuristic to recall this rule: suppose the record at log
-        // (redpanda) offset 0 is a config batch. Then its data (kafka) offset
-        // must be 0, the same as the data (kafka) offset of the data record at
-        // log (redpanda) offset 1.
+        // (funes) offset 0 is a config batch. Then its data (sql) offset
+        // must be 0, the same as the data (sql) offset of the data record at
+        // log (funes) offset 1.
         return delta + (o - it->second.base_offset);
     }
 }

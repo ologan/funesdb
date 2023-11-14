@@ -258,8 +258,8 @@ inline void rjson_serialize(
 inline void rjson_serialize(
   json::Writer<json::StringBuffer>& w, const cluster::node::local_state& f) {
     w.StartObject();
-    w.Key("redpanda_version");
-    rjson_serialize(w, f.redpanda_version);
+    w.Key("funes_version");
+    rjson_serialize(w, f.funes_version);
     w.Key("logical_version");
     rjson_serialize(w, f.logical_version);
     w.Key("uptime");
@@ -406,18 +406,18 @@ inline void read_value(json::Value const& rd, cluster::topic_status& obj) {
 }
 
 inline void read_value(json::Value const& rd, cluster::node::local_state& obj) {
-    cluster::node::application_version redpanda_version;
+    cluster::node::application_version funes_version;
     cluster::cluster_version logical_version;
     std::chrono::milliseconds uptime;
     std::vector<storage::disk> disks;
 
-    read_member(rd, "redpanda_version", redpanda_version);
+    read_member(rd, "funes_version", funes_version);
     read_member(rd, "logical_version", logical_version);
     read_member(rd, "uptime", uptime);
     read_member(rd, "disks", disks);
 
     obj = cluster::node::local_state{
-      {}, redpanda_version, logical_version, uptime};
+      {}, funes_version, logical_version, uptime};
     obj.set_disks(disks);
 }
 

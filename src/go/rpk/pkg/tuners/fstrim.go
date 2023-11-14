@@ -22,7 +22,7 @@ import (
 
 const (
 	fstrim            = "fstrim"
-	unitPrefix        = "redpanda-"
+	unitPrefix        = "funes-"
 	timerName         = fstrim + ".timer"
 	serviceName       = fstrim + ".service"
 	customTimerName   = unitPrefix + timerName

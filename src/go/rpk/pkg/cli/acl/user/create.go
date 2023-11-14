@@ -40,11 +40,11 @@ with a custom "mechanism". SASL consists of three parts: a username, a
 password, and a mechanism. The mechanism determines which authentication flow
 the client will use for this user/pass.
 
-Redpanda currently supports two mechanisms: SCRAM-SHA-256, the default, and
+Funes currently supports two mechanisms: SCRAM-SHA-256, the default, and
 SCRAM-SHA-512, which is the same flow but uses sha512 rather than sha256.
 
-Using SASL requires setting "enable_sasl: true" in the redpanda section of your
-redpanda.yaml. Before a created SASL account can be used, you must also create
+Using SASL requires setting "enable_sasl: true" in the funes section of your
+funes.yaml. Before a created SASL account can be used, you must also create
 ACLs to grant the account access to certain resources in your cluster. See the
 acl help text for more info.
 `,
@@ -126,7 +126,7 @@ acl help text for more info.
 
 	// This is needed here in order to show the password flag with a different
 	// usage text for this command only.
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	passwordFlag := cmd.PersistentFlags().Lookup("password")
 	passwordFlag.Usage = "New user's password (NOTE: if using --password for the admin API, use --new-password)"
 	passwordFlag.Hidden = false

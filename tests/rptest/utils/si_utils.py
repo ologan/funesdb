@@ -24,7 +24,7 @@ from rptest.archival.abs_client import ABSClient
 from rptest.clients.rp_storage_tool import RpStorageTool
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.services.redpanda import MetricsEndpoint, RESTART_LOG_ALLOW_LIST
+from rptest.services.funes import MetricsEndpoint, RESTART_LOG_ALLOW_LIST
 
 EMPTY_SEGMENT_SIZE = 4096
 
@@ -262,7 +262,7 @@ def make_segment_summary(ntpr: NTPR, reader: SegmentReader) -> SegmentSummary:
 
 def parse_s3_manifest_path(path: str) -> NTPR:
     """Parse S3 manifest path. Return ntp and revision.
-    Sample name: 50000000/meta/kafka/panda-topic/0_19/manifest.json
+    Sample name: 50000000/meta/sql/panda-topic/0_19/manifest.json
     """
     items = path.split('/')
     ns = items[2]
@@ -304,7 +304,7 @@ def parse_controller_snapshot_path(path: str) -> ClusterMetadataComponents:
 
 def parse_s3_segment_path(path) -> SegmentPathComponents:
     """Parse S3 segment path. Return ntp, revision and name.
-    Sample name: b525cddd/kafka/panda-topic/0_9/4109-1-v1.log
+    Sample name: b525cddd/sql/panda-topic/0_9/4109-1-v1.log
     """
     items = path.split('/')
     ns = items[1]
@@ -485,7 +485,7 @@ NodeSegmentsReport = NewType('NodeSegmentsReport', dict[str, NodeReport])
 def get_expected_ntp_restored_size(nodes_segments_report: NodeSegmentsReport,
                                    retention_policy: int):
     """ Get expected retestored ntp disk size
-    We expect that redpanda will restore max
+    We expect that funes will restore max
     amount of segments with total size less
     than retention_policy
     """
@@ -523,7 +523,7 @@ def get_expected_ntp_restored_size(nodes_segments_report: NodeSegmentsReport,
     return expected_restored_sizes
 
 
-def nodes_report_cloud_segments(redpanda, target_segments):
+def nodes_report_cloud_segments(funes, target_segments):
     """
     Returns true if the nodes in the cluster collectively report having
     above the given number of segments.
@@ -533,10 +533,10 @@ def nodes_report_cloud_segments(redpanda, target_segments):
     and for associated ListObjects calls to take a long time.
     """
     try:
-        num_segments = redpanda.metric_sum(
-            "redpanda_cloud_storage_segments",
+        num_segments = funes.metric_sum(
+            "funes_cloud_storage_segments",
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
-        redpanda.logger.info(
+        funes.logger.info(
             f"Cluster metrics report {num_segments} / {target_segments} cloud segments"
         )
     except:
@@ -643,7 +643,7 @@ class PathMatcher:
         return self._match_partition_manifest(path)
 
 
-def quiesce_uploads(redpanda, topic_names: list[str], timeout_sec):
+def quiesce_uploads(funes, topic_names: list[str], timeout_sec):
     """
     Wait until all local data for all topics in `topic_names` has been uploaded
     to remote storage.  This function expects that no new data is being produced:
@@ -654,47 +654,47 @@ def quiesce_uploads(redpanda, topic_names: list[str], timeout_sec):
     will fail: it expects all data to be uploaded eventually.
     """
     def remote_has_reached_hwm(ntp: NTP, hwm: int):
-        view = BucketView(redpanda)
+        view = BucketView(funes)
         try:
             manifest = view.get_partition_manifest(ntp)
         except Exception as e:
-            redpanda.logger.debug(
+            funes.logger.debug(
                 f"Partition {ntp} doesn't have a manifest yet ({e})")
             return False
 
-        remote_committed_offset = BucketView.kafka_last_offset(manifest)
+        remote_committed_offset = BucketView.sql_last_offset(manifest)
         if remote_committed_offset is None:
-            redpanda.logger.debug(
+            funes.logger.debug(
                 f"Partition {ntp} does not have committed offset yet")
             return False
         else:
             ready = remote_committed_offset >= hwm - 1
             if not ready:
-                redpanda.logger.debug(
+                funes.logger.debug(
                     f"Partition {ntp} not yet ready ({remote_committed_offset} < {hwm-1})"
                 )
             return ready
 
     t_initial = time.time()
 
-    rpk = RpkTool(redpanda)
+    rpk = RpkTool(funes)
     for topic_name in topic_names:
         described = rpk.describe_topic(topic_name)
         p_count = 0
         for p in described:
             p_count += 1
 
-            ntp = NTP(ns='kafka', topic=topic_name, partition=p.id)
+            ntp = NTP(ns='sql', topic=topic_name, partition=p.id)
             hwm = p.high_watermark
 
             # After timeout_sec has elapsed, expect each partition to
             # be ready immediately.
             timeout = max(1, timeout_sec - (time.time() - t_initial))
 
-            redpanda.wait_until(lambda: remote_has_reached_hwm(ntp, hwm),
+            funes.wait_until(lambda: remote_has_reached_hwm(ntp, hwm),
                                 timeout_sec=timeout,
                                 backoff_sec=1)
-            redpanda.logger.debug(f"Partition {ntp} ready (reached HWM {hwm})")
+            funes.logger.debug(f"Partition {ntp} ready (reached HWM {hwm})")
 
         if p_count == 0:
             # We expect to be called on a topic where `rpk topic describe` returns
@@ -706,8 +706,8 @@ def quiesce_uploads(redpanda, topic_names: list[str], timeout_sec):
 class SpillMeta:
     base: int
     last: int
-    base_kafka: int
-    last_kafka: int
+    base_sql: int
+    last_sql: int
     base_ts: int
     last_ts: int
     ntpr: NTPR
@@ -715,12 +715,12 @@ class SpillMeta:
 
     @staticmethod
     def make(ntpr: NTPR, path: str):
-        base, last, base_kafka, last_kafka, base_ts, last_ts = SpillMeta._parse_path(
+        base, last, base_sql, last_sql, base_ts, last_ts = SpillMeta._parse_path(
             ntpr, path)
         return SpillMeta(base=base,
                          last=last,
-                         base_kafka=base_kafka,
-                         last_kafka=last_kafka,
+                         base_sql=base_sql,
+                         last_sql=last_sql,
                          base_ts=base_ts,
                          last_ts=last_ts,
                          ntpr=ntpr,
@@ -731,7 +731,7 @@ class SpillMeta:
         """
         Extract metadata from spillover manifest path.
         Expected format is:
-        {base}.{base_rp_offset}.{last_rp_offest}.{base_kafka_offset}.{last_kafka_offset}.{first_ts}.{last_ts}
+        {base}.{base_rp_offset}.{last_rp_offest}.{base_sql_offset}.{last_sql_offset}.{first_ts}.{last_ts}
         where base = {hash}/meta/{ntpr.ns}/{ntpr.topic}/{ntpr.partition}_{ntpr.revision}/manifest"
         """
         base = BucketView.gen_manifest_path(ntpr)
@@ -788,22 +788,22 @@ class BucketView:
     the result.
     """
     def __init__(self,
-                 redpanda,
+                 funes,
                  topics: Optional[Sequence[TopicSpec]] = None,
                  scan_segments: bool = False):
         """
-        Always construct this with a `redpanda` -- the explicit logger/bucket/client
+        Always construct this with a `funes` -- the explicit logger/bucket/client
         arguments are only here to enable the structure of topic_recovery_test.py to work,
         and an instance constructed that way will not work for all methods.
 
-        :param redpanda: a RedpandaService, whose SISettings we will use
+        :param funes: a FunesService, whose SISettings we will use
         :param topics: optional list of topics to filter result to
         :param scan_segments: optional flag that indicates that segments has to be parsed
         """
-        self.redpanda = redpanda
-        self.logger = redpanda.logger
-        self.bucket = redpanda.si_settings.cloud_storage_bucket
-        self.client: S3Client | ABSClient = redpanda.cloud_storage_client
+        self.funes = funes
+        self.logger = funes.logger
+        self.bucket = funes.si_settings.cloud_storage_bucket
+        self.client: S3Client | ABSClient = funes.cloud_storage_client
 
         self.path_matcher = PathMatcher(topics)
 
@@ -854,7 +854,7 @@ class BucketView:
         return self._state.partition_manifests
 
     @staticmethod
-    def kafka_start_offset(manifest) -> Optional[int]:
+    def sql_start_offset(manifest) -> Optional[int]:
         if "archive_start_offset" in manifest:
             return manifest["archive_start_offset"] - manifest[
                 "archive_start_offset_delta"]
@@ -886,7 +886,7 @@ class BucketView:
         )
 
     @staticmethod
-    def kafka_last_offset(manifest) -> Optional[int]:
+    def sql_last_offset(manifest) -> Optional[int]:
         if 'segments' not in manifest or len(manifest['segments']) == 0:
             return None
 
@@ -1268,7 +1268,7 @@ class BucketView:
     def is_ntp_in_manifest(self,
                            topic: str,
                            partition: int,
-                           ns: str = "kafka") -> bool:
+                           ns: str = "sql") -> bool:
         """
         Whether a manifest is present for this NTP
         """
@@ -1284,21 +1284,21 @@ class BucketView:
                           topic: str,
                           partition: int,
                           revision: int,
-                          ns: str = 'kafka') -> dict:
+                          ns: str = 'sql') -> dict:
         ntpr = NTPR(ns, topic, partition, revision)
         return self.get_partition_manifest(ntpr)
 
     def manifest_for_ntp(self,
                          topic: str,
                          partition: int,
-                         ns: str = 'kafka') -> dict:
+                         ns: str = 'sql') -> dict:
         ntp = NTP(ns, topic, partition)
         return self.get_partition_manifest(ntp)
 
     def cloud_log_segment_count_for_ntp(self,
                                         topic: str,
                                         partition: int,
-                                        ns: str = 'kafka') -> int:
+                                        ns: str = 'sql') -> int:
         manifest = self.manifest_for_ntp(topic, partition, ns)
         if 'segments' not in manifest:
             return 0
@@ -1308,7 +1308,7 @@ class BucketView:
     def stm_region_size_for_ntp(self,
                                 topic: str,
                                 partition: int,
-                                ns: str = "kafka") -> LogRegionSize:
+                                ns: str = "sql") -> LogRegionSize:
         size = LogRegionSize()
 
         try:
@@ -1330,7 +1330,7 @@ class BucketView:
     def archive_size_for_ntp(self,
                              topic: str,
                              partition: int,
-                             ns: str = "kafka") -> LogRegionSize:
+                             ns: str = "sql") -> LogRegionSize:
         size = LogRegionSize()
 
         try:
@@ -1360,7 +1360,7 @@ class BucketView:
     def cloud_log_size_for_ntp(self,
                                topic: str,
                                partition: int,
-                               ns: str = 'kafka') -> CloudLogSize:
+                               ns: str = 'sql') -> CloudLogSize:
         return CloudLogSize(
             stm=self.stm_region_size_for_ntp(topic, partition, ns),
             archive=self.archive_size_for_ntp(topic, partition, ns))

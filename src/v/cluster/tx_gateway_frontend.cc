@@ -48,7 +48,7 @@ using namespace std::chrono_literals;
 template<typename Func>
 static auto with(
   ss::shared_ptr<tm_stm> stm,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   const std::string_view name,
   Func&& func) noexcept {
     return stm->lock_tx(tx_id, name)
@@ -61,7 +61,7 @@ static auto with(
 template<typename Func>
 static auto with_free(
   ss::shared_ptr<tm_stm> stm,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   const std::string_view name,
   Func&& func) noexcept {
     auto units = stm->try_lock_tx(tx_id, name);
@@ -79,7 +79,7 @@ static auto with_free(
 }
 
 static tm_transaction as_tx(
-  kafka::transactional_id tx_id, model::term_id term, fetch_tx_reply reply) {
+  sql::transactional_id tx_id, model::term_id term, fetch_tx_reply reply) {
     vassert(
       reply.ec == tx_errc::none,
       "can't extract a tx from a failed (ec: {}) reply",
@@ -348,7 +348,7 @@ ss::future<> tx_gateway_frontend::stop() {
 }
 
 ss::future<std::optional<model::ntp>>
-tx_gateway_frontend::ntp_for_tx_id(kafka::transactional_id id) {
+tx_gateway_frontend::ntp_for_tx_id(sql::transactional_id id) {
     if (!_feature_table.local().is_active(
           features::feature::transaction_partitioning)) {
         co_return model::legacy_tm_ntp;
@@ -389,7 +389,7 @@ tx_gateway_frontend::ntp_for_tx_id(kafka::transactional_id id) {
 }
 
 ss::future<bool> tx_gateway_frontend::hosts(
-  model::partition_id partition, kafka::transactional_id tx_id) {
+  model::partition_id partition, sql::transactional_id tx_id) {
     model::ntp tx_ntp(
       model::tx_manager_nt.ns, model::tx_manager_nt.tp, partition);
     auto retries = _metadata_dissemination_retries;
@@ -437,7 +437,7 @@ ss::future<bool> tx_gateway_frontend::hosts(
 }
 
 ss::future<bool> tx_gateway_frontend::do_hosts(
-  model::partition_id partition, kafka::transactional_id tx_id) {
+  model::partition_id partition, sql::transactional_id tx_id) {
     model::ntp tx_ntp(
       model::tx_manager_nt.ns, model::tx_manager_nt.tp, partition);
     auto shard = _shard_table.local().shard_for(tx_ntp);
@@ -539,7 +539,7 @@ ss::future<tx_errc> tx_gateway_frontend::do_init_hosted_transactions(
 }
 
 ss::future<fetch_tx_reply> tx_gateway_frontend::fetch_tx_locally(
-  kafka::transactional_id tx_id, model::term_id term, model::partition_id tm) {
+  sql::transactional_id tx_id, model::term_id term, model::partition_id tm) {
     vlog(
       txlog.trace,
       "[tx_id={}] fetching transaction locally term: {}, partition: {}",
@@ -609,7 +609,7 @@ ss::future<fetch_tx_reply> tx_gateway_frontend::fetch_tx_locally(
 }
 
 ss::future<checked<tm_transaction, tx_errc>> tx_gateway_frontend::fetch_tx(
-  kafka::transactional_id tx_id, model::term_id term, model::partition_id tm) {
+  sql::transactional_id tx_id, model::term_id term, model::partition_id tm) {
     vlog(
       txlog.trace,
       "[tx_id={}] fetching transactions from partition: {} in term: {}",
@@ -636,7 +636,7 @@ ss::future<checked<tm_transaction, tx_errc>> tx_gateway_frontend::fetch_tx(
 }
 
 ss::future<> tx_gateway_frontend::dispatch_fetch_tx(
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   model::term_id term,
   model::partition_id tm,
   model::timeout_clock::duration timeout,
@@ -688,7 +688,7 @@ ss::future<> tx_gateway_frontend::dispatch_fetch_tx(
 
 ss::future<fetch_tx_reply> tx_gateway_frontend::dispatch_fetch_tx(
   model::node_id target,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   model::term_id term,
   model::partition_id tm,
   model::timeout_clock::duration timeout,
@@ -823,7 +823,7 @@ ss::future<try_abort_reply> tx_gateway_frontend::process_locally(
 ss::future<try_abort_reply> tx_gateway_frontend::do_try_abort(
   model::term_id term,
   ss::shared_ptr<tm_stm> stm,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   model::producer_identity pid,
   model::tx_seq tx_seq,
   model::timeout_clock::duration timeout) {
@@ -984,7 +984,7 @@ ss::future<try_abort_reply> tx_gateway_frontend::do_try_abort(
 }
 
 ss::future<cluster::init_tm_tx_reply> tx_gateway_frontend::init_tm_tx(
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::timeout_clock::duration timeout,
   model::producer_identity expected_pid) {
@@ -1073,7 +1073,7 @@ ss::future<cluster::init_tm_tx_reply> tx_gateway_frontend::init_tm_tx(
 }
 
 ss::future<cluster::init_tm_tx_reply> tx_gateway_frontend::init_tm_tx_locally(
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::timeout_clock::duration timeout,
   model::producer_identity expected_pid,
@@ -1215,7 +1215,7 @@ bool is_valid_producer(
 
 ss::future<cluster::init_tm_tx_reply> tx_gateway_frontend::limit_init_tm_tx(
   ss::shared_ptr<tm_stm> stm,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::timeout_clock::duration timeout,
   model::producer_identity expected_pid) {
@@ -1312,7 +1312,7 @@ ss::future<cluster::init_tm_tx_reply> tx_gateway_frontend::limit_init_tm_tx(
 ss::future<cluster::init_tm_tx_reply> tx_gateway_frontend::do_init_tm_tx(
   ss::shared_ptr<tm_stm> stm,
   model::term_id term,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::timeout_clock::duration timeout,
   model::producer_identity expected_pid) {
@@ -1593,7 +1593,7 @@ ss::future<add_paritions_tx_reply> tx_gateway_frontend::do_add_partition_to_tx(
 
         res_topic.results.reserve(req_topic.partitions.size());
         for (model::partition_id req_partition : req_topic.partitions) {
-            model::ntp ntp(model::kafka_namespace, topic, req_partition);
+            model::ntp ntp(model::sql_namespace, topic, req_partition);
             auto has_ntp = std::any_of(
               tx.partitions.begin(),
               tx.partitions.end(),
@@ -2711,7 +2711,7 @@ ss::future<checked<tm_transaction, tx_errc>> tx_gateway_frontend::forget_tx(
 ss::future<checked<tm_transaction, tx_errc>> tx_gateway_frontend::get_tx(
   model::term_id term,
   ss::shared_ptr<tm_stm> stm,
-  kafka::transactional_id tid,
+  sql::transactional_id tid,
   model::timeout_clock::duration timeout) {
     auto tx_opt = co_await stm->get_tx(tid);
     if (!tx_opt.has_value()) {
@@ -3019,7 +3019,7 @@ ss::future<checked<tm_transaction, tx_errc>> tx_gateway_frontend::get_tx(
 
     if (tx.status == tm_transaction::tx_status::ongoing) {
         if (old_tx.tx_seq != tx.tx_seq || old_tx.status != tx.status) {
-            // when redpanda saves ongoing to disk it also
+            // when funes saves ongoing to disk it also
             // keeps it in memory so fetching should return
             // the same
             vlog(
@@ -3063,7 +3063,7 @@ ss::future<checked<tm_transaction, tx_errc>> tx_gateway_frontend::get_latest_tx(
   model::term_id term,
   ss::shared_ptr<tm_stm> stm,
   model::producer_identity pid,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   model::timeout_clock::duration timeout) {
     vlog(
       txlog.trace,
@@ -3112,7 +3112,7 @@ tx_gateway_frontend::get_ongoing_tx(
   model::term_id term,
   ss::shared_ptr<tm_stm> stm,
   model::producer_identity pid,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   model::timeout_clock::duration timeout) {
     vlog(
       txlog.trace,
@@ -3140,7 +3140,7 @@ tx_gateway_frontend::get_ongoing_tx(
         // another transaction.
         //
         // it violates the docs, the producer is expected to call abort
-        // https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/producer/KafkaProducer.html
+        // https://sql.apache.org/23/javadoc/org/apache/sql/clients/producer/SQLProducer.html
         co_return tx_errc::invalid_txn_state;
     } else if (tx.status == tm_transaction::tx_status::killed) {
         // a tx was timed out, can't treat it as ::aborting because
@@ -3214,7 +3214,7 @@ void tx_gateway_frontend::expire_old_txs() {
                     model::tx_manager_nt.ns, model::tx_manager_nt.tp, pid);
                   return expire_old_txs(tx_ntp).finally([this] {
                       // TODO: Create per shard timer
-                      // https://github.com/redpanda-data/redpanda/issues/9606
+                      // https://github.com/redpanda-data/funes/issues/9606
                       // to consider: most likely it's ok to re-arm the timer
                       // only once out of the do_for_each
                       rearm_expire_timer();
@@ -3261,7 +3261,7 @@ ss::future<> tx_gateway_frontend::expire_old_txs(ss::shared_ptr<tm_stm> stm) {
 }
 
 ss::future<> tx_gateway_frontend::expire_old_tx(
-  ss::shared_ptr<tm_stm> stm, kafka::transactional_id tx_id) {
+  ss::shared_ptr<tm_stm> stm, sql::transactional_id tx_id) {
     auto units = co_await stm->lock_tx(tx_id, "expire_old_tx");
 
     auto term_opt = co_await stm->sync();
@@ -3432,7 +3432,7 @@ tx_gateway_frontend::get_all_transactions() {
 }
 
 ss::future<result<tm_transaction, tx_errc>>
-tx_gateway_frontend::describe_tx(kafka::transactional_id tid) {
+tx_gateway_frontend::describe_tx(sql::transactional_id tid) {
     auto tm_ntp_opt = co_await ntp_for_tx_id(tid);
     if (!tm_ntp_opt) {
         co_return tx_errc::coordinator_not_available;
@@ -3495,7 +3495,7 @@ tx_gateway_frontend::describe_tx(kafka::transactional_id tid) {
 }
 
 ss::future<result<tm_transaction, tx_errc>> tx_gateway_frontend::describe_tx(
-  ss::shared_ptr<tm_stm> stm, kafka::transactional_id tid) {
+  ss::shared_ptr<tm_stm> stm, sql::transactional_id tid) {
     auto term_opt = co_await stm->sync();
     if (!term_opt.has_value()) {
         if (term_opt.error() == tm_stm::op_status::not_leader) {
@@ -3533,7 +3533,7 @@ tx_gateway_frontend::route_locally(try_abort_request&& r) {
 }
 
 ss::future<tx_errc> tx_gateway_frontend::delete_partition_from_tx(
-  kafka::transactional_id tid, tm_transaction::tx_partition ntp) {
+  sql::transactional_id tid, tm_transaction::tx_partition ntp) {
     auto tm_ntp = co_await ntp_for_tx_id(tid);
     if (!tm_ntp) {
         co_return tx_errc::coordinator_not_available;
@@ -3588,7 +3588,7 @@ ss::future<tx_errc> tx_gateway_frontend::delete_partition_from_tx(
 
 ss::future<tx_errc> tx_gateway_frontend::do_delete_partition_from_tx(
   ss::shared_ptr<tm_stm> stm,
-  kafka::transactional_id tid,
+  sql::transactional_id tid,
   tm_transaction::tx_partition ntp) {
     checked<model::term_id, tm_stm::op_status> term_opt
       = tm_stm::op_status::unknown;

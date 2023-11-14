@@ -32,7 +32,7 @@ func norm(header string) string { return strings.TrimSpace(strings.ToUpper(heade
 // ALLOW_RPK_CLOUD_ADMIN override.
 func CheckExitCloudAdmin(p *config.RpkProfile) {
 	if p.FromCloud && !p.DevOverrides().AllowRpkCloudAdmin {
-		Die("This admin API based command is not supported on Redpanda Cloud clusters.")
+		Die("This admin API based command is not supported on Funes Cloud clusters.")
 	}
 }
 

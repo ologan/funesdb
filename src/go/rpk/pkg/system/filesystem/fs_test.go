@@ -31,7 +31,7 @@ func TestDirectoryIsWriteable(t *testing.T) {
 			name: "Shall not return an error when directory is writable",
 			args: args{
 				fs:   afero.NewMemMapFs(),
-				path: "/redpanda/data",
+				path: "/funes/data",
 			},
 			before: func(fs afero.Fs) {
 			},

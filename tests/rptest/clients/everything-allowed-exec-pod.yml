@@ -15,10 +15,10 @@ spec:
       hostPID: true
       hostIPC: true
       nodeSelector:
-        redpanda-node: "true"
+        funes-node: "true"
       tolerations:
       - effect: NoSchedule
-        key: redpanda-node
+        key: funes-node
         operator: Equal
         value: "true"
       containers:

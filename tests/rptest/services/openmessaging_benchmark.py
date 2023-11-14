@@ -84,7 +84,7 @@ class OpenMessagingBenchmarkWorkers(Service):
         """
         Check if benchmark worker logfile contains errors
 
-        TimeoutException - means that redpanda node is responding too slow,
+        TimeoutException - means that funes node is responding too slow,
         so some records can't be produced or consumed
         """
         bad_lines = collections.defaultdict(list)
@@ -141,7 +141,7 @@ class OpenMessagingBenchmark(Service):
     STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "benchmark.log")
     OPENMESSAGING_DIR = "/opt/openmessaging-benchmark"
     DRIVER_FILE = os.path.join(OPENMESSAGING_DIR,
-                               "driver-redpanda/redpanda-ducktape.yaml")
+                               "driver-funes/funes-ducktape.yaml")
     WORKLOAD_FILE = os.path.join(OPENMESSAGING_DIR, "workloads/ducktape.yaml")
     NUM_WORKERS = 2
 
@@ -155,7 +155,7 @@ class OpenMessagingBenchmark(Service):
 
     def __init__(self,
                  ctx,
-                 redpanda,
+                 funes,
                  driver="SIMPLE_DRIVER",
                  workload="SIMPLE_WORKLOAD",
                  node=None,
@@ -176,7 +176,7 @@ class OpenMessagingBenchmark(Service):
             self.nodes = [node]
 
         self._ctx = ctx
-        self.redpanda = redpanda
+        self.funes = funes
         self.worker_nodes = worker_nodes
         self.workers = None
         self.driver = OMBSampleConfigurations.DRIVERS[driver]
@@ -196,17 +196,17 @@ class OpenMessagingBenchmark(Service):
         node.account.create_file(OpenMessagingBenchmark.WORKLOAD_FILE, conf)
 
     def _create_benchmark_driver_file(self, node):
-        # if testing redpanda cloud, override with default superuser
-        if hasattr(self.redpanda, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
-            u, p, m = self.redpanda._superuser
+        # if testing funes cloud, override with default superuser
+        if hasattr(self.funes, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
+            u, p, m = self.funes._superuser
             self.driver['sasl_username'] = u
             self.driver['sasl_password'] = p
             self.driver['sasl_mechanism'] = m
             self.driver['security_protocol'] = 'SASL_SSL'
-            self.driver["redpanda_node"] = self.redpanda.brokers().split(
+            self.driver["funes_node"] = self.funes.brokers().split(
                 ':')[0]
         else:
-            self.driver["redpanda_node"] = self.redpanda.nodes[
+            self.driver["funes_node"] = self.funes.nodes[
                 0].account.hostname
         conf = self.render("omb_driver.yaml", **self.driver)
         self.logger.info("Rendered driver config: \n %s", conf)
@@ -237,11 +237,11 @@ class OpenMessagingBenchmark(Service):
             f"Starting Open Messaging Benchmark with workers: {worker_nodes}")
 
         rp_node = None
-        if self.redpanda.num_nodes > 0:
-            rp_node = self.redpanda.nodes[0]
+        if self.funes.num_nodes > 0:
+            rp_node = self.funes.nodes[0]
         rp_version = "unknown_version"
         try:
-            rp_version = self.redpanda.get_version(rp_node)
+            rp_version = self.funes.get_version(rp_node)
         except AssertionError:
             # In some builds (particularly in dev), version string may not be populated
             pass

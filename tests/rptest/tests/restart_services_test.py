@@ -10,22 +10,22 @@
 import requests
 
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.admin import Admin
-from rptest.services.redpanda import RedpandaService, ResourceSettings, LoggingConfig, SchemaRegistryConfig
+from rptest.services.funes import FunesService, ResourceSettings, LoggingConfig, SchemaRegistryConfig
 from ducktape.utils.util import wait_until
 from rptest.util import search_logs_with_timeout
 
 log_config = LoggingConfig('info',
                            logger_levels={
                                'admin_api_server': 'trace',
-                               'kafka/client': 'trace'
+                               'sql/client': 'trace'
                            })
 
 
-class RestartServicesTest(RedpandaTest):
+class RestartServicesTest(FunesTest):
     #
-    # Smoke test the redpanda-services/restart Admin API endpoint
+    # Smoke test the funes-services/restart Admin API endpoint
     #
     def __init__(self, context, **kwargs):
         super(RestartServicesTest, self).__init__(
@@ -38,7 +38,7 @@ class RestartServicesTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_restart_services_failures(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         # Failure checks
         self.logger.debug("Check restart with no service name")
@@ -58,7 +58,7 @@ class RestartServicesTest(RedpandaTest):
             assert ex.response.status_code == requests.codes.not_found
 
 
-class RestartServicesUndefinedConfigTest(RedpandaTest):
+class RestartServicesUndefinedConfigTest(FunesTest):
     def __init__(self, context, **kwargs):
         super(RestartServicesUndefinedConfigTest, self).__init__(
             context,
@@ -74,7 +74,7 @@ class RestartServicesUndefinedConfigTest(RedpandaTest):
             r"admin_api_server - .* is undefined. Is it set in the .yaml config file?"
         ])
     def test_undefined_config(self):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         # Success checks
         self.logger.debug("Check http proxy restart")

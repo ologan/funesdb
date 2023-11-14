@@ -28,7 +28,7 @@ std::optional<bool>
 perturb(json::Value& value, json::Document& doc, std::string& path) {
     auto perturb_int = [&]<typename T>(T v) -> std::optional<T> {
         /*
-         * some integers represent enums. in the redpanda tree when an enum is
+         * some integers represent enums. in the funes tree when an enum is
          * printed out in string form it is usually done via a case statement
          * that covers all of the enum values and a non-matching enum is a hard
          * fail as the switch falls through to a call to __builtin_unreachable.

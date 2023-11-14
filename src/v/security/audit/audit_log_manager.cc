@@ -1,22 +1,22 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "security/audit/audit_log_manager.h"
 
 #include "cluster/controller.h"
 #include "cluster/ephemeral_credential_frontend.h"
-#include "kafka/client/client.h"
-#include "kafka/client/config_utils.h"
-#include "kafka/protocol/produce.h"
-#include "kafka/protocol/schemata/produce_response.h"
-#include "kafka/server/handlers/topics/types.h"
+#include "sql/client/client.h"
+#include "sql/client/config_utils.h"
+#include "sql/protocol/produce.h"
+#include "sql/protocol/schemata/produce_response.h"
+#include "sql/server/handlers/topics/types.h"
 #include "security/acl.h"
 #include "security/audit/client_probe.h"
 #include "security/audit/logger.h"
@@ -59,13 +59,13 @@ std::ostream& operator<<(std::ostream& os, event_type t) {
 
 class audit_sink;
 
-/// Contains a kafka client and a sempahore to bound the memory allocated
+/// Contains a sql client and a sempahore to bound the memory allocated
 /// by it. This class may be allocated/deallocated on the owning shard depending
 /// on the value of the global audit toggle config option (audit_enabled)
 class audit_client {
 public:
     audit_client(
-      audit_sink* sink, cluster::controller*, kafka::client::configuration&);
+      audit_sink* sink, cluster::controller*, sql::client::configuration&);
 
     /// Initializes the client (with all necessary auth) and connects to the
     /// remote broker. If successful requests to create audit topic and all
@@ -80,13 +80,13 @@ public:
     /// Produces to the audit topic, internal partitioner assigns partitions
     /// to the batches provided. Blocks if semaphore is exhausted.
     ss::future<>
-    produce(std::vector<kafka::client::record_essence>, audit_probe& probe);
+    produce(std::vector<sql::client::record_essence>, audit_probe& probe);
 
     bool is_initialized() const { return _is_initialized; }
 
 private:
-    ss::future<> update_status(kafka::error_code);
-    ss::future<> update_status(kafka::produce_response);
+    ss::future<> update_status(sql::error_code);
+    ss::future<> update_status(sql::produce_response);
     ss::future<> configure();
     ss::future<> mitigate_error(std::exception_ptr);
     ss::future<> create_internal_topic();
@@ -96,19 +96,19 @@ private:
     ss::future<> set_client_credentials();
 
 private:
-    kafka::error_code _last_errc{kafka::error_code::unknown_server_error};
+    sql::error_code _last_errc{sql::error_code::unknown_server_error};
     ss::abort_source _as;
     ss::gate _gate;
     bool _is_initialized{false};
     size_t _max_buffer_size;
     ssx::semaphore _send_sem;
-    kafka::client::client _client;
+    sql::client::client _client;
     audit_sink* _sink;
     cluster::controller* _controller;
     std::unique_ptr<client_probe> _probe;
 };
 
-/// Allocated only on the shard responsible for owning the kafka client, its
+/// Allocated only on the shard responsible for owning the sql client, its
 /// lifetime is the duration of the audit_log_manager. Contains a gate/mutex to
 /// synchronize around actions around the internal client which may be
 /// started/stopped on demand.
@@ -119,9 +119,9 @@ public:
     audit_sink(
       audit_log_manager* audit_mgr,
       cluster::controller* controller,
-      kafka::client::configuration& config) noexcept;
+      sql::client::configuration& config) noexcept;
 
-    /// Starts a kafka::client if none is allocated, backgrounds the work
+    /// Starts a sql::client if none is allocated, backgrounds the work
     ss::future<> start();
 
     /// Closes all gates, deallocates client returns when all has completed
@@ -130,7 +130,7 @@ public:
     /// Produce to the audit topic within the context of the internal locks,
     /// ensuring toggling of the audit master switch happens in lock step with
     /// calls to produce()
-    ss::future<> produce(std::vector<kafka::client::record_essence> records);
+    ss::future<> produce(std::vector<sql::client::record_essence> records);
 
     /// Allocates and connects, or deallocates and shuts down the audit client
     void toggle(bool enabled);
@@ -156,7 +156,7 @@ private:
     /// audit_client and members necessary to pass to its constructor
     std::unique_ptr<audit_client> _client;
     cluster::controller* _controller;
-    kafka::client::configuration& _config;
+    sql::client::configuration& _config;
 
     friend class audit_client;
 };
@@ -164,7 +164,7 @@ private:
 audit_client::audit_client(
   audit_sink* sink,
   cluster::controller* controller,
-  kafka::client::configuration& client_config)
+  sql::client::configuration& client_config)
   : _max_buffer_size(config::shard_local_cfg().audit_client_max_buffer_size())
   , _send_sem(_max_buffer_size, "audit_log_producer_semaphore")
   , _client(
@@ -246,7 +246,7 @@ ss::future<> audit_client::set_auditing_permissions() {
 
     security::resource_pattern audit_topic_pattern{
       security::resource_type::topic,
-      model::kafka_audit_logging_topic,
+      model::sql_audit_logging_topic,
       security::pattern_type::literal};
 
     co_await _controller->get_security_frontend().local().create_acls(
@@ -260,16 +260,16 @@ ss::future<> audit_client::set_auditing_permissions() {
 /// to an invoke_on_all() call. Conditionals are wrapped around the call to
 /// `update_auth_status` so that its only called when the errc changes to/from
 /// a desired condition.
-ss::future<> audit_client::update_status(kafka::error_code errc) {
+ss::future<> audit_client::update_status(sql::error_code errc) {
     /// If the status changed to erraneous from anything else
-    if (errc == kafka::error_code::illegal_sasl_state) {
-        if (_last_errc != kafka::error_code::illegal_sasl_state) {
+    if (errc == sql::error_code::illegal_sasl_state) {
+        if (_last_errc != sql::error_code::illegal_sasl_state) {
             co_await _sink->update_auth_status(
               audit_sink::auth_misconfigured_t::yes);
         }
-    } else if (_last_errc == kafka::error_code::illegal_sasl_state) {
+    } else if (_last_errc == sql::error_code::illegal_sasl_state) {
         /// The status changed from erraneous to anything else
-        if (errc != kafka::error_code::illegal_sasl_state) {
+        if (errc != sql::error_code::illegal_sasl_state) {
             co_await _sink->update_auth_status(
               audit_sink::auth_misconfigured_t::no);
         }
@@ -277,13 +277,13 @@ ss::future<> audit_client::update_status(kafka::error_code errc) {
     _last_errc = errc;
 }
 
-ss::future<> audit_client::update_status(kafka::produce_response response) {
+ss::future<> audit_client::update_status(sql::produce_response response) {
     /// This method should almost always call update_status() with a value of
-    /// no error code. That is because kafka client mitigation will be called in
+    /// no error code. That is because sql client mitigation will be called in
     /// the case there is a produce error, and an erraneous response will only
     /// be returned when the retry count is exhausted, which will never occur
     /// since it is artificially set high to have the effect of always retrying
-    absl::flat_hash_set<kafka::error_code> errcs;
+    absl::flat_hash_set<sql::error_code> errcs;
     for (const auto& topic_response : response.data.responses) {
         for (const auto& partition_response : topic_response.partitions) {
             errcs.emplace(partition_response.error_code);
@@ -294,8 +294,8 @@ ss::future<> audit_client::update_status(kafka::produce_response response) {
         co_return;
     }
     auto errc = *errcs.begin();
-    if (errcs.contains(kafka::error_code::illegal_sasl_state)) {
-        errc = kafka::error_code::illegal_sasl_state;
+    if (errcs.contains(sql::error_code::illegal_sasl_state)) {
+        errc = sql::error_code::illegal_sasl_state;
     }
     co_await update_status(errc);
 }
@@ -309,9 +309,9 @@ ss::future<> audit_client::mitigate_error(std::exception_ptr eptr) {
     auto f = ss::now();
     try {
         std::rethrow_exception(eptr);
-    } catch (kafka::client::broker_error const& ex) {
+    } catch (sql::client::broker_error const& ex) {
         f = update_status(ex.error);
-        if (ex.error == kafka::error_code::sasl_authentication_failed) {
+        if (ex.error == sql::error_code::sasl_authentication_failed) {
             f = f.then([this, ex]() {
                 return inform(ex.node_id).then([this]() {
                     return _client.connect();
@@ -330,7 +330,7 @@ ss::future<> audit_client::inform(model::node_id id) {
     vlog(adtlog.trace, "inform: {}", id);
 
     // Inform a particular node
-    if (id != kafka::client::unknown_node_id) {
+    if (id != sql::client::unknown_node_id) {
         return do_inform(id);
     }
 
@@ -349,18 +349,18 @@ ss::future<> audit_client::do_inform(model::node_id id) {
 ss::future<> audit_client::create_internal_topic() {
     constexpr std::string_view retain_forever = "-1";
     constexpr std::string_view seven_days = "604800000";
-    kafka::creatable_topic audit_topic{
-      .name = model::kafka_audit_logging_topic,
+    sql::creatable_topic audit_topic{
+      .name = model::sql_audit_logging_topic,
       .num_partitions = config::shard_local_cfg().audit_log_num_partitions(),
       .replication_factor
       = config::shard_local_cfg().audit_log_replication_factor(),
       .assignments = {},
       .configs = {
-        kafka::createable_topic_config{
-          .name = ss::sstring(kafka::topic_property_retention_bytes),
+        sql::createable_topic_config{
+          .name = ss::sstring(sql::topic_property_retention_bytes),
           .value{retain_forever}},
-        kafka::createable_topic_config{
-          .name = ss::sstring(kafka::topic_property_retention_duration),
+        sql::createable_topic_config{
+          .name = ss::sstring(sql::topic_property_retention_duration),
           .value{seven_days}}}};
     vlog(
       adtlog.info, "Creating audit log topic with settings: {}", audit_topic);
@@ -370,13 +370,13 @@ ss::future<> audit_client::create_internal_topic() {
           fmt::format("Unexpected create topics response: {}", resp.data));
     }
     const auto& topic = resp.data.topics[0];
-    if (topic.error_code == kafka::error_code::none) {
+    if (topic.error_code == sql::error_code::none) {
         vlog(adtlog.debug, "Auditing: created audit log topic: {}", topic);
-    } else if (topic.error_code == kafka::error_code::topic_already_exists) {
+    } else if (topic.error_code == sql::error_code::topic_already_exists) {
         vlog(adtlog.debug, "Auditing: topic already exists");
         co_await _client.update_metadata();
     } else {
-        if (topic.error_code == kafka::error_code::invalid_replication_factor) {
+        if (topic.error_code == sql::error_code::invalid_replication_factor) {
             vlog(
               adtlog.warn,
               "Auditing: invalid replication factor on audit topic, "
@@ -405,7 +405,7 @@ ss::future<> audit_client::shutdown() {
 }
 
 ss::future<> audit_client::produce(
-  std::vector<kafka::client::record_essence> records, audit_probe& probe) {
+  std::vector<sql::client::record_essence> records, audit_probe& probe) {
     /// TODO: Produce with acks=1, atm -1 is hardcoded into client
     const auto records_size = [](const auto& records) {
         std::size_t size = 0;
@@ -435,17 +435,17 @@ ss::future<> audit_client::produce(
               const auto n_records = records.size();
               return _client
                 .produce_records(
-                  model::kafka_audit_logging_topic, std::move(records))
-                .then([this, n_records, &probe](kafka::produce_response r) {
+                  model::sql_audit_logging_topic, std::move(records))
+                .then([this, n_records, &probe](sql::produce_response r) {
                     bool errored = std::any_of(
                       r.data.responses.cbegin(),
                       r.data.responses.cend(),
-                      [](const kafka::topic_produce_response& tp) {
+                      [](const sql::topic_produce_response& tp) {
                           return std::any_of(
                             tp.partitions.cbegin(),
                             tp.partitions.cend(),
-                            [](const kafka::partition_produce_response& p) {
-                                return p.error_code != kafka::error_code::none;
+                            [](const sql::partition_produce_response& p) {
+                                return p.error_code != sql::error_code::none;
                             });
                       });
                     if (errored) {
@@ -471,7 +471,7 @@ ss::future<> audit_client::produce(
     } catch (const ss::broken_semaphore&) {
         vlog(
           adtlog.debug,
-          "Shutting down the auditor kafka::client, semaphore broken");
+          "Shutting down the auditor sql::client, semaphore broken");
     }
     co_return;
 }
@@ -481,7 +481,7 @@ ss::future<> audit_client::produce(
 audit_sink::audit_sink(
   audit_log_manager* audit_mgr,
   cluster::controller* controller,
-  kafka::client::configuration& config) noexcept
+  sql::client::configuration& config) noexcept
   : _audit_mgr(audit_mgr)
   , _controller(controller)
   , _config(config) {}
@@ -508,7 +508,7 @@ audit_sink::update_auth_status(auth_misconfigured_t auth_misconfigured) {
 }
 
 ss::future<>
-audit_sink::produce(std::vector<kafka::client::record_essence> records) {
+audit_sink::produce(std::vector<sql::client::record_essence> records) {
     /// No locks/gates since the calls to this method are done in controlled
     /// context of other synchronization primitives
     vassert(_client, "produce() called on a null client");
@@ -569,7 +569,7 @@ void audit_log_manager::set_enabled_events() {
 }
 
 audit_log_manager::audit_log_manager(
-  cluster::controller* controller, kafka::client::configuration& client_config)
+  cluster::controller* controller, sql::client::configuration& client_config)
   : _audit_enabled(config::shard_local_cfg().audit_enabled.bind())
   , _queue_drain_interval_ms(
       config::shard_local_cfg().audit_queue_drain_interval_ms.bind())
@@ -713,7 +713,7 @@ bool audit_log_manager::is_client_enabled() const {
     return _sink->is_enabled();
 }
 
-bool audit_log_manager::report_redpanda_app_event(is_started app_started) {
+bool audit_log_manager::report_funes_app_event(is_started app_started) {
     return enqueue_app_lifecycle_event(
       app_started == is_started::yes
         ? application_lifecycle::activity_id::start
@@ -759,7 +759,7 @@ ss::future<> audit_log_manager::drain() {
       _queue.size());
 
     /// Combine all batched audit msgs into record_essences
-    std::vector<kafka::client::record_essence> essences;
+    std::vector<sql::client::record_essence> essences;
     auto records = std::exchange(_queue, underlying_t{});
     auto& records_seq = records.get<underlying_list>();
     while (!records_seq.empty()) {
@@ -769,12 +769,12 @@ ss::future<> audit_log_manager::drain() {
         iobuf b;
         b.append(as_json.c_str(), as_json.size());
         essences.push_back(
-          kafka::client::record_essence{.value = std::move(b)});
+          sql::client::record_essence{.value = std::move(b)});
         co_await ss::maybe_yield();
     }
 
     /// This call may block if the audit_clients semaphore is exhausted,
-    /// this represents the amount of memory used within its kafka::client
+    /// this represents the amount of memory used within its sql::client
     /// produce batch queue. If the semaphore blocks it will apply
     /// backpressure here, and the \ref _queue will begin to fill closer to
     /// capacity. When it hits capacity, enqueue_audit_event() will block.
@@ -808,11 +808,11 @@ audit_log_manager::should_enqueue_audit_event() const {
 }
 
 std::optional<audit_log_manager::audit_event_passthrough>
-audit_log_manager::should_enqueue_audit_event(kafka::api_key api) const {
+audit_log_manager::should_enqueue_audit_event(sql::api_key api) const {
     if (auto val = should_enqueue_audit_event(); val.has_value()) {
         return val;
     }
-    if (!is_audit_event_enabled(kafka_api_to_event_type(api))) {
+    if (!is_audit_event_enabled(sql_api_to_event_type(api))) {
         return std::make_optional(audit_event_passthrough::yes);
     }
     return std::nullopt;

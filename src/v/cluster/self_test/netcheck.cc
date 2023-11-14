@@ -88,7 +88,7 @@ ss::future<std::vector<self_test_result>> netcheck::run(netcheck_opts opts) {
         co_await ss::futurize_invoke(validate_options, opts);
         vlog(
           clusterlog.info,
-          "Starting redpanda self-test network benchmark, with options: {}",
+          "Starting funes self-test network benchmark, with options: {}",
           opts);
         co_return co_await ss::with_scheduling_group(opts.sg, [this]() {
             return ssx::async_transform(

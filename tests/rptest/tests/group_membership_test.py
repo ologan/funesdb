@@ -18,15 +18,15 @@ import ducktape.errors
 
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
-from rptest.services.redpanda import RedpandaService
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import FunesService
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.kcl import KCL
 from rptest.clients.rpk import RpkTool
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.services.rpk_producer import RpkProducer
 
 
-class ListGroupsReplicationFactorTest(RedpandaTest):
+class ListGroupsReplicationFactorTest(FunesTest):
     """
     We encountered an issue where listing groups would return a
     coordinator-loading error when the underlying group membership topic had a
@@ -46,7 +46,7 @@ class ListGroupsReplicationFactorTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_list_groups(self):
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         kcl.produce(self.topic, "msg\n")
         kcl.consume(self.topic, n=1, group="g0")
         kcl.list_groups()
@@ -61,7 +61,7 @@ class ListGroupsReplicationFactorTest(RedpandaTest):
 
         503 is safe status to retry.
         """
-        admin = Admin(redpanda=self.redpanda)
+        admin = Admin(funes=self.funes)
         timeout = time.time() + 10
 
         while time.time() < timeout:
@@ -82,22 +82,22 @@ class ListGroupsReplicationFactorTest(RedpandaTest):
     def test_list_groups_has_no_duplicates(self):
         """
         Reproducer for:
-        https://github.com/redpanda-data/redpanda/issues/2528
+        https://github.com/redpanda-data/funes/issues/2528
         """
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
         kcl.produce(self.topic, "msg\n")
         # create 4 groups
         kcl.consume(self.topic, n=1, group="g0")
         kcl.consume(self.topic, n=1, group="g1")
         kcl.consume(self.topic, n=1, group="g2")
         kcl.consume(self.topic, n=1, group="g3")
-        # transfer kafka/__consumer_offsets/0 leadership across the nodes to trigger
+        # transfer sql/__consumer_offsets/0 leadership across the nodes to trigger
         # group state recovery on each node
-        for n in self.redpanda.nodes:
-            self._transfer_with_retry(namespace="kafka",
+        for n in self.funes.nodes:
+            self._transfer_with_retry(namespace="sql",
                                       topic="__consumer_offsets",
                                       partition=0,
-                                      target_id=self.redpanda.idx(n))
+                                      target_id=self.funes.idx(n))
 
         # assert that there are no duplicates in
         def _list_groups():
@@ -113,7 +113,7 @@ class ListGroupsReplicationFactorTest(RedpandaTest):
 
         def _check_no_duplicates():
             groups = _list_groups()
-            self.redpanda.logger.debug(f"groups: {groups}")
+            self.funes.logger.debug(f"groups: {groups}")
             return len(groups) == 4
 
         wait_until(_check_no_duplicates,
@@ -127,13 +127,13 @@ class GroupCoordinatorTransferUtils:
     Utilities class for handling the topic-partition for the __consumer_offsets topic.
     This class assumes that the topic has 1 partition a replication factor of 3
     """
-    def __init__(self, redpanda: RedpandaService):
-        self.redpanda = redpanda
-        self.admin = Admin(self.redpanda)
-        self.logger = self.redpanda.logger
+    def __init__(self, funes: FunesService):
+        self.funes = funes
+        self.admin = Admin(self.funes)
+        self.logger = self.funes.logger
 
     def get_group_partition(self, partition: int = 0):
-        partition = self.admin.get_partitions(namespace="kafka",
+        partition = self.admin.get_partitions(namespace="sql",
                                               topic="__consumer_offsets",
                                               partition=partition)
         self.logger.debug(f"Group partition: {partition}")
@@ -152,10 +152,10 @@ class GroupCoordinatorTransferUtils:
         self.logger.debug(
             f"Transferring leadership to {new_leader.account.hostname}")
         success = self.admin.transfer_leadership_to(
-            namespace="kafka",
+            namespace="sql",
             topic="__consumer_offsets",
             partition=0,
-            target_id=self.redpanda.idx(new_leader))
+            target_id=self.funes.idx(new_leader))
 
         self.logger.debug(
             f"Leadership transfer to {new_leader}, success: {success}")
@@ -164,7 +164,7 @@ class GroupCoordinatorTransferUtils:
     def validate_leadership_transfer(self, new_leader: ClusterNode):
         def leader_is():
             leader = self.get_group_leader()
-            return leader != -1 and self.redpanda.get_node(
+            return leader != -1 and self.funes.get_node(
                 leader) == new_leader
 
         try:
@@ -193,16 +193,16 @@ class GroupCoordinatorTransferUtils:
         replicas = filter(lambda r: r["node_id"] != leader, replicas)
         new_leader = random.choice(list(replicas))['node_id']
         self.logger.debug(f"New leader: {new_leader}")
-        return self.redpanda.get_node(new_leader)
+        return self.funes.get_node(new_leader)
 
 
-class GroupMetricsTest(RedpandaTest):
+class GroupMetricsTest(FunesTest):
     topics = (TopicSpec(partition_count=1), TopicSpec(partition_count=3),
               TopicSpec(partition_count=3))
 
     def __init__(self, ctx, *args, **kwargs):
 
-        # Require internal_kafka topic to have an increased replication factor
+        # Require internal_sql topic to have an increased replication factor
         extra_rp_conf = dict(default_topic_replications=3,
                              enable_leader_balancer=False,
                              group_topic_partitions=1)
@@ -212,7 +212,7 @@ class GroupMetricsTest(RedpandaTest):
         self._ctx = ctx
 
     def _get_offset_from_metrics(self, group):
-        metric = self.redpanda.metrics_sample("kafka_group_offset")
+        metric = self.funes.metrics_sample("sql_group_offset")
         if metric is None:
             return None
         metric = metric.label_filter(dict(group=group))
@@ -224,7 +224,7 @@ class GroupMetricsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_check_value(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic = next(filter(lambda x: x.partition_count == 1,
                             self.topics)).name
 
@@ -266,7 +266,7 @@ class GroupMetricsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_multiple_topics_and_partitions(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topics = self.topics
         group = "g0"
 
@@ -296,7 +296,7 @@ class GroupMetricsTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_topic_recreation(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         topic_spec = next(filter(lambda x: x.partition_count == 1,
                                  self.topics))
         topic = topic_spec.name
@@ -342,7 +342,7 @@ class GroupMetricsTest(RedpandaTest):
         producers = []
         for topic in topics:
             producer = RpkProducer(self._ctx,
-                                   self.redpanda,
+                                   self.funes,
                                    topic.name,
                                    msg_size=5,
                                    msg_count=1000)
@@ -352,7 +352,7 @@ class GroupMetricsTest(RedpandaTest):
         consumers = []
         for topic in topics:
             consumer = RpkConsumer(self._ctx,
-                                   self.redpanda,
+                                   self.funes,
                                    topic.name,
                                    group=group)
             consumer.start()
@@ -360,17 +360,17 @@ class GroupMetricsTest(RedpandaTest):
 
         # Wait until cluster starts producing metrics
         wait_until(
-            lambda: self.redpanda.metrics_sample("kafka_group_offset") != None,
+            lambda: self.funes.metrics_sample("sql_group_offset") != None,
             timeout_sec=30,
             backoff_sec=5)
 
-        utils = GroupCoordinatorTransferUtils(self.redpanda)
+        utils = GroupCoordinatorTransferUtils(self.funes)
 
         def metrics_from_single_node(node):
             """
             Check that metrics are produced only by the given node.
             """
-            metrics = self.redpanda.metrics_sample("kafka_group_offset")
+            metrics = self.funes.metrics_sample("sql_group_offset")
             if not metrics:
                 self.logger.debug("No metrics found")
                 return False

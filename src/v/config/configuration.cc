@@ -14,7 +14,7 @@
 #include "config/node_config.h"
 #include "config/validators.h"
 #include "model/metadata.h"
-#include "pandaproxy/schema_registry/schema_id_validation.h"
+#include "funesproxy/schema_registry/schema_id_validation.h"
 #include "security/gssapi_principal_mapper.h"
 #include "security/mtls.h"
 #include "security/oidc_principal_mapping.h"
@@ -116,7 +116,7 @@ configuration::configuration()
   , rpc_server_listen_backlog(
       *this,
       "rpc_server_listen_backlog",
-      "TCP connection queue length for Kafka server and internal RPC server",
+      "TCP connection queue length for SQL server and internal RPC server",
       {.visibility = visibility::user},
       std::nullopt,
       {.min = 1})
@@ -324,7 +324,7 @@ configuration::configuration()
       *this,
       "enable_usage",
       "Enables the usage tracking mechanism, storing windowed history of "
-      "kafka/cloud_storage metrics over time",
+      "sql/cloud_storage metrics over time",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       false)
   , usage_num_windows(
@@ -339,7 +339,7 @@ configuration::configuration()
   , usage_window_width_interval_sec(
       *this,
       "usage_window_width_interval_sec",
-      "The width of a usage window, tracking cloud and kafka ingress/egress "
+      "The width of a usage window, tracking cloud and sql ingress/egress "
       "traffic each interval",
       {.needs_restart = needs_restart::no,
        .example = "3600",
@@ -392,9 +392,9 @@ configuration::configuration()
       "Target fetch size quota byte rate (bytes per second) - disabled default",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt)
-  , kafka_admin_topic_api_rate(
+  , sql_admin_topic_api_rate(
       *this,
-      "kafka_admin_topic_api_rate",
+      "sql_admin_topic_api_rate",
       "Target quota rate (partition mutations per default_window_sec)",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt,
@@ -476,7 +476,7 @@ configuration::configuration()
   , legacy_group_offset_retention_enabled(
       *this,
       "legacy_group_offset_retention_enabled",
-      "Group offset retention is enabled by default in versions of Redpanda >= "
+      "Group offset retention is enabled by default in versions of Funes >= "
       "23.1. To enable offset retention after upgrading from an older version "
       "set this option to true.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
@@ -619,43 +619,43 @@ configuration::configuration()
       "refreshed",
       {.visibility = visibility::tunable},
       2s)
-  , kafka_tcp_keepalive_idle_timeout_seconds(
+  , sql_tcp_keepalive_idle_timeout_seconds(
       *this,
-      "kafka_tcp_keepalive_timeout",
-      "TCP keepalive idle timeout in seconds for kafka connections. This "
+      "sql_tcp_keepalive_timeout",
+      "TCP keepalive idle timeout in seconds for sql connections. This "
       "describes the timeout between tcp keepalive probes that the remote site"
       "successfully acknowledged. Refers to the TCP_KEEPIDLE socket option. "
       "When changed applies to new connections only.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       120s)
-  , kafka_tcp_keepalive_probe_interval_seconds(
+  , sql_tcp_keepalive_probe_interval_seconds(
       *this,
-      "kafka_tcp_keepalive_probe_interval_seconds",
-      "TCP keepalive probe interval in seconds for kafka connections. This "
+      "sql_tcp_keepalive_probe_interval_seconds",
+      "TCP keepalive probe interval in seconds for sql connections. This "
       "describes the timeout between unacknowledged tcp keepalives. Refers to "
       "the TCP_KEEPINTVL socket option. When changed applies to new "
       "connections only.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       60s)
-  , kafka_tcp_keepalive_probes(
+  , sql_tcp_keepalive_probes(
       *this,
-      "kafka_tcp_keepalive_probes",
+      "sql_tcp_keepalive_probes",
       "TCP keepalive unacknowledged probes until the connection is considered "
-      "dead for kafka connections. Refers to the TCP_KEEPCNT socket option. "
+      "dead for sql connections. Refers to the TCP_KEEPCNT socket option. "
       "When "
       "changed applies to new connections only.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       3)
-  , kafka_connection_rate_limit(
+  , sql_connection_rate_limit(
       *this,
-      "kafka_connection_rate_limit",
+      "sql_connection_rate_limit",
       "Maximum connections per second for one core",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt,
       {.min = 1})
-  , kafka_connection_rate_limit_overrides(
+  , sql_connection_rate_limit_overrides(
       *this,
-      "kafka_connection_rate_limit_overrides",
+      "sql_connection_rate_limit_overrides",
       "Overrides for specific ips for maximum connections per second for one "
       "core",
       {.needs_restart = needs_restart::no,
@@ -675,7 +675,7 @@ configuration::configuration()
       *this,
       "max_concurrent_producer_ids",
       "Max number of the active sessions (producers). When the threshold "
-      "is passed Redpanda terminates old sessions. When an idle producer "
+      "is passed Funes terminates old sessions. When an idle producer "
       "corresponding to the terminated session wakes up and produces - it "
       "leads to its batches being rejected with out of order sequence error.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
@@ -685,7 +685,7 @@ configuration::configuration()
       *this,
       "max_transactions_per_coordinator",
       "Max number of the active txn sessions (producers). When the threshold "
-      "is passed Redpanda terminates old sessions. When an idle producer "
+      "is passed Funes terminates old sessions. When an idle producer "
       "corresponding to the terminated session wakes up and produces - it "
       "leads to its batches being rejected with invalid producer epoch or "
       "invalid_producer_id_mapping (it depends on the txn execution phase).",
@@ -828,10 +828,10 @@ configuration::configuration()
       "Election timeout expressed in milliseconds",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       1'500ms)
-  , kafka_group_recovery_timeout_ms(
+  , sql_group_recovery_timeout_ms(
       *this,
-      "kafka_group_recovery_timeout_ms",
-      "Kafka group recovery timeout expressed in milliseconds",
+      "sql_group_recovery_timeout_ms",
+      "SQL group recovery timeout expressed in milliseconds",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       30'000ms)
   , replicate_append_timeout_ms(
@@ -933,15 +933,15 @@ configuration::configuration()
       "Key-value maximum segment size (bytes)",
       {.visibility = visibility::tunable},
       16_MiB)
-  , max_kafka_throttle_delay_ms(
+  , max_sql_throttle_delay_ms(
       *this,
-      "max_kafka_throttle_delay_ms",
-      "Fail-safe maximum throttle delay on kafka requests",
+      "max_sql_throttle_delay_ms",
+      "Fail-safe maximum throttle delay on sql requests",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       30'000ms)
-  , kafka_max_bytes_per_fetch(
+  , sql_max_bytes_per_fetch(
       *this,
-      "kafka_max_bytes_per_fetch",
+      "sql_max_bytes_per_fetch",
       "Limit fetch responses to this many bytes, even if total of partition "
       "bytes limits is higher",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
@@ -1085,7 +1085,7 @@ configuration::configuration()
       "The number of segments per partition that the system will attempt to "
       "reserve disk capacity for. For example, if the maximum segment size is "
       "configured to be 100 MB, and the value of this option is 2, then in a "
-      "system with 10 partitions Redpanda will attempt to reserve at least 2 "
+      "system with 10 partitions Funes will attempt to reserve at least 2 "
       "GB "
       "of disk space.",
       {.needs_restart = needs_restart::no,
@@ -1118,8 +1118,8 @@ configuration::configuration()
   , enable_sasl(
       *this,
       "enable_sasl",
-      "Enable SASL authentication for Kafka connections, authorization is "
-      "required. see also `kafka_enable_authorization`",
+      "Enable SASL authentication for SQL connections, authorization is "
+      "required. see also `sql_enable_authorization`",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       false)
   , sasl_mechanisms(
@@ -1133,33 +1133,33 @@ configuration::configuration()
   , sasl_kerberos_config(
       *this,
       "sasl_kerberos_config",
-      "The location of the Kerberos krb5.conf file for Redpanda",
+      "The location of the Kerberos krb5.conf file for Funes",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       "/etc/krb5.conf")
   , sasl_kerberos_keytab(
       *this,
       "sasl_kerberos_keytab",
-      "The location of the Kerberos keytab file for Redpanda",
+      "The location of the Kerberos keytab file for Funes",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
-      "/var/lib/redpanda/redpanda.keytab")
+      "/var/lib/funes/funes.keytab")
   , sasl_kerberos_principal(
       *this,
       "sasl_kerberos_principal",
-      "The primary of the Kerberos Service Principal Name (SPN) for Redpanda",
+      "The primary of the Kerberos Service Principal Name (SPN) for Funes",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
-      "redpanda",
+      "funes",
       &validate_non_empty_string_opt)
   , sasl_kerberos_principal_mapping(
       *this,
       "sasl_kerberos_principal_mapping",
-      "Rules for mapping Kerberos Principal Names to Redpanda User Principals",
+      "Rules for mapping Kerberos Principal Names to Funes User Principals",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       {"DEFAULT"},
       security::validate_kerberos_mapping_rules)
-  , kafka_sasl_max_reauth_ms(
+  , sql_sasl_max_reauth_ms(
       *this,
-      "kafka_sasl_max_reauth_ms",
-      "The maximum time between Kafka client reauthentications. If a client "
+      "sql_sasl_max_reauth_ms",
+      "The maximum time between SQL client reauthentications. If a client "
       "has not reauthenticated a connection within this time frame, that "
       "connection is torn down. Without this, a connection could live long "
       "after the client's credentials are expired or revoked. Session expiry "
@@ -1169,27 +1169,27 @@ configuration::configuration()
        .visibility = visibility::user},
       std::nullopt,
       {.min = 1000ms})
-  , kafka_enable_authorization(
+  , sql_enable_authorization(
       *this,
-      "kafka_enable_authorization",
-      "Enable authorization for Kafka connections. Values:"
+      "sql_enable_authorization",
+      "Enable authorization for SQL connections. Values:"
       "- `nil`: Ignored. Authorization is enabled with `enable_sasl: true`"
       "; `true`: authorization is required"
       "; `false`: authorization is disabled"
-      ". See also: `enable_sasl` and `kafka_api[].authentication_method`",
+      ". See also: `enable_sasl` and `sql_api[].authentication_method`",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt)
-  , kafka_mtls_principal_mapping_rules(
+  , sql_mtls_principal_mapping_rules(
       *this,
-      "kafka_mtls_principal_mapping_rules",
-      "Principal Mapping Rules for mTLS Authentication on the Kafka API",
+      "sql_mtls_principal_mapping_rules",
+      "Principal Mapping Rules for mTLS Authentication on the SQL API",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt,
       security::tls::validate_rules)
-  , kafka_enable_partition_reassignment(
+  , sql_enable_partition_reassignment(
       *this,
-      "kafka_enable_partition_reassignment",
-      "Enable the Kafka partition reassignment API",
+      "sql_enable_partition_reassignment",
+      "Enable the SQL partition reassignment API",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       true)
   , controller_backend_housekeeping_interval_ms(
@@ -1204,31 +1204,31 @@ configuration::configuration()
       "Timeout for executing node management operations",
       {.visibility = visibility::tunable},
       5s)
-  , kafka_request_max_bytes(
+  , sql_request_max_bytes(
       *this,
-      "kafka_request_max_bytes",
-      "Maximum size of a single request processed via Kafka API",
+      "sql_request_max_bytes",
+      "Maximum size of a single request processed via SQL API",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       100_MiB)
-  , kafka_batch_max_bytes(
+  , sql_batch_max_bytes(
       *this,
-      "kafka_batch_max_bytes",
+      "sql_batch_max_bytes",
       "Maximum size of a batch processed by server. If batch is compressed the "
       "limit applies to compressed batch size",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       1_MiB)
-  , kafka_nodelete_topics(
+  , sql_nodelete_topics(
       *this,
-      "kafka_nodelete_topics",
-      "Prevents the topics in the list from being deleted via the kafka api",
+      "sql_nodelete_topics",
+      "Prevents the topics in the list from being deleted via the sql api",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       {"__audit", "__consumer_offsets", "_schemas"},
       &validate_non_empty_string_vec)
-  , kafka_noproduce_topics(
+  , sql_noproduce_topics(
       *this,
-      "kafka_noproduce_topics",
+      "sql_noproduce_topics",
       "Prevents the topics in the list from having message produced to them "
-      "via the kafka api",
+      "via the sql api",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       {"__audit"},
       &validate_non_empty_string_vec)
@@ -1283,32 +1283,32 @@ configuration::configuration()
       "Time between members backend reconciliation loop retries ",
       {.visibility = visibility::tunable},
       5s)
-  , kafka_connections_max(
+  , sql_connections_max(
       *this,
-      "kafka_connections_max",
-      "Maximum number of Kafka client connections per broker",
+      "sql_connections_max",
+      "Maximum number of SQL client connections per broker",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt)
-  , kafka_connections_max_per_ip(
+  , sql_connections_max_per_ip(
       *this,
-      "kafka_connections_max_per_ip",
-      "Maximum number of Kafka client connections from each IP address, per "
+      "sql_connections_max_per_ip",
+      "Maximum number of SQL client connections from each IP address, per "
       "broker",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt)
-  , kafka_connections_max_overrides(
+  , sql_connections_max_overrides(
       *this,
-      "kafka_connections_max_overrides",
-      "Per-IP overrides of kafka connection count limit, list of "
+      "sql_connections_max_overrides",
+      "Per-IP overrides of sql connection count limit, list of "
       "<ip>:<count> strings",
       {.needs_restart = needs_restart::no,
        .example = R"(['127.0.0.1:90', '50.20.1.1:40'])",
        .visibility = visibility::user},
       {},
       validate_connection_rate)
-  , kafka_client_group_byte_rate_quota(
+  , sql_client_group_byte_rate_quota(
       *this,
-      "kafka_client_group_byte_rate_quota",
+      "sql_client_group_byte_rate_quota",
       "Per-group target produce quota byte rate (bytes per second). "
       "Client is considered part of the group if client_id contains "
       "clients_prefix",
@@ -1318,9 +1318,9 @@ configuration::configuration()
        .visibility = visibility::user},
       {},
       validate_client_groups_byte_rate_quota)
-  , kafka_client_group_fetch_byte_rate_quota(
+  , sql_client_group_fetch_byte_rate_quota(
       *this,
-      "kafka_client_group_fetch_byte_rate_quota",
+      "sql_client_group_fetch_byte_rate_quota",
       "Per-group target fetch quota byte rate (bytes per second). "
       "Client is considered part of the group if client_id contains "
       "clients_prefix",
@@ -1330,23 +1330,23 @@ configuration::configuration()
        .visibility = visibility::user},
       {},
       validate_client_groups_byte_rate_quota)
-  , kafka_rpc_server_tcp_recv_buf(
+  , sql_rpc_server_tcp_recv_buf(
       *this,
-      "kafka_rpc_server_tcp_recv_buf",
-      "Kafka server TCP receive buffer size in bytes.",
+      "sql_rpc_server_tcp_recv_buf",
+      "SQL server TCP receive buffer size in bytes.",
       {.example = "65536"},
       std::nullopt,
       {.min = 32_KiB, .align = 4_KiB})
-  , kafka_rpc_server_tcp_send_buf(
+  , sql_rpc_server_tcp_send_buf(
       *this,
-      "kafka_rpc_server_tcp_send_buf",
-      "Kafka server TCP transmit buffer size in bytes.",
+      "sql_rpc_server_tcp_send_buf",
+      "SQL server TCP transmit buffer size in bytes.",
       {.example = "65536"},
       std::nullopt,
       {.min = 32_KiB, .align = 4_KiB})
-  , kafka_rpc_server_stream_recv_buf(
+  , sql_rpc_server_stream_recv_buf(
       *this,
-      "kafka_rpc_server_stream_recv_buf",
+      "sql_rpc_server_stream_recv_buf",
       "Userspace receive buffer max size in bytes",
       {.example = "65536", .visibility = visibility::tunable},
       std::nullopt,
@@ -1354,11 +1354,11 @@ configuration::configuration()
       // permit setting a max below the min).  The maximum is set to forbid
       // contiguous allocations beyond that size.
       {.min = 512, .max = 512_KiB, .align = 4_KiB})
-  , kafka_enable_describe_log_dirs_remote_storage(
+  , sql_enable_describe_log_dirs_remote_storage(
       *this,
-      "kafka_enable_describe_log_dirs_remote_storage",
+      "sql_enable_describe_log_dirs_remote_storage",
       "Whether to include tiered storage as a special remote:// directory in "
-      "DescribeLogDirs Kafka API requests.",
+      "DescribeLogDirs SQL API requests.",
       {.needs_restart = needs_restart::no,
        .example = "false",
        .visibility = visibility::user},
@@ -1743,7 +1743,7 @@ configuration::configuration()
       "cloud_storage_throughput_limit_percent",
       "Max throughput used by tiered-storage per node expressed as a "
       "percentage of the disk bandwidth. If the server has several disks "
-      "Redpanda will take into account only the one which is used to store "
+      "Funes will take into account only the one which is used to store "
       "tiered-storage cache. Note that even if the tiered-storage is allowed "
       "to use full bandwidth of the disk (100%) it won't necessary use it in "
       "full. The actual usage depend on your workload and the state of the "
@@ -1790,7 +1790,7 @@ configuration::configuration()
       *this,
       "cloud_storage_spillover_manifest_size",
       "The size of the manifest which can be offloaded to the cloud. If the "
-      "size of the local manifest stored in redpanda exceeds "
+      "size of the local manifest stored in funes exceeds "
       "cloud_storage_spillover_manifest_size x2 the spillover mechanism will "
       "split the manifest into two parts and one of them will be uploaded to "
       "S3.",
@@ -1841,7 +1841,7 @@ configuration::configuration()
   , cloud_storage_disable_upload_consistency_checks(
       *this,
       "cloud_storage_disable_upload_consistency_checks",
-      "Disable all upload consistency checks. This will allow redpanda to "
+      "Disable all upload consistency checks. This will allow funes to "
       "upload logs with gaps and replicate metadata with consistency "
       "violations. Normally, this options should be disabled.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
@@ -1849,7 +1849,7 @@ configuration::configuration()
   , cloud_storage_disable_metadata_consistency_checks(
       *this,
       "cloud_storage_disable_metadata_consistency_checks",
-      "Disable all metadata consistency checks. This will allow redpanda to "
+      "Disable all metadata consistency checks. This will allow funes to "
       "replay logs with inconsistent tiered-storage metadata. Normally, this "
       "option should be disabled.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
@@ -1874,7 +1874,7 @@ configuration::configuration()
       "cloud_storage_azure_shared_key",
       "The shared key to be used for Azure Shared Key authentication with the "
       "configured Azure storage account (see "
-      "'cloud_storage_azure_storage_account)'. Note that Redpanda expects this "
+      "'cloud_storage_azure_storage_account)'. Note that Funes expects this "
       "string to be Base64 encoded.",
       {.needs_restart = needs_restart::no,
        .visibility = visibility::user,
@@ -1945,7 +1945,7 @@ configuration::configuration()
       *this,
       "retention_local_strict",
       "Trim log data when a cloud topic reaches its local retention limit. "
-      "When this option is disabled Redpanda will allow partitions to grow "
+      "When this option is disabled Funes will allow partitions to grow "
       "past the local retention limit, and will be trimmed automatically as "
       "storage reaches the configured target size.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
@@ -2008,7 +2008,7 @@ configuration::configuration()
   , disk_reservation_percent(
       *this,
       "disk_reservation_percent",
-      "The percentage of total disk capacity that Redpanda will avoid using. "
+      "The percentage of total disk capacity that Funes will avoid using. "
       "This applies both when cloud cache and log data share a disk, as well "
       "as when cloud cache uses a dedicated disk. It is recommended to not run "
       "disks near capacity to avoid blocking I/O due to low disk space, as "
@@ -2105,7 +2105,7 @@ configuration::configuration()
       "per "
       "partition if the shard is at its maximum partition capacity.  These "
       "readers are cached"
-      "across Kafka consume requests and store a readahead buffer.",
+      "across SQL consume requests and store a readahead buffer.",
       {.needs_restart = needs_restart::no,
        .visibility = visibility::tunable,
        .aliases = {"cloud_storage_max_readers_per_shard"}},
@@ -2195,64 +2195,64 @@ configuration::configuration()
       "List of superuser usernames",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       {})
-  , kafka_qdc_latency_alpha(
+  , sql_qdc_latency_alpha(
       *this,
-      "kafka_qdc_latency_alpha",
-      "Smoothing parameter for kafka queue depth control latency tracking.",
+      "sql_qdc_latency_alpha",
+      "Smoothing parameter for sql queue depth control latency tracking.",
       {.visibility = visibility::tunable},
       0.002)
-  , kafka_qdc_window_size_ms(
+  , sql_qdc_window_size_ms(
       *this,
-      "kafka_qdc_window_size_ms",
-      "Window size for kafka queue depth control latency tracking.",
+      "sql_qdc_window_size_ms",
+      "Window size for sql queue depth control latency tracking.",
       {.visibility = visibility::tunable},
       1500ms)
-  , kafka_qdc_window_count(
+  , sql_qdc_window_count(
       *this,
-      "kafka_qdc_window_count",
-      "Number of windows used in kafka queue depth control latency tracking.",
+      "sql_qdc_window_count",
+      "Number of windows used in sql queue depth control latency tracking.",
       {.visibility = visibility::tunable},
       12)
-  , kafka_qdc_enable(
+  , sql_qdc_enable(
       *this,
-      "kafka_qdc_enable",
-      "Enable kafka queue depth control.",
+      "sql_qdc_enable",
+      "Enable sql queue depth control.",
       {.visibility = visibility::user},
       false)
-  , kafka_qdc_depth_alpha(
+  , sql_qdc_depth_alpha(
       *this,
-      "kafka_qdc_depth_alpha",
-      "Smoothing factor for kafka queue depth control depth tracking.",
+      "sql_qdc_depth_alpha",
+      "Smoothing factor for sql queue depth control depth tracking.",
       {.visibility = visibility::tunable},
       0.8)
-  , kafka_qdc_max_latency_ms(
+  , sql_qdc_max_latency_ms(
       *this,
-      "kafka_qdc_max_latency_ms",
-      "Max latency threshold for kafka queue depth control depth tracking.",
+      "sql_qdc_max_latency_ms",
+      "Max latency threshold for sql queue depth control depth tracking.",
       {.visibility = visibility::user},
       80ms)
-  , kafka_qdc_idle_depth(
+  , sql_qdc_idle_depth(
       *this,
-      "kafka_qdc_idle_depth",
-      "Queue depth when idleness is detected in kafka queue depth control.",
+      "sql_qdc_idle_depth",
+      "Queue depth when idleness is detected in sql queue depth control.",
       {.visibility = visibility::tunable},
       10)
-  , kafka_qdc_min_depth(
+  , sql_qdc_min_depth(
       *this,
-      "kafka_qdc_min_depth",
-      "Minimum queue depth used in kafka queue depth control.",
+      "sql_qdc_min_depth",
+      "Minimum queue depth used in sql queue depth control.",
       {.visibility = visibility::tunable},
       1)
-  , kafka_qdc_max_depth(
+  , sql_qdc_max_depth(
       *this,
-      "kafka_qdc_max_depth",
-      "Maximum queue depth used in kafka queue depth control.",
+      "sql_qdc_max_depth",
+      "Maximum queue depth used in sql queue depth control.",
       {.visibility = visibility::tunable},
       100)
-  , kafka_qdc_depth_update_ms(
+  , sql_qdc_depth_update_ms(
       *this,
-      "kafka_qdc_depth_update_ms",
-      "Update frequency for kafka queue depth control.",
+      "sql_qdc_depth_update_ms",
+      "Update frequency for sql queue depth control.",
       {.visibility = visibility::tunable},
       7s)
   , zstd_decompress_workspace_bytes(
@@ -2436,14 +2436,14 @@ configuration::configuration()
   , storage_strict_data_init(
       *this,
       "storage_strict_data_init",
-      "Requires that an empty file named `.redpanda_data_dir` be present in "
-      "the data directory. Redpanda will refuse to start if it is not found.",
+      "Requires that an empty file named `.funes_data_dir` be present in "
+      "the data directory. Funes will refuse to start if it is not found.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       false)
   , memory_abort_on_alloc_failure(
       *this,
       "memory_abort_on_alloc_failure",
-      "If true, the redpanda process will terminate immediately when an "
+      "If true, the funes process will terminate immediately when an "
       "allocation cannot be satisfied due to memory exhaustion. If false, an "
       "exception is thrown instead.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
@@ -2583,44 +2583,44 @@ configuration::configuration()
       "in controller configuration operations limit",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       std::nullopt)
-  , kafka_throughput_limit_node_in_bps(
+  , sql_throughput_limit_node_in_bps(
       *this,
-      "kafka_throughput_limit_node_in_bps",
-      "Node wide throughput ingress limit - maximum kafka traffic throughput "
+      "sql_throughput_limit_node_in_bps",
+      "Node wide throughput ingress limit - maximum sql traffic throughput "
       "allowed on the ingress side of each node, in bytes/s. Default is no "
       "limit.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt,
       {.min = 1})
-  , kafka_throughput_limit_node_out_bps(
+  , sql_throughput_limit_node_out_bps(
       *this,
-      "kafka_throughput_limit_node_out_bps",
-      "Node wide throughput egress limit - maximum kafka traffic throughput "
+      "sql_throughput_limit_node_out_bps",
+      "Node wide throughput egress limit - maximum sql traffic throughput "
       "allowed on the egress side of each node, in bytes/s. Default is no "
       "limit.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt,
       {.min = 1})
-  , kafka_quota_balancer_window(
+  , sql_quota_balancer_window(
       *this,
-      "kafka_quota_balancer_window_ms",
+      "sql_quota_balancer_window_ms",
       "Time window used to average current throughput measurement for quota "
       "balancer, in milliseconds",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       5000ms,
       {.min = 1ms, .max = bottomless_token_bucket::max_width})
-  , kafka_quota_balancer_node_period(
+  , sql_quota_balancer_node_period(
       *this,
-      "kafka_quota_balancer_node_period_ms",
+      "sql_quota_balancer_node_period_ms",
       "Intra-node throughput quota balancer invocation period, in "
       "milliseconds. Value of 0 disables the balancer and makes all the "
       "throughput quotas immutable.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       750ms,
       {.min = 0ms})
-  , kafka_quota_balancer_min_shard_throughput_ratio(
+  , sql_quota_balancer_min_shard_throughput_ratio(
       *this,
-      "kafka_quota_balancer_min_shard_throughput_ratio",
+      "sql_quota_balancer_min_shard_throughput_ratio",
       "The lowest value of the throughput quota a shard can get in the process "
       "of quota balancing, expressed as a ratio of default shard quota. "
       "0 means there is no minimum, 1 means no quota can be taken away "
@@ -2628,24 +2628,24 @@ configuration::configuration()
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       0.01,
       &validate_0_to_1_ratio)
-  , kafka_quota_balancer_min_shard_throughput_bps(
+  , sql_quota_balancer_min_shard_throughput_bps(
       *this,
-      "kafka_quota_balancer_min_shard_throughput_bps",
+      "sql_quota_balancer_min_shard_throughput_bps",
       "The lowest value of the throughput quota a shard can get in the process "
       "of quota balancing, in bytes/s. 0 means there is no minimum.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       256,
       {.min = 0})
-  , kafka_throughput_controlled_api_keys(
+  , sql_throughput_controlled_api_keys(
       *this,
-      "kafka_throughput_controlled_api_keys",
-      "List of Kafka API keys that are subject to cluster-wide "
+      "sql_throughput_controlled_api_keys",
+      "List of SQL API keys that are subject to cluster-wide "
       "and node-wide throughput limit control",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       {"produce", "fetch"})
-  , kafka_throughput_control(
+  , sql_throughput_control(
       *this,
-      "kafka_throughput_control",
+      "sql_throughput_control",
       "List of throughput control groups that define exclusions from node-wide "
       "throughput limits. Each group consists of: (\"name\" (optional) - any "
       "unique group name, \"client_id\" - regex to match client_id). "
@@ -2694,27 +2694,27 @@ configuration::configuration()
       "enable_schema_id_validation",
       "Enable Server Side Schema ID Validation.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
-      pandaproxy::schema_registry::schema_id_validation_mode::none,
-      {pandaproxy::schema_registry::schema_id_validation_mode::none,
-       pandaproxy::schema_registry::schema_id_validation_mode::redpanda,
-       pandaproxy::schema_registry::schema_id_validation_mode::compat})
-  , kafka_schema_id_validation_cache_capacity(
+      funesproxy::schema_registry::schema_id_validation_mode::none,
+      {funesproxy::schema_registry::schema_id_validation_mode::none,
+       funesproxy::schema_registry::schema_id_validation_mode::funes,
+       funesproxy::schema_registry::schema_id_validation_mode::compat})
+  , sql_schema_id_validation_cache_capacity(
       *this,
-      "kafka_schema_id_validation_cache_capacity",
+      "sql_schema_id_validation_cache_capacity",
       "Per-shard capacity of the cache for validating schema IDs.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       128)
-  , kafka_memory_share_for_fetch(
+  , sql_memory_share_for_fetch(
       *this,
-      "kafka_memory_share_for_fetch",
-      "The share of kafka subsystem memory that can be used for fetch read "
-      "buffers, as a fraction of kafka subsystem memory amount",
+      "sql_memory_share_for_fetch",
+      "The share of sql subsystem memory that can be used for fetch read "
+      "buffers, as a fraction of sql subsystem memory amount",
       {.needs_restart = needs_restart::yes, .visibility = visibility::user},
       0.5,
       {.min = 0.0, .max = 1.0})
-  , kafka_memory_batch_size_estimate_for_fetch(
+  , sql_memory_batch_size_estimate_for_fetch(
       *this,
-      "kafka_memory_batch_size_estimate_for_fetch",
+      "sql_memory_batch_size_estimate_for_fetch",
       "The size of the batch used to estimate memory consumption for Fetch "
       "requests, in bytes. Smaller sizes allow more concurrent fetch requests "
       "per shard, larger sizes prevent running out of memory because of too "
@@ -2724,7 +2724,7 @@ configuration::configuration()
   , cpu_profiler_enabled(
       *this,
       "cpu_profiler_enabled",
-      "Enables cpu profiling for Redpanda",
+      "Enables cpu profiling for Funes",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       false)
   , cpu_profiler_sample_period_ms(
@@ -2753,7 +2753,7 @@ configuration::configuration()
       "oidc_token_audience",
       "A string representing the intended recipient of the token.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
-      "redpanda")
+      "funes")
   , oidc_clock_skew_tolerance(
       *this,
       "oidc_clock_skew_tolerance",
@@ -2764,7 +2764,7 @@ configuration::configuration()
   , oidc_principal_mapping(
       *this,
       "oidc_principal_mapping",
-      "Rule for mapping JWT Payload claim to a Redpanda User Principal",
+      "Rule for mapping JWT Payload claim to a Funes User Principal",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       "$.sub",
       security::oidc::validate_principal_mapping_rule)
@@ -2778,13 +2778,13 @@ configuration::configuration()
       validate_http_authn_mechanisms) {}
 
 configuration::error_map_t configuration::load(const YAML::Node& root_node) {
-    if (!root_node["redpanda"]) {
-        throw std::invalid_argument("'redpanda' root is required");
+    if (!root_node["funes"]) {
+        throw std::invalid_argument("'funes' root is required");
     }
 
     const auto& ignore = node().property_names();
 
-    return config_store::read_yaml(root_node["redpanda"], ignore);
+    return config_store::read_yaml(root_node["funes"], ignore);
 }
 
 configuration& shard_local_cfg() {

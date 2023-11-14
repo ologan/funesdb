@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -147,7 +147,7 @@ public:
       model::offset insync,
       const fragmented_vector<segment_t>& segments,
       const fragmented_vector<segment_t>& replaced,
-      kafka::offset start_kafka_offset,
+      sql::offset start_sql_offset,
       model::offset archive_start_offset,
       model::offset_delta archive_start_offset_delta,
       model::offset archive_clean_offset,
@@ -167,7 +167,7 @@ public:
       , _archive_start_offset(archive_start_offset)
       , _archive_start_offset_delta(archive_start_offset_delta)
       , _archive_clean_offset(archive_clean_offset)
-      , _start_kafka_offset_override(start_kafka_offset)
+      , _start_sql_offset_override(start_sql_offset)
       , _archive_size_bytes(archive_size_bytes)
       , _last_partition_scrub(last_partition_scrub)
       , _last_scrubbed_offset(last_scrubbed_offset)
@@ -228,11 +228,11 @@ public:
     // Get last offset
     model::offset get_last_offset() const;
 
-    // Get the last inclusive Kafka offset
-    std::optional<kafka::offset> get_last_kafka_offset() const;
+    // Get the last inclusive SQL offset
+    std::optional<sql::offset> get_last_sql_offset() const;
 
-    // Get the last exclusive Kafka offset
-    std::optional<kafka::offset> get_next_kafka_offset() const;
+    // Get the last exclusive SQL offset
+    std::optional<sql::offset> get_next_sql_offset() const;
 
     // Get insync offset of the archival_metadata_stm
     //
@@ -245,17 +245,17 @@ public:
     // applying all commands in the record batch to the manifest.
     void advance_insync_offset(model::offset o);
 
-    /// Return start offset that takes into account start kafka offset of the
-    /// manifest, start kafka offset override and start offset of the archive.
-    std::optional<kafka::offset> full_log_start_kafka_offset() const;
+    /// Return start offset that takes into account start sql offset of the
+    /// manifest, start sql offset override and start offset of the archive.
+    std::optional<sql::offset> full_log_start_sql_offset() const;
 
     /// Get starting offset of the current manifest (doesn't take into account
     /// spillover manifests)
     std::optional<model::offset> get_start_offset() const;
 
-    /// Get starting kafka offset of the current manifest (doesn't take into
+    /// Get starting sql offset of the current manifest (doesn't take into
     /// account spillover manifests)
-    std::optional<kafka::offset> get_start_kafka_offset() const;
+    std::optional<sql::offset> get_start_sql_offset() const;
 
     /// Get last uploaded compacted offset
     model::offset get_last_uploaded_compacted_offset() const;
@@ -385,14 +385,14 @@ public:
     /// \returns true if start offset was moved
     bool advance_start_offset(model::offset start_offset);
 
-    /// \brief Set start kafka offset without removing any data from the
+    /// \brief Set start sql offset without removing any data from the
     /// manifest.
     ///
-    /// Allows start_kafka_offset to move forward freely, without changing
+    /// Allows start_sql_offset to move forward freely, without changing
     /// start_offset.
     ///
-    /// \returns true if start_kafka_offset was moved
-    bool advance_start_kafka_offset(kafka::offset new_start_offset);
+    /// \returns true if start_sql_offset was moved
+    bool advance_start_sql_offset(sql::offset new_start_offset);
 
     /// \brief Resets the state of the manifest to the default constructed
     /// state.
@@ -447,7 +447,7 @@ public:
     /// Returns an iterator to the segment containing offset o, such that o >=
     /// segment.base_offset and o <= segment.committed_offset.
     const_iterator segment_containing(model::offset o) const;
-    const_iterator segment_containing(kafka::offset o) const;
+    const_iterator segment_containing(sql::offset o) const;
 
     // Return collection of segments that were replaced in lightweight format.
     std::vector<partition_manifest::lw_segment_meta>
@@ -480,7 +480,7 @@ public:
 
     model::offset get_archive_start_offset() const;
     model::offset_delta get_archive_start_offset_delta() const;
-    kafka::offset get_archive_start_kafka_offset() const;
+    sql::offset get_archive_start_sql_offset() const;
     model::offset get_archive_clean_offset() const;
 
     /// Advance archive_start_offset
@@ -499,7 +499,7 @@ public:
     void set_archive_clean_offset(
       model::offset start_rp_offset, uint64_t size_bytes);
 
-    kafka::offset get_start_kafka_offset_override() const;
+    sql::offset get_start_sql_offset_override() const;
 
     auto serde_fields() {
         // this list excludes _mem_tracker, which is not serialized
@@ -516,7 +516,7 @@ public:
           _archive_start_offset,
           _archive_start_offset_delta,
           _archive_clean_offset,
-          _start_kafka_offset_override,
+          _start_sql_offset_override,
           _archive_size_bytes,
           _spillover_manifests,
           _last_partition_scrub,
@@ -537,7 +537,7 @@ public:
           _archive_start_offset,
           _archive_start_offset_delta,
           _archive_clean_offset,
-          _start_kafka_offset_override,
+          _start_sql_offset_override,
           _archive_size_bytes,
           _spillover_manifests,
           _last_partition_scrub,
@@ -560,7 +560,7 @@ public:
       anomalies detected);
 
 private:
-    std::optional<kafka::offset> compute_start_kafka_offset_local() const;
+    std::optional<sql::offset> compute_start_sql_offset_local() const;
 
     void set_start_offset(model::offset start_offset);
 
@@ -633,8 +633,8 @@ private:
     // could be removed by the housekeeping. The invariant is that 'clean' is
     // less or equal to 'start'.
     model::offset _archive_clean_offset;
-    // Start kafka offset set by the DeleteRecords request
-    kafka::offset _start_kafka_offset_override;
+    // Start sql offset set by the DeleteRecords request
+    sql::offset _start_sql_offset_override;
     // Size of the segments within the archive region (i.e. excluding this
     // manifest)
     uint64_t _archive_size_bytes{0};
@@ -649,10 +649,10 @@ private:
     // manifest is processed from oldest to newest.
     std::optional<model::offset> _last_scrubbed_offset;
 
-    // The starting offset for a Kafka batch in the segment that corresponds
+    // The starting offset for a SQL batch in the segment that corresponds
     // with `_start_offset`. This value is computed from
-    // `compute_start_kafka_offset_local` and is not in the serialized manifest.
-    mutable std::optional<kafka::offset> _cached_start_kafka_offset_local;
+    // `compute_start_sql_offset_local` and is not in the serialized manifest.
+    mutable std::optional<sql::offset> _cached_start_sql_offset_local;
 
     anomalies _detected_anomalies;
 };

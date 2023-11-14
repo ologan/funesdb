@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 #include "cluster/cloud_metadata/cluster_manifest.h"
 
@@ -50,11 +50,11 @@ void cluster_metadata_manifest::load_from_json(const rapidjson::Document& doc) {
     auto compat_version = doc["compat_version"].GetInt();
     if (
       compat_version
-      > static_cast<int>(cluster_metadata_manifest::redpanda_serde_version)) {
+      > static_cast<int>(cluster_metadata_manifest::funes_serde_version)) {
         throw std::runtime_error(fmt::format(
           "Can't deserialize cluster manifest, supported version {}, manifest "
           "version {}, compatible version {}",
-          static_cast<int>(cluster_metadata_manifest::redpanda_serde_version),
+          static_cast<int>(cluster_metadata_manifest::funes_serde_version),
           version,
           compat_version));
     }
@@ -111,10 +111,10 @@ void cluster_metadata_manifest::to_json(std::ostream& out) const {
     Writer<OStreamWrapper> w(wrapper);
     w.StartObject();
     w.Key("version");
-    w.Int(static_cast<int>(cluster_metadata_manifest::redpanda_serde_version));
+    w.Int(static_cast<int>(cluster_metadata_manifest::funes_serde_version));
     w.Key("compat_version");
     w.Int(static_cast<int>(
-      cluster_metadata_manifest::redpanda_serde_compat_version));
+      cluster_metadata_manifest::funes_serde_compat_version));
     w.Key("cluster_uuid");
     w.String(ss::sstring(cluster_uuid()));
     w.Key("upload_time_since_epoch");

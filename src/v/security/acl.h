@@ -9,7 +9,7 @@
  * by the Apache License, Version 2.0
  */
 #pragma once
-#include "kafka/types.h"
+#include "sql/types.h"
 #include "model/fundamental.h"
 #include "seastarx.h"
 #include "utils/named_type.h"
@@ -28,12 +28,12 @@ namespace security {
 // cluster is a resource type and the acl data model requires that resources
 // have names, so this is a fixed name for that resource.
 //
-// tools that manage kafka APIs assume a fixed name for the cluster resource:
-// `kafka-cluster` and put this string in requests that operate on cluster ACLs.
+// tools that manage sql APIs assume a fixed name for the cluster resource:
+// `sql-cluster` and put this string in requests that operate on cluster ACLs.
 // This means that the name is effectively part of the protocol and we can adopt
 // the same name.
 using acl_cluster_name = named_type<ss::sstring, struct acl_cluster_name_type>;
-inline const acl_cluster_name default_cluster_name("kafka-cluster");
+inline const acl_cluster_name default_cluster_name("sql-cluster");
 
 /*
  * An ACL resource type.
@@ -51,11 +51,11 @@ template<typename T>
 consteval resource_type get_resource_type() {
     if constexpr (std::is_same_v<T, model::topic>) {
         return resource_type::topic;
-    } else if constexpr (std::is_same_v<T, kafka::group_id>) {
+    } else if constexpr (std::is_same_v<T, sql::group_id>) {
         return resource_type::group;
     } else if constexpr (std::is_same_v<T, security::acl_cluster_name>) {
         return resource_type::cluster;
-    } else if constexpr (std::is_same_v<T, kafka::transactional_id>) {
+    } else if constexpr (std::is_same_v<T, sql::transactional_id>) {
         return resource_type::transactional_id;
     } else {
         static_assert(utils::unsupported_type<T>::value, "Unsupported type");
@@ -123,7 +123,7 @@ std::ostream& operator<<(std::ostream&, pattern_type);
 std::ostream& operator<<(std::ostream&, principal_type);
 
 /*
- * Kafka principal is (principal-type, principal)
+ * SQL principal is (principal-type, principal)
  */
 class acl_principal
   : public serde::
@@ -499,7 +499,7 @@ private:
     acl_entry_filter _acl;
 };
 
-/// Name of the principal the kafka client for auditing will be using
+/// Name of the principal the sql client for auditing will be using
 inline const acl_principal audit_principal{
   principal_type::ephemeral_user, "__auditing"};
 

@@ -12,7 +12,7 @@
 #pragma once
 
 #include "config/configuration.h"
-#include "kafka/protocol/errors.h"
+#include "sql/protocol/errors.h"
 #include "model/fundamental.h"
 #include "model/record.h"
 #include "raft/consensus.h"

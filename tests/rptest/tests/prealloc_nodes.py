@@ -7,15 +7,15 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from ducktape.cluster.cluster_spec import ClusterSpec
 from ducktape.tests.test import TestContext
 from ducktape.utils.util import wait_until
 
 
-class PreallocNodesTest(RedpandaTest):
+class PreallocNodesTest(FunesTest):
     """
-    Extends RedpandaTest to preallocate ducktape
+    Extends FunesTest to preallocate ducktape
     nodes from the given test context.
 
     Having some explicitly allocated nodes is useful for
@@ -43,7 +43,7 @@ class PreallocNodesTest(RedpandaTest):
         return self._preallocated_nodes
 
     def free_nodes(self):
-        # Free the normally allocated nodes (e.g. RedpandaService)
+        # Free the normally allocated nodes (e.g. FunesService)
         super().free_nodes()
 
         self.free_preallocated_nodes()
@@ -62,7 +62,7 @@ class PreallocNodesTest(RedpandaTest):
             # with subsequent tests' use of the node. Clear them down first.
             # For example, those tests that use KgoVerifierProducer.
             for node in self.preallocated_nodes:
-                wait_until(lambda: self.redpanda.sockets_clear(node),
+                wait_until(lambda: self.funes.sockets_clear(node),
                            timeout_sec=120,
                            backoff_sec=10)
 

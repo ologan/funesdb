@@ -15,11 +15,11 @@ import time
 import requests
 
 from ducktape.utils.util import wait_until
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from rptest.services.admin import Admin
 from rptest.services.failure_injector import FailureInjector, FailureSpec
-from rptest.services.redpanda import RedpandaService
-from rptest.services.redpanda_installer import VERSION_RE, int_tuple
+from rptest.services.funes import FunesService
+from rptest.services.funes_installer import VERSION_RE, int_tuple
 
 
 class OperationType(Enum):
@@ -81,15 +81,15 @@ def generate_random_workload(available_nodes):
 
 class NodeDecommissionWaiter():
     def __init__(self,
-                 redpanda,
+                 funes,
                  node_id,
                  logger,
                  progress_timeout=30,
                  decommissioned_node_ids=None):
-        self.redpanda = redpanda
+        self.funes = funes
         self.node_id = node_id
         self.logger = logger
-        self.admin = Admin(self.redpanda)
+        self.admin = Admin(self.funes)
         self.last_update = None
         self.last_replicas_left = None
         self.last_partitions_bytes_left = None
@@ -101,19 +101,19 @@ class NodeDecommissionWaiter():
     def _nodes_with_decommission_progress_api(self):
         def has_decommission_progress_api(node):
             v = int_tuple(
-                VERSION_RE.findall(self.redpanda.get_version(node))[0])
+                VERSION_RE.findall(self.funes.get_version(node))[0])
             # decommission progress api is available since v22.3.12
             return v[0] >= 23 or (v[0] == 22 and v[1] == 3 and v[2] >= 12)
 
         return [
-            n for n in self.redpanda.started_nodes()
+            n for n in self.funes.started_nodes()
             if has_decommission_progress_api(n)
         ]
 
     def _dump_partition_move_available_bandwidth(self):
         def get_metric(self, node):
             try:
-                metrics = list(self.redpanda.metrics(node))
+                metrics = list(self.funes.metrics(node))
                 family = filter(
                     lambda fam: fam.name ==
                     "vectorized_raft_recovery_partition_movement_available_bandwidth",
@@ -127,15 +127,15 @@ class NodeDecommissionWaiter():
                                   exc_info=True)
                 return None
 
-        for n in self.redpanda.started_nodes():
+        for n in self.funes.started_nodes():
             self.logger.debug(
-                f"partition move available bandwidth: node_id: {self.redpanda.node_id(n)} ==> {get_metric(self, n)}"
+                f"partition move available bandwidth: node_id: {self.funes.node_id(n)} ==> {get_metric(self, n)}"
             )
 
     def _not_decommissioned_node(self):
         return random.choice([
             n for n in self._nodes_with_decommission_progress_api()
-            if self.redpanda.node_id(n) not in self.decommissioned_node_ids
+            if self.funes.node_id(n) not in self.decommissioned_node_ids
         ])
 
     def _made_progress(self):
@@ -223,22 +223,22 @@ class NodeDecommissionWaiter():
 
 
 class NodeOpsExecutor():
-    def __init__(self, redpanda: RedpandaService, logger,
+    def __init__(self, funes: FunesService, logger,
                  lock: threading.Lock):
-        self.redpanda = redpanda
+        self.funes = funes
         self.logger = logger
         self.timeout = 360
         self.lock = lock
 
     def node_id(self, idx):
-        return self.redpanda.node_id(self.redpanda.get_node(idx),
+        return self.funes.node_id(self.funes.get_node(idx),
                                      force_refresh=True)
 
     def decommission(self, idx: int):
         node_id = self.node_id(idx)
         self.logger.info(
             f"executor - decommissioning node {node_id} (idx: {idx})")
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def decommissioned():
             try:
@@ -267,7 +267,7 @@ class NodeOpsExecutor():
                    backoff_sec=1)
 
     def get_statuses(self, node_to_query=None):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         brokers = admin.get_brokers(node=node_to_query)
 
         return [{
@@ -294,7 +294,7 @@ class NodeOpsExecutor():
         try:
             brokers = self.get_statuses(node_to_query)
             self.logger.info(
-                f"broker statuses from {self.redpanda.node_id(node_to_query)}: {brokers}"
+                f"broker statuses from {self.funes.node_id(node_to_query)}: {brokers}"
             )
             ids = map(lambda broker: broker['id'], brokers)
             return not node_id in ids
@@ -304,11 +304,11 @@ class NodeOpsExecutor():
 
     def node_removed(self, node_id):
         node_removed_cnt = 0
-        for n in self.redpanda.started_nodes():
+        for n in self.funes.started_nodes():
             if self.is_node_removed(n, node_id):
                 node_removed_cnt += 1
 
-        node_count = len(self.redpanda.started_nodes())
+        node_count = len(self.funes.started_nodes())
         majority = int(node_count / 2) + 1
         self.logger.debug(
             f"node {node_id} removed on {node_removed_cnt} nodes, majority: {majority}"
@@ -321,7 +321,7 @@ class NodeOpsExecutor():
             f"executor - waiting for node {node_id} to be removed")
 
         # wait for node to be removed of decommissioning to stop making progress
-        waiter = NodeDecommissionWaiter(self.redpanda,
+        waiter = NodeDecommissionWaiter(self.funes,
                                         node_id=node_id,
                                         logger=self.logger,
                                         progress_timeout=60)
@@ -332,27 +332,27 @@ class NodeOpsExecutor():
                    backoff_sec=1)
 
     def stop_node(self, idx):
-        node = self.redpanda.get_node(idx)
-        # remove from started nodes before actually stopping redpanda process
+        node = self.funes.get_node(idx)
+        # remove from started nodes before actually stopping funes process
         # to prevent failures from being injected after this point
         with self.lock:
-            self.redpanda.remove_from_started_nodes(node)
-            self.redpanda.stop_node(node)
-        self.redpanda.clean_node(node,
+            self.funes.remove_from_started_nodes(node)
+            self.funes.stop_node(node)
+        self.funes.clean_node(node,
                                  preserve_logs=True,
                                  preserve_current_install=True)
-        self.redpanda.set_seed_servers(self.redpanda.started_nodes())
+        self.funes.set_seed_servers(self.funes.started_nodes())
 
     def recommission(self, idx: int):
         node_id = self.node_id(idx)
         self.logger.info(f"executor - recommissioning {node_id} (idx: {idx})")
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def recommissioned():
             try:
                 statuses = []
-                for n in self.redpanda.started_nodes():
+                for n in self.funes.started_nodes():
                     brokers = admin.get_brokers(node=n)
 
                     for b in brokers:
@@ -379,9 +379,9 @@ class NodeOpsExecutor():
     def add(self, idx: int):
         self.logger.info(f"executor - adding node (idx: {idx})")
 
-        node = self.redpanda.get_node(idx)
+        node = self.funes.get_node(idx)
 
-        self.redpanda.start_node(node,
+        self.funes.start_node(node,
                                  timeout=self.timeout,
                                  auto_assign_node_id=True,
                                  omit_seeds_on_idx_one=False)
@@ -390,9 +390,9 @@ class NodeOpsExecutor():
             f"added node: {idx} with new node id: {self.node_id(idx)}")
 
     def _replicas_per_node(self):
-        kafkacat = KafkaCat(self.redpanda)
+        sqlcat = SQLCat(self.funes)
         node_replicas = defaultdict(int)
-        md = kafkacat.metadata()
+        md = sqlcat.metadata()
         for topic in md['topics']:
             for p in topic['partitions']:
                 for r in p['replicas']:
@@ -449,10 +449,10 @@ class NodeOpsExecutor():
 
 
 class FailureInjectorBackgroundThread():
-    def __init__(self, redpanda: RedpandaService, logger,
+    def __init__(self, funes: FunesService, logger,
                  lock: threading.Lock):
         self.stop_ev = threading.Event()
-        self.redpanda = redpanda
+        self.funes = funes
         self.thread = None
         self.logger = logger
         self.max_suspend_duration_seconds = 10
@@ -478,7 +478,7 @@ class FailureInjectorBackgroundThread():
         assert self.error is None, f"failure injector error, most likely node failed to stop: {self.error}"
 
     def _worker(self):
-        with FailureInjector(self.redpanda) as f_injector:
+        with FailureInjector(self.funes) as f_injector:
             while not self.stop_ev.is_set():
 
                 f_type = random.choice(FailureSpec.FAILURE_TYPES)
@@ -489,7 +489,7 @@ class FailureInjectorBackgroundThread():
                 # use provided lock to prevent interfering with nodes being stopped/started
                 with self.lock:
                     try:
-                        node = random.choice(self.redpanda.started_nodes())
+                        node = random.choice(self.funes.started_nodes())
 
                         length = 0
 

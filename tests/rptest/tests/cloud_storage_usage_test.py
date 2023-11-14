@@ -1,10 +1,10 @@
 # Copyright 2023 Redpanda Data, Inc.
 #
-# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# Licensed as a Funes Enterprise file under the Funes Community
 # License (the "License"); you may not use this file except in compliance with
 # the License. You may obtain a copy of the License at
 #
-# https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+# https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
 
 import random
 import time
@@ -18,14 +18,14 @@ from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
-from rptest.services.redpanda import MetricsEndpoint, SISettings
+from rptest.services.funes import MetricsEndpoint, SISettings
 from rptest.tests.partition_movement import PartitionMovementMixin
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.mode_checks import skip_debug_mode
 from rptest.utils.si_utils import BucketView, NTP, quiesce_uploads
 
 
-class CloudStorageUsageTest(RedpandaTest, PartitionMovementMixin):
+class CloudStorageUsageTest(FunesTest, PartitionMovementMixin):
     message_size = 32 * 1024  # 32KiB
     log_segment_size = 1024 * 1024  # 256KiB
     produce_byte_rate_per_ntp = 512 * 1024  # 512 KiB
@@ -59,8 +59,8 @@ class CloudStorageUsageTest(RedpandaTest, PartitionMovementMixin):
                              extra_rp_conf=extra_rp_conf,
                              si_settings=self.si_settings)
 
-        self.rpk = RpkTool(self.redpanda)
-        self.admin = Admin(self.redpanda)
+        self.rpk = RpkTool(self.funes)
+        self.admin = Admin(self.funes)
         self.s3_port = self.si_settings.cloud_storage_api_endpoint_port
 
     def _create_producers(self) -> list[KgoVerifierProducer]:
@@ -75,7 +75,7 @@ class CloudStorageUsageTest(RedpandaTest, PartitionMovementMixin):
                              f"{bps / 1024}KiB/s on topic={topic.name}")
             producers.append(
                 KgoVerifierProducer(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic,
                                     msg_size=self.message_size,
                                     msg_count=msg_count,
@@ -86,7 +86,7 @@ class CloudStorageUsageTest(RedpandaTest, PartitionMovementMixin):
         return producers
 
     def _check_usage(self, timeout_sec):
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
 
         # The usage inferred from the uploaded manifest
         # lags behind the actual reported usage. For this reason,
@@ -118,26 +118,26 @@ class CloudStorageUsageTest(RedpandaTest, PartitionMovementMixin):
 
     def _test_epilogue(self):
         # Assert tht retention was active
-        self.redpanda.metric_sum(
-            "redpanda_cloud_storage_deleted_segments",
+        self.funes.metric_sum(
+            "funes_cloud_storage_deleted_segments",
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS) > 0
 
         # Assert that compacted segment re-upload operated during the test
-        bucket_view = BucketView(self.redpanda, topics=self.topics)
+        bucket_view = BucketView(self.funes, topics=self.topics)
         bucket_view.assert_at_least_n_uploaded_segments_compacted(
             self.topics[1].name, partition=0, revision=None, n=1)
 
     def _check_describe_log_dirs(self):
-        quiesce_uploads(self.redpanda, [t.name for t in self.topics],
+        quiesce_uploads(self.funes, [t.name for t in self.topics],
                         timeout_sec=30)
 
         describe_items = self.rpk.describe_log_dirs()
         by_ntp: defaultdict[NTP, list] = defaultdict(list)
         for i in describe_items:
-            ntp = NTP(ns='kafka', topic=i.topic, partition=i.partition)
+            ntp = NTP(ns='sql', topic=i.topic, partition=i.partition)
             by_ntp[ntp].append(i)
 
-        bucket_view = BucketView(self.redpanda)
+        bucket_view = BucketView(self.funes)
         for ntp, items in by_ntp.items():
             remote_items = list(i for i in items
                                 if i.dir.startswith("remote://"))

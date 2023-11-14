@@ -29,7 +29,7 @@ ss::future<> disk(const ss::sstring& path) {
             if (fs == ss::fs_type::ext4) {
                 checklog.warn(
                   "Path: `{}' is on ext4, not XFS. This will probably work, "
-                  "but Redpanda is only tested on XFS and XFS is recommended "
+                  "but Funes is only tested on XFS and XFS is recommended "
                   "for best performance.",
                   path);
             } else if (fs != ss::fs_type::xfs) {
@@ -59,7 +59,7 @@ void memory(bool ignore) {
 
 ss::future<> systemd_notify_ready() {
     ss::sstring msg = ssx::sformat(
-      "READY=1\nSTATUS=redpanda is ready! - {}", redpanda_version());
+      "READY=1\nSTATUS=funes is ready! - {}", funes_version());
     return systemd_raw_message(std::move(msg));
 }
 

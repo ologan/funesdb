@@ -1398,7 +1398,7 @@ FIXTURE_TEST(partition_size_while_cleanup, storage_test_fixture) {
     BOOST_REQUIRE_EQUAL(sz_initial, 0);
 
     // Add 100 batches with one event each, all events having the same key
-    static constexpr size_t batch_size = 1_KiB; // Size visible to Kafka API
+    static constexpr size_t batch_size = 1_KiB; // Size visible to SQL API
     static constexpr size_t input_batch_count = 100;
 
     append_exactly(log, input_batch_count, batch_size, "key")
@@ -2111,7 +2111,7 @@ FIXTURE_TEST(committed_offset_updates, storage_test_fixture) {
 }
 
 FIXTURE_TEST(changing_cleanup_policy_back_and_forth, storage_test_fixture) {
-    // issue: https://github.com/redpanda-data/redpanda/issues/2214
+    // issue: https://github.com/redpanda-data/funes/issues/2214
     auto cfg = default_log_config(test_dir);
     cfg.max_compacted_segment_size = config::mock_binding<size_t>(100_MiB);
     cfg.cache = storage::with_cache::no;
@@ -2687,7 +2687,7 @@ FIXTURE_TEST(write_truncate_compact, storage_test_fixture) {
             })
           .get();
         // TODO: re-enable. See:
-        // https://github.com/redpanda-data/redpanda/issues/8153
+        // https://github.com/redpanda-data/funes/issues/8153
         // throw;
     }
     // BOOST_REQUIRE_EQUAL(false, ss::file_exists(dir_path).get());
@@ -3289,7 +3289,7 @@ FIXTURE_TEST(test_bytes_eviction_overrides, storage_test_fixture) {
         storage::log_manager mgr = make_log_manager(cfg);
 
         auto deferred = ss::defer([&mgr]() mutable { mgr.stop().get0(); });
-        auto ntp = model::ntp(model::kafka_namespace, "test", 0);
+        auto ntp = model::ntp(model::sql_namespace, "test", 0);
         storage::ntp_config ntp_cfg(ntp, mgr.config().base_dir);
         storage::ntp_config::default_overrides overrides;
 
@@ -3360,7 +3360,7 @@ FIXTURE_TEST(issue_8091, storage_test_fixture) {
     info("config: {}", mgr.config());
     auto deferred = ss::defer([&mgr]() mutable { mgr.stop().get(); });
 
-    auto ntp = model::ntp(model::kafka_namespace, "test", 0);
+    auto ntp = model::ntp(model::sql_namespace, "test", 0);
     auto log
       = mgr.manage(storage::ntp_config(ntp, mgr.config().base_dir)).get0();
 

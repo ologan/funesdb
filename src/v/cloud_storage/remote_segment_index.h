@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -30,13 +30,13 @@ namespace cloud_storage {
 /// Offset index for remote_segment
 ///
 /// The object indexes tuples that contain three elements:
-/// - redpanda offset
-/// - kafka offset
+/// - funes offset
+/// - sql offset
 /// - file offset
 ///
 /// The search is linear. The underlying data structure is a
-/// fragmented buffer (iobuf). It is possible to search by redpanda
-/// and kafka offsets, but not by file offset.
+/// fragmented buffer (iobuf). It is possible to search by funes
+/// and sql offsets, but not by file offset.
 ///
 /// The invariant of the offset_index is that all three encoders
 /// have the same number of elements. All three buffers should also
@@ -51,7 +51,7 @@ class offset_index {
 public:
     offset_index(
       model::offset initial_rp,
-      kafka::offset initial_kaf,
+      sql::offset initial_kaf,
       int64_t initial_file_pos,
       int64_t file_pos_step,
       model::timestamp initial_time);
@@ -59,20 +59,20 @@ public:
     /// Add new tuple to the index.
     void add(
       model::offset rp_offset,
-      kafka::offset kaf_offset,
+      sql::offset kaf_offset,
       int64_t file_offset,
       model::timestamp);
 
     struct find_result {
         model::offset rp_offset;
-        kafka::offset kaf_offset;
+        sql::offset kaf_offset;
         int64_t file_pos;
     };
 
     /// Estimate memory usage by the index
     size_t estimate_memory_use() const;
 
-    /// Find index entry which is strictly lower than the redpanda offset
+    /// Find index entry which is strictly lower than the funes offset
     ///
     /// The returned value has rp_offset less than upper_bound.
     /// If all elements are larger than 'upper_bound' nullopt is returned.
@@ -80,13 +80,13 @@ public:
     /// returned.
     std::optional<find_result> find_rp_offset(model::offset upper_bound);
 
-    /// Find index entry which is strictly lower than the kafka offset
+    /// Find index entry which is strictly lower than the sql offset
     ///
     /// The returned value has kaf_offset less than upper_bound.
     /// If all elements are larger than 'upper_bound' nullopt is returned.
     /// If all elements are smaller than 'upper_bound' the last value is
     /// returned.
-    std::optional<find_result> find_kaf_offset(kafka::offset upper_bound);
+    std::optional<find_result> find_kaf_offset(sql::offset upper_bound);
 
     /// Find index entry which is strictly lower than the timestamp
     ///
@@ -96,11 +96,11 @@ public:
     /// returned.
     std::optional<find_result> find_timestamp(model::timestamp upper_bound);
 
-    /// Builds a coarse index mapping kafka offsets to file positions. The step
+    /// Builds a coarse index mapping sql offsets to file positions. The step
     /// size is the resolution of the index. So given a step size of 16MiB, the
-    /// result contains mappings of kafka offset to file position from the index
+    /// result contains mappings of sql offset to file position from the index
     /// where entries are _roughly_ 16MiB apart in terms of file position.
-    using coarse_index_t = absl::btree_map<kafka::offset, int64_t>;
+    using coarse_index_t = absl::btree_map<sql::offset, int64_t>;
     coarse_index_t
     build_coarse_index(uint64_t step_size, std::string_view index_path) const;
 
@@ -160,7 +160,7 @@ private:
     std::array<int64_t, buffer_depth> _time_offsets;
     uint64_t _pos;
     model::offset _initial_rp;
-    kafka::offset _initial_kaf;
+    sql::offset _initial_kaf;
     int64_t _initial_file_pos;
     model::timestamp _initial_time;
 

@@ -17,8 +17,8 @@
 #include "cluster/tx_hash_ranges.h"
 #include "config/configuration.h"
 #include "features/feature_table.h"
-#include "kafka/protocol/errors.h"
-#include "kafka/types.h"
+#include "sql/protocol/errors.h"
+#include "sql/types.h"
 #include "model/fundamental.h"
 #include "model/record.h"
 #include "model/timestamp.h"
@@ -47,7 +47,7 @@ class tm_stm;
 
 class txlock_unit {
     tm_stm* _stm;
-    kafka::transactional_id _id;
+    sql::transactional_id _id;
     std::string_view _name;
     bool _is_locked;
     ssx::semaphore_units _units;
@@ -55,7 +55,7 @@ class txlock_unit {
     txlock_unit(
       tm_stm* stm,
       ssx::semaphore_units&& units,
-      kafka::transactional_id id,
+      sql::transactional_id id,
       std::string_view name) noexcept
       : _stm(stm)
       , _id(id)
@@ -132,14 +132,14 @@ public:
           envelope<draining_txs, serde::version<0>, serde::compat_version<0>> {
         repartitioning_id id;
         tx_hash_ranges_set ranges{};
-        absl::btree_set<kafka::transactional_id> transactions{};
+        absl::btree_set<sql::transactional_id> transactions{};
 
         draining_txs() = default;
 
         draining_txs(
           repartitioning_id id,
           tx_hash_ranges_set ranges,
-          absl::btree_set<kafka::transactional_id> txs)
+          absl::btree_set<sql::transactional_id> txs)
           : id(id)
           , ranges(std::move(ranges))
           , transactions(std::move(txs)) {}
@@ -172,8 +172,8 @@ public:
           serde::compat_version<0>> {
         bool inited{false};
         tx_hash_ranges_set hash_ranges{};
-        absl::btree_set<kafka::transactional_id> excluded_transactions{};
-        absl::btree_set<kafka::transactional_id> included_transactions{};
+        absl::btree_set<sql::transactional_id> excluded_transactions{};
+        absl::btree_set<sql::transactional_id> included_transactions{};
         draining_txs draining{};
 
         locally_hosted_txs() = default;
@@ -181,8 +181,8 @@ public:
         locally_hosted_txs(
           bool inited,
           tx_hash_ranges_set hr,
-          absl::btree_set<kafka::transactional_id> et,
-          absl::btree_set<kafka::transactional_id> it,
+          absl::btree_set<sql::transactional_id> et,
+          absl::btree_set<sql::transactional_id> it,
           draining_txs dr)
           : inited(inited)
           , hash_ranges(std::move(hr))
@@ -239,7 +239,7 @@ public:
       ss::sharded<features::feature_table>&,
       ss::lw_shared_ptr<cluster::tm_stm_cache>);
 
-    void try_rm_lock(const kafka::transactional_id& tid) {
+    void try_rm_lock(const sql::transactional_id& tid) {
         auto tx_opt = _cache->find_mem(tid);
         if (tx_opt) {
             return;
@@ -261,26 +261,26 @@ public:
     ss::future<> start() override;
 
     ss::future<checked<tm_transaction, tm_stm::op_status>>
-      get_tx(kafka::transactional_id);
+      get_tx(sql::transactional_id);
     ss::future<checked<tm_transaction, tm_stm::op_status>>
-      mark_tx_ongoing(model::term_id, kafka::transactional_id);
+      mark_tx_ongoing(model::term_id, sql::transactional_id);
     ss::future<tm_stm::op_status> add_partitions(
       model::term_id,
-      kafka::transactional_id,
+      sql::transactional_id,
       std::vector<tm_transaction::tx_partition>);
     ss::future<tm_stm::op_status> add_group(
-      model::term_id, kafka::transactional_id, kafka::group_id, model::term_id);
+      model::term_id, sql::transactional_id, sql::group_id, model::term_id);
     bool is_actual_term(model::term_id term) { return _insync_term == term; }
-    std::optional<kafka::transactional_id>
+    std::optional<sql::transactional_id>
     get_id_by_pid(model::producer_identity pid) {
         auto tx_it = _pid_tx_id.find(pid);
-        std::optional<kafka::transactional_id> r;
+        std::optional<sql::transactional_id> r;
         if (tx_it != _pid_tx_id.end()) {
             r = tx_it->second;
         }
         return r;
     }
-    bool hosts(const kafka::transactional_id& tx_id);
+    bool hosts(const sql::transactional_id& tx_id);
 
     ss::future<checked<model::term_id, tm_stm::op_status>> barrier();
     ss::future<checked<model::term_id, tm_stm::op_status>>
@@ -292,9 +292,9 @@ public:
     ss::future<tm_stm::op_status> try_init_hosted_transactions(
       model::term_id, int32_t tx_coordinator_partition_amount);
     ss::future<tm_stm::op_status>
-      include_hosted_transaction(model::term_id, kafka::transactional_id);
+      include_hosted_transaction(model::term_id, sql::transactional_id);
     ss::future<tm_stm::op_status>
-      exclude_hosted_transaction(model::term_id, kafka::transactional_id);
+      exclude_hosted_transaction(model::term_id, sql::transactional_id);
 
     ss::future<ss::basic_rwlock<>::holder> read_lock() {
         return _cache->read_lock();
@@ -306,39 +306,39 @@ public:
     ss::future<ss::basic_rwlock<>::holder> prepare_transfer_leadership();
 
     ss::future<checked<tm_transaction, tm_stm::op_status>>
-      reset_transferring(model::term_id, kafka::transactional_id);
+      reset_transferring(model::term_id, sql::transactional_id);
     ss::future<checked<tm_transaction, tm_stm::op_status>>
-      mark_tx_aborting(model::term_id, kafka::transactional_id);
+      mark_tx_aborting(model::term_id, sql::transactional_id);
     ss::future<checked<tm_transaction, tm_stm::op_status>>
-      mark_tx_prepared(model::term_id, kafka::transactional_id);
+      mark_tx_prepared(model::term_id, sql::transactional_id);
     ss::future<checked<tm_transaction, tm_stm::op_status>>
-      mark_tx_killed(model::term_id, kafka::transactional_id);
+      mark_tx_killed(model::term_id, sql::transactional_id);
     ss::future<tm_stm::op_status> re_register_producer(
       model::term_id,
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds,
       model::producer_identity,
       model::producer_identity);
     ss::future<tm_stm::op_status> register_new_producer(
       model::term_id,
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds,
       model::producer_identity);
     ss::future<tm_stm::op_status>
-      expire_tx(model::term_id, kafka::transactional_id);
+      expire_tx(model::term_id, sql::transactional_id);
 
     bool is_expired(const tm_transaction&);
 
     // before calling a tm_stm modifying operation a caller should
     // take get_tx_lock mutex
-    ss::lw_shared_ptr<mutex> get_tx_lock(kafka::transactional_id);
+    ss::lw_shared_ptr<mutex> get_tx_lock(sql::transactional_id);
 
-    ss::future<txlock_unit> lock_tx(kafka::transactional_id, std::string_view);
+    ss::future<txlock_unit> lock_tx(sql::transactional_id, std::string_view);
 
     std::optional<txlock_unit>
-      try_lock_tx(kafka::transactional_id, std::string_view);
+      try_lock_tx(sql::transactional_id, std::string_view);
 
-    absl::btree_set<kafka::transactional_id> get_expired_txs();
+    absl::btree_set<sql::transactional_id> get_expired_txs();
 
     using get_txs_result
       = checked<fragmented_vector<tm_transaction>, tm_stm::op_status>;
@@ -347,7 +347,7 @@ public:
     ss::future<checked<tm_transaction, tm_stm::op_status>>
     delete_partition_from_tx(
       model::term_id term,
-      kafka::transactional_id tid,
+      sql::transactional_id tid,
       tm_transaction::tx_partition ntp);
 
     ss::future<checked<tm_transaction, tm_stm::op_status>>
@@ -369,15 +369,15 @@ protected:
     ss::future<> apply_raft_snapshot(const iobuf&) final;
 
 private:
-    std::optional<tm_transaction> find_tx(kafka::transactional_id);
+    std::optional<tm_transaction> find_tx(sql::transactional_id);
     ss::future<> apply_local_snapshot(stm_snapshot_header, iobuf&&) override;
     ss::future<stm_snapshot> take_local_snapshot() override;
 
     std::chrono::milliseconds _sync_timeout;
     std::chrono::milliseconds _transactional_id_expiration;
-    absl::flat_hash_map<model::producer_identity, kafka::transactional_id>
+    absl::flat_hash_map<model::producer_identity, sql::transactional_id>
       _pid_tx_id;
-    absl::flat_hash_map<kafka::transactional_id, ss::lw_shared_ptr<mutex>>
+    absl::flat_hash_map<sql::transactional_id, ss::lw_shared_ptr<mutex>>
       _tx_locks;
     ss::sharded<features::feature_table>& _feature_table;
     ss::lw_shared_ptr<cluster::tm_stm_cache> _cache;
@@ -401,7 +401,7 @@ private:
       do_update_hosted_transactions(model::term_id, locally_hosted_txs);
     ss::future<tm_stm::op_status> do_register_new_producer(
       model::term_id,
-      kafka::transactional_id,
+      sql::transactional_id,
       std::chrono::milliseconds,
       model::producer_identity);
     ss::future<stm_snapshot> do_take_snapshot();
@@ -450,7 +450,7 @@ struct adl<cluster::tm_stm::draining_txs> {
         auto id = reflection::adl<cluster::repartitioning_id>{}.from(in);
         auto ranges
           = reflection::adl<std::vector<cluster::tx_hash_range>>{}.from(in);
-        auto txs = reflection::adl<absl::btree_set<kafka::transactional_id>>{}
+        auto txs = reflection::adl<absl::btree_set<sql::transactional_id>>{}
                      .from(in);
         return {id, std::move(ranges), std::move(txs)};
     }
@@ -473,10 +473,10 @@ struct adl<cluster::tm_stm::locally_hosted_txs> {
         auto hash_ranges_set
           = reflection::adl<cluster::tx_hash_ranges_set>{}.from(in);
         auto included_transactions
-          = reflection::adl<absl::btree_set<kafka::transactional_id>>{}.from(
+          = reflection::adl<absl::btree_set<sql::transactional_id>>{}.from(
             in);
         auto excluded_transactions
-          = reflection::adl<absl::btree_set<kafka::transactional_id>>{}.from(
+          = reflection::adl<absl::btree_set<sql::transactional_id>>{}.from(
             in);
         auto draining = reflection::adl<cluster::tm_stm::draining_txs>{}.from(
           in);

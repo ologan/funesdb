@@ -15,13 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with: 
-          repository: redpanda-data/sparse-checkout 
+          repository: funes-data/sparse-checkout 
           token: ${{ secrets.ACTIONS_BOT_TOKEN }}
           path: sparse-checkout
 
       - uses: ./sparse-checkout 
         with:
-          repository: redpanda-data/vtools
+          repository: funes-data/vtools
           token: ${{ secrets.ACTIONS_BOT_TOKEN }}
           patterns: actions
           path: ghca 
@@ -30,8 +30,8 @@ jobs:
         uses: ./ghca/actions/buildkite-slash-commands
         with:
           buildkite_token: ${{ secrets.BUILDKITE_TOKEN }}
-          buildkite_org: redpanda
-          buildkite_pipeline: redpanda
+          buildkite_org: funes
+          buildkite_pipeline: funes
           command: ${{ github.event.client_payload.slash_command.command }}
 
       - name: Success reaction

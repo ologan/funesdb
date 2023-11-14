@@ -1,19 +1,19 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
 #include "cluster/fwd.h"
 #include "config/property.h"
-#include "kafka/client/fwd.h"
-#include "kafka/client/types.h"
-#include "kafka/protocol/types.h"
+#include "sql/client/fwd.h"
+#include "sql/client/types.h"
+#include "sql/protocol/types.h"
 #include "model/timeout_clock.h"
 #include "net/types.h"
 #include "security/audit/probe.h"
@@ -58,7 +58,7 @@ public:
       = ss::bool_class<struct audit_event_permitted_tag>;
 
     audit_log_manager(
-      cluster::controller* controller, kafka::client::configuration&);
+      cluster::controller* controller, sql::client::configuration&);
 
     audit_log_manager(const audit_log_manager&) = delete;
     audit_log_manager& operator=(const audit_log_manager&) = delete;
@@ -66,11 +66,11 @@ public:
     audit_log_manager& operator=(audit_log_manager&&) = delete;
     ~audit_log_manager();
 
-    /// Start the underlying kafka client and create the audit log topic
+    /// Start the underlying sql client and create the audit log topic
     /// if necessary
     ss::future<> start();
 
-    /// Shuts down the internal kafka client and stops all pending bg work
+    /// Shuts down the internal sql client and stops all pending bg work
     ss::future<> stop();
 
     /// Enqueue an event to be produced onto an audit log partition
@@ -91,7 +91,7 @@ public:
       security::audit::returns_auditable_resource_vector Func,
       typename... Args>
     bool
-    enqueue_authz_audit_event(kafka::api_key api, Func func, Args&&... args) {
+    enqueue_authz_audit_event(sql::api_key api, Func func, Args&&... args) {
         if (auto val = should_enqueue_audit_event(api); val.has_value()) {
             return (bool)*val;
         }
@@ -101,7 +101,7 @@ public:
     }
 
     template<typename... Args>
-    bool enqueue_authz_audit_event(kafka::api_key api, Args&&... args) {
+    bool enqueue_authz_audit_event(sql::api_key api, Args&&... args) {
         if (auto val = should_enqueue_audit_event(api); val.has_value()) {
             return (bool)*val;
         }
@@ -140,12 +140,12 @@ public:
     /// Note does not include records already sent to client
     size_t pending_events() const { return _queue.size(); };
 
-    /// Returns true if the internal kafka client is allocated
+    /// Returns true if the internal sql client is allocated
     ///
     /// NOTE: Only works on shard_id{0}, use in unit tests
     bool is_client_enabled() const;
 
-    bool report_redpanda_app_event(is_started);
+    bool report_funes_app_event(is_started);
 
 private:
     /// The following methods return nullopt in the case the event should
@@ -154,7 +154,7 @@ private:
     /// not having attributes of desired trackable events
     std::optional<audit_event_passthrough> should_enqueue_audit_event() const;
     std::optional<audit_event_passthrough>
-      should_enqueue_audit_event(kafka::api_key) const;
+      should_enqueue_audit_event(sql::api_key) const;
     std::optional<audit_event_passthrough>
       should_enqueue_audit_event(event_type) const;
 
@@ -200,7 +200,7 @@ private:
 
     /// This will be true when the client detects that there is an issue with
     /// authorization configuration. Auth must be enabled so the client
-    /// principal can be queried. This is needed so that redpanda can give
+    /// principal can be queried. This is needed so that funes can give
     /// special permission to the audit client to do things like produce to the
     /// audit topic.
     bool _auth_misconfigured{false};
@@ -227,13 +227,13 @@ private:
     underlying_t _queue;
     ssx::semaphore _active_drain{1, "audit-drain"};
 
-    /// Single instance contains a kafka::client::client instance.
+    /// Single instance contains a sql::client::client instance.
     friend class audit_sink;
     std::unique_ptr<audit_sink> _sink;
 
     /// Other references
     cluster::controller* _controller;
-    kafka::client::configuration& _config;
+    sql::client::configuration& _config;
     std::unique_ptr<audit_probe> _probe;
 };
 

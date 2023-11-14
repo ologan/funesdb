@@ -117,7 +117,7 @@ struct compacted_index {
     enum class recovery_state {
         /**
          * Index may be missing when either was deleted or not stored when
-         * redpanda crashed
+         * funes crashed
          */
         index_missing,
         /**

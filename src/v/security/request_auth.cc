@@ -47,7 +47,7 @@ request_auth_result
 request_authenticator::authenticate(const ss::http::request& req) {
     if (_controller == nullptr) {
         // We are running outside of an environment with credentials, e.g.
-        // a unit test or a standalone pandaproxy/schema_registry
+        // a unit test or a standalone funesproxy/schema_registry
         return request_auth_result(
           request_auth_result::authenticated::yes,
           request_auth_result::superuser::yes,

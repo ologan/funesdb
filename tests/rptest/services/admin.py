@@ -26,7 +26,7 @@ class AuthPreservingSession(requests.Session):
     """
     Override `requests` default behaviour of dropping Authorization
     headers when redirecting.  This makes sense as a general default,
-    but in the case of the redpanda admin API, we trust the server to
+    but in the case of the funes admin API, we trust the server to
     only redirect us to other equally privileged servers within
     the same cluster.
     """
@@ -59,28 +59,28 @@ class PartitionDetails:
         self.status = None
 
 
-class RedpandaNode(NamedTuple):
+class FunesNode(NamedTuple):
     # host or ip address
     ip: str
-    # node id in redpanda.yaml
+    # node id in funes.yaml
     id: int
 
 
 class Admin:
     """
-    Wrapper for Redpanda admin REST API.
+    Wrapper for Funes admin REST API.
 
     All methods on this class will raise on errors.  For GETs the return
     value is a decoded dict of the JSON payload, for other requests
     the successful HTTP response object is returned.
     """
     def __init__(self,
-                 redpanda,
+                 funes,
                  default_node=None,
                  retry_codes=None,
                  auth=None,
                  retries_amount=5):
-        self.redpanda = redpanda
+        self.funes = funes
 
         self._session = AuthPreservingSession()
         if auth is not None:
@@ -128,18 +128,18 @@ class Admin:
 
     def _get_configuration(self, host, namespace, topic, partition):
         url = f"http://{host}:9644/v1/partitions/{namespace}/{topic}/{partition}"
-        self.redpanda.logger.debug(f"Dispatching GET {url}")
+        self.funes.logger.debug(f"Dispatching GET {url}")
         r = self._session.request("GET", url)
         if r.status_code != 200:
-            self.redpanda.logger.warn(f"Response {r.status_code}: {r.text}")
+            self.funes.logger.warn(f"Response {r.status_code}: {r.text}")
             return None
         else:
             try:
                 json = r.json()
-                self.redpanda.logger.debug(f"Response OK, JSON: {json}")
+                self.funes.logger.debug(f"Response OK, JSON: {json}")
                 return json
             except json.decoder.JSONDecodeError as e:
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"Response OK, Malformed JSON: '{r.text}' ({e})")
                 return None
 
@@ -148,7 +148,7 @@ class Admin:
             hosts,
             topic,
             partition=0,
-            namespace="kafka",
+            namespace="sql",
             replication: Optional[int] = None) -> Optional[PartitionDetails]:
         """
         Method iterates through hosts and checks that the configuration of
@@ -164,53 +164,53 @@ class Admin:
         replicas = None
         status = None
         for host in hosts:
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"requesting \"{namespace}/{topic}/{partition}\" details from {host})"
             )
             meta = self._get_configuration(host, namespace, topic, partition)
             if meta == None:
                 return None
             if "replicas" not in meta:
-                self.redpanda.logger.debug(f"replicas are missing")
+                self.funes.logger.debug(f"replicas are missing")
                 return None
             if "status" not in meta:
-                self.redpanda.logger.debug(f"status is missing")
+                self.funes.logger.debug(f"status is missing")
                 return None
             if status == None:
                 status = meta["status"]
-                self.redpanda.logger.debug(f"get status:{status}")
+                self.funes.logger.debug(f"get status:{status}")
             if status != meta["status"]:
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"get status:{meta['status']} while already observed:{status} before"
                 )
                 return None
             read_replicas = meta["replicas"]
             if replicas is None:
                 replicas = read_replicas
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"get replicas:{read_replicas} from {host}")
             elif not self._equal_assignments(replicas, read_replicas):
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"get conflicting replicas:{read_replicas} from {host}")
                 return None
             if replication != None:
                 if len(meta["replicas"]) != replication:
-                    self.redpanda.logger.debug(
+                    self.funes.logger.debug(
                         f"expected replication:{replication} got:{len(meta['replicas'])}"
                     )
                     return None
             if meta["leader_id"] < 0:
-                self.redpanda.logger.debug(f"doesn't have leader")
+                self.funes.logger.debug(f"doesn't have leader")
                 return None
             if last_leader < 0:
                 last_leader = int(meta["leader_id"])
-                self.redpanda.logger.debug(f"get leader:{last_leader}")
+                self.funes.logger.debug(f"get leader:{last_leader}")
             if last_leader not in [n["node_id"] for n in replicas]:
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"leader:{last_leader} isn't in the replica set")
                 return None
             if last_leader != meta["leader_id"]:
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"got leader:{meta['leader_id']} but observed {last_leader} before"
                 )
                 return None
@@ -225,7 +225,7 @@ class Admin:
             topic,
             *,
             partition=0,
-            namespace="kafka",
+            namespace="sql",
             replication=None,
             timeout_s=10,
             backoff_s=1,
@@ -236,13 +236,13 @@ class Admin:
         When the timeout is exhaust it throws TimeoutException
         """
         if hosts == None:
-            hosts = [n.account.hostname for n in self.redpanda.nodes]
+            hosts = [n.account.hostname for n in self.funes.nodes]
         hosts = list(hosts)
 
         def get_stable_configuration():
             random.shuffle(hosts)
             msg = ",".join(hosts)
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"wait details for {namespace}/{topic}/{partition} from nodes: {msg}"
             )
             try:
@@ -255,7 +255,7 @@ class Admin:
                     return False
                 return True, info
             except RequestException:
-                self.redpanda.logger.exception(
+                self.funes.logger.exception(
                     "an error on getting stable configuration, retrying")
                 return False
 
@@ -270,7 +270,7 @@ class Admin:
     def await_stable_leader(self,
                             topic,
                             partition=0,
-                            namespace="kafka",
+                            namespace="sql",
                             replication=None,
                             timeout_s=10,
                             backoff_s=1,
@@ -312,7 +312,7 @@ class Admin:
         elif node is None:
             # Pick a random node to run this request on.  If that node gives
             # connection errors we will retry on other nodes.
-            node = random.choice(self.redpanda.started_nodes())
+            node = random.choice(self.funes.started_nodes())
             retry_connection = True
         else:
             # We were called with a specific node to run on -- do no retry on
@@ -322,14 +322,14 @@ class Admin:
         if kwargs.get('timeout', None) is None:
             kwargs['timeout'] = DEFAULT_TIMEOUT
 
-        fallback_nodes = self.redpanda.nodes
+        fallback_nodes = self.funes.nodes
         fallback_nodes = list(filter(lambda n: n != node, fallback_nodes))
 
         # On connection errors, retry until we run out of alternative nodes to try
         # (fall through on first successful request)
         while True:
             url = self._url(node, path)
-            self.redpanda.logger.debug(f"Dispatching {verb} {url}")
+            self.funes.logger.debug(f"Dispatching {verb} {url}")
             try:
                 r = self._session.request(verb, url, **kwargs)
             except requests.ConnectionError:
@@ -337,7 +337,7 @@ class Admin:
                     node = random.choice(fallback_nodes)
                     fallback_nodes = list(
                         filter(lambda n: n != node, fallback_nodes))
-                    self.redpanda.logger.info(
+                    self.funes.logger.info(
                         f"Connection error, retrying on node {node.account.hostname} (remaining {[n.account.hostname for n in fallback_nodes]})"
                     )
                 else:
@@ -347,18 +347,18 @@ class Admin:
 
         # Log the response
         if r.status_code != 200:
-            self.redpanda.logger.warn(f"Response {r.status_code}: {r.text}")
+            self.funes.logger.warn(f"Response {r.status_code}: {r.text}")
         else:
             if 'application/json' in r.headers.get('Content-Type') and len(
                     r.text):
                 try:
-                    self.redpanda.logger.debug(
+                    self.funes.logger.debug(
                         f"Response OK, JSON: {r.json()}")
                 except json.decoder.JSONDecodeError as e:
-                    self.redpanda.logger.debug(
+                    self.funes.logger.debug(
                         f"Response OK, Malformed JSON: '{r.text}' ({e})")
             else:
-                self.redpanda.logger.debug("Response OK")
+                self.funes.logger.debug("Response OK")
 
         r.raise_for_status()
         return r
@@ -450,14 +450,14 @@ class Admin:
         no nodes are supplied, uses all nodes in the cluster.
         """
         if not nodes:
-            nodes = self.redpanda.nodes
+            nodes = self.funes.nodes
 
         def node_supports_feature(node):
             features_resp = None
             try:
                 features_resp = self.get_features(node=node)
             except RequestException as e:
-                self.redpanda.logger.debug(
+                self.funes.logger.debug(
                     f"Could not get features on {node.account.hostname}: {e}")
                 return False
             features_dict = dict(
@@ -507,7 +507,7 @@ class Admin:
         Set broker log level
         """
         name = name.replace("/", "%2F")
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             path = f"config/log_level/{name}?level={level}"
             if expires:
                 path = f"{path}&expires={expires}"
@@ -544,7 +544,7 @@ class Admin:
         Decommission broker
         """
         path = f"brokers/{id}/decommission"
-        self.redpanda.logger.debug(f"decommissioning {path}")
+        self.funes.logger.debug(f"decommissioning {path}")
         return self._request('put', path, node=node)
 
     def get_decommission_status(self, id, node=None):
@@ -559,7 +559,7 @@ class Admin:
         Recommission broker i.e. abort ongoing decommissioning
         """
         path = f"brokers/{id}/recommission"
-        self.redpanda.logger.debug(f"recommissioning {id}")
+        self.funes.logger.debug(f"recommissioning {id}")
         return self._request('put', path, node=node)
 
     def trigger_rebalance(self, node=None):
@@ -607,7 +607,7 @@ class Admin:
         assert (topic is None and partition is None) or \
                 (topic is not None)
 
-        namespace = namespace or "kafka"
+        namespace = namespace or "sql"
         path = "partitions"
         if topic:
             path = f"{path}/{namespace}/{topic}"
@@ -638,7 +638,7 @@ class Admin:
         result = []
         for partition in range(tm_partition_amount):
             self.await_stable_leader(topic="tx",
-                                     namespace="kafka_internal",
+                                     namespace="sql_internal",
                                      partition=partition)
             path = f"transactions?coordinator_partition_id={partition}"
             partition_res = self._request('get', path, node=node).json()
@@ -708,7 +708,7 @@ class Admin:
                                partition,
                                replicas,
                                *,
-                               namespace="kafka",
+                               namespace="sql",
                                node=None):
         """
         [ {"node_id": 0, "core": 1}, ... ]
@@ -721,7 +721,7 @@ class Admin:
                                      partition,
                                      replicas,
                                      *,
-                                     namespace="kafka",
+                                     namespace="sql",
                                      node=None):
         """
         [ {"node_id": 0, "core": 1}, ... ]
@@ -732,7 +732,7 @@ class Admin:
     def cancel_partition_move(self,
                               topic,
                               partition,
-                              namespace="kafka",
+                              namespace="sql",
                               node=None):
 
         path = f"partitions/{namespace}/{topic}/{partition}/cancel_reconfiguration"
@@ -741,14 +741,14 @@ class Admin:
     def force_abort_partition_move(self,
                                    topic,
                                    partition,
-                                   namespace="kafka",
+                                   namespace="sql",
                                    node=None):
 
         path = f"partitions/{namespace}/{topic}/{partition}/unclean_abort_reconfiguration"
         return self._request('post', path, node=node)
 
     def create_user(self, username, password, algorithm):
-        self.redpanda.logger.debug(
+        self.funes.logger.debug(
             f"Creating user {username}:{password}:{algorithm}")
 
         path = f"security/users"
@@ -762,14 +762,14 @@ class Admin:
                       ))
 
     def delete_user(self, username):
-        self.redpanda.logger.info(f"Deleting user {username}")
+        self.funes.logger.info(f"Deleting user {username}")
 
         path = f"security/users/{username}"
 
         self._request("delete", path)
 
     def update_user(self, username, password, algorithm):
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Updating user {username}:{password}:{algorithm}")
 
         self._request("PUT",
@@ -823,7 +823,7 @@ class Admin:
             p = self.get_partitions(topic=topic,
                                     partition=partition,
                                     namespace=namespace)
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"ntp {namespace}/{topic}/{partition} details: {p}")
             return p
 
@@ -845,7 +845,7 @@ class Admin:
         else:
             path = f"raft/{details['raft_group_id']}/transfer_leadership"
 
-        leader = self.redpanda.get_node(leader_id)
+        leader = self.funes.get_node(leader_id)
         ret = self._request('post', path=path, node=leader)
         return ret.status_code == 200
 
@@ -853,9 +853,9 @@ class Admin:
         """
         Start maintenanceing on 'node', sending the request to 'dst_node'.
         """
-        id = self.redpanda.node_id(node)
+        id = self.funes.node_id(node)
         url = f"brokers/{id}/maintenance"
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Starting maintenance on node {node.name}/{id}")
         return self._request("put", url, node=dst_node)
 
@@ -863,9 +863,9 @@ class Admin:
         """
         Stop maintenanceing on 'node', sending the request to 'dst_node'.
         """
-        id = self.redpanda.node_id(node)
+        id = self.funes.node_id(node)
         url = f"brokers/{id}/maintenance"
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"Stopping maintenance on node {node.name}/{id}")
         return self._request("delete", url, node=dst_node)
 
@@ -873,8 +873,8 @@ class Admin:
         """
         Get maintenance status of a node.
         """
-        id = self.redpanda.node_id(node)
-        self.redpanda.logger.info(
+        id = self.funes.node_id(node)
+        self.funes.logger.info(
             f"Getting maintenance status on node {node.name}/{id}")
         return self._request("get", "maintenance", node=node).json()
 
@@ -882,8 +882,8 @@ class Admin:
         """
         Reset info for leaders on node
         """
-        id = self.redpanda.node_id(node)
-        self.redpanda.logger.info(f"Reset leaders info on {node.name}/{id}")
+        id = self.funes.node_id(node)
+        self.funes.logger.info(f"Reset leaders info on {node.name}/{id}")
         url = "debug/reset_leaders"
         return self._request("post", url, node=node)
 
@@ -892,10 +892,10 @@ class Admin:
         Get info for leaders on node
         """
         if node:
-            id = self.redpanda.node_id(node)
-            self.redpanda.logger.info(f"Get leaders info on {node.name}/{id}")
+            id = self.funes.node_id(node)
+            self.funes.logger.info(f"Get leaders info on {node.name}/{id}")
         else:
-            self.redpanda.logger.info(f"Get leaders info on any node")
+            self.funes.logger.info(f"Get leaders info on any node")
 
         url = "debug/partition_leaders_table"
         return self._request("get", url, node=node).json()
@@ -1093,16 +1093,16 @@ class Admin:
                                      offsets,
                                      topic,
                                      partition,
-                                     translate_to="kafka",
+                                     translate_to="sql",
                                      node=None):
         """
         Query offset translator to translate offsets from one type to another
 
-        Options for param "translate_to" are "kafka" and "redpanda"
+        Options for param "translate_to" are "sql" and "funes"
         """
         return self._request(
             "get",
-            f"debug/storage/offset_translator/kafka/{topic}/{partition}?translate_to={translate_to}",
+            f"debug/storage/offset_translator/sql/{topic}/{partition}?translate_to={translate_to}",
             node=node,
             json=offsets).json()
 

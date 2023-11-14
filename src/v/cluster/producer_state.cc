@@ -173,7 +173,7 @@ result<request_ptr> requests::try_emplace(
 }
 
 bool requests::stm_apply(
-  const model::batch_identity& bid, kafka::offset offset) {
+  const model::batch_identity& bid, sql::offset offset) {
     bool relink_producer = false;
     auto first = bid.first_seq;
     auto last = bid.last_seq;
@@ -191,7 +191,7 @@ bool requests::stm_apply(
         relink_producer = true;
     }
     result_promise_t ready{};
-    ready.set_value(kafka_result{.last_offset = offset});
+    ready.set_value(sql_result{.last_offset = offset});
     _finished_requests.emplace_back(ss::make_lw_shared<request>(
       bid.first_seq, bid.last_seq, model::term_id{-1}, std::move(ready)));
 
@@ -222,7 +222,7 @@ producer_state::producer_state(
     // Hydrate from snapshot.
     for (auto& req : snapshot._finished_requests) {
         result_promise_t ready{};
-        ready.set_value(kafka_result{req._last_offset});
+        ready.set_value(sql_result{req._last_offset});
         _requests._finished_requests.push_back(ss::make_lw_shared<request>(
           req._first_sequence,
           req._last_sequence,
@@ -326,7 +326,7 @@ result<request_ptr> producer_state::try_emplace_request(
 }
 
 void producer_state::update(
-  const model::batch_identity& bid, kafka::offset offset) {
+  const model::batch_identity& bid, sql::offset offset) {
     if (_gate.is_closed()) {
         return;
     }
@@ -357,7 +357,7 @@ std::optional<seq_t> producer_state::last_sequence_number() const {
 }
 
 producer_state_snapshot
-producer_state::snapshot(kafka::offset log_start_offset) const {
+producer_state::snapshot(sql::offset log_start_offset) const {
     producer_state_snapshot snapshot;
     snapshot._id = _id;
     snapshot._group = _group;
@@ -370,15 +370,15 @@ producer_state::snapshot(kafka::offset log_start_offset) const {
           *this,
           req->_first_sequence,
           req->_last_sequence);
-        auto kafka_offset
+        auto sql_offset
           = req->_result.get_shared_future().get().value().last_offset;
         // offsets older than log start are no longer interesting.
-        if (kafka_offset >= log_start_offset) {
+        if (sql_offset >= log_start_offset) {
             snapshot._finished_requests.push_back(
               producer_state_snapshot::finished_request{
                 ._first_sequence = req->_first_sequence,
                 ._last_sequence = req->_last_sequence,
-                ._last_offset = kafka_offset});
+                ._last_offset = sql_offset});
         }
     }
     return snapshot;

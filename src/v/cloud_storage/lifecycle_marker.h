@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -40,7 +40,7 @@ namespace cloud_storage {
 // │  Purged  │
 // └──────────┘
 enum class lifecycle_status : uint8_t {
-    // exists in a live redpanda cluster.
+    // exists in a live funes cluster.
     live = 1,
 
     // still exists in a cluster's controller, but is in the process

@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iobuf.h"
@@ -179,7 +179,7 @@ void upload_index(
   retry_chain_node& fib) {
     offset_index ix{
       meta.base_offset,
-      meta.base_kafka_offset(),
+      meta.base_sql_offset(),
       0,
       remote_segment_sampling_step_bytes,
       meta.base_timestamp};
@@ -585,10 +585,10 @@ FIXTURE_TEST(test_remote_segment_chunk_read, cloud_storage_fixture) {
     // chunks in the segment.
     auto stream = segment
                     .offset_data_stream(
-                      m.get(key)->base_kafka_offset(),
-                      // using a very large kafka offset makes sure we iterate
+                      m.get(key)->base_sql_offset(),
+                      // using a very large sql offset makes sure we iterate
                       // over the entire segment in chunks.
-                      kafka::offset{100000000},
+                      sql::offset{100000000},
                       std::nullopt,
                       ss::default_priority_class())
                     .get()
@@ -647,8 +647,8 @@ FIXTURE_TEST(test_remote_segment_chunk_read_fallback, cloud_storage_fixture) {
 
     auto stream = segment
                     .offset_data_stream(
-                      m.get(key)->base_kafka_offset(),
-                      kafka::offset{100000000},
+                      m.get(key)->base_sql_offset(),
+                      sql::offset{100000000},
                       std::nullopt,
                       ss::default_priority_class())
                     .get()
@@ -748,7 +748,7 @@ FIXTURE_TEST(test_chunks_initialization, cloud_storage_fixture) {
     BOOST_REQUIRE(!first.handle.has_value());
 
     auto last_offset_in_chunks = 0;
-    for (auto [kafka_offset, file_offset] : coarse_index) {
+    for (auto [sql_offset, file_offset] : coarse_index) {
         const auto& chunk = chunk_api.get(file_offset);
         BOOST_REQUIRE(chunk.current_state == chunk_state::not_available);
         BOOST_REQUIRE_EQUAL(chunk.required_after_n_chunks, 0);
@@ -808,7 +808,7 @@ FIXTURE_TEST(test_chunk_hydration, cloud_storage_fixture) {
     BOOST_REQUIRE(chunk.current_state == chunk_state::hydrated);
     BOOST_REQUIRE(chunk.handle.has_value());
 
-    for (auto [kafka_offset, file_offset] : coarse_index) {
+    for (auto [sql_offset, file_offset] : coarse_index) {
         auto handle = chunk_api.hydrate_chunk(file_offset).get();
         // The file handle is open
         BOOST_REQUIRE(*handle);

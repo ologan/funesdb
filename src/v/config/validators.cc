@@ -167,7 +167,7 @@ validate_non_empty_string_opt(const std::optional<ss::sstring>& os) {
 
 std::optional<ss::sstring>
 validate_audit_event_types(const std::vector<ss::sstring>& vs) {
-    /// TODO: Should match stringified enums in kafka/types.h
+    /// TODO: Should match stringified enums in sql/types.h
     static const absl::flat_hash_set<ss::sstring> audit_event_types{
       "management",
       "produce",

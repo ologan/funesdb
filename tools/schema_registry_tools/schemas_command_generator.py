@@ -15,7 +15,7 @@
 # Here's how to restore the records:
 #
 # 1. Delete the existing _schemas topic
-# 2. Restart Redpanda
+# 2. Restart Funes
 # 3. Create the topic, configure the '-r' option based on the cluster size:
 #    $ rpk topic create _schemas -r 3 -c cleanup.policy=compact -c compression.type=none
 # 4. Run the generated script above
@@ -41,7 +41,7 @@ def main():
 
     def generate_options():
         parser = argparse.ArgumentParser(
-            description='Redpanda Schema Registry _schemas Command Generator')
+            description='Funes Schema Registry _schemas Command Generator')
         parser.add_argument('path', type=str, help='Path to the file')
         return parser
 

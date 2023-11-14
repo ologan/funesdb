@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -83,10 +83,10 @@ public:
 
     /// Create a reader
     ///
-    /// Note that config.start_offset and config.max_offset are kafka offsets.
+    /// Note that config.start_offset and config.max_offset are sql offsets.
     /// All offset translation is done internally. The returned record batch
-    /// reader will produce batches with kafka offsets and the config will be
-    /// updated using kafka offsets.
+    /// reader will produce batches with sql offsets and the config will be
+    /// updated using sql offsets.
     ss::future<storage::translating_reader> make_reader(
       storage::log_reader_config config,
       std::optional<model::timeout_clock::time_point> deadline = std::nullopt);
@@ -99,17 +99,17 @@ public:
 
     /// Whether a timequery on this timestamp can match this remote log
     /// log (i.e. whether it is <= the max offset).  Timestamps below the
-    /// base_timestamp will also return true, as Kafka timequery semantics
+    /// base_timestamp will also return true, as SQL timequery semantics
     /// are that a timestamp below the start of a log will match the first
     /// record in the log.
     bool bounds_timestamp(model::timestamp) const;
 
-    /// Return first uploaded kafka offset
-    kafka::offset first_uploaded_offset();
+    /// Return first uploaded sql offset
+    sql::offset first_uploaded_offset();
 
     /// Return the offset one past the end of the last offset (i.e. the high
     /// watermark as reported by object storage).
-    kafka::offset next_kafka_offset();
+    sql::offset next_sql_offset();
 
     /// Get partition NTP
     const model::ntp& get_ntp() const;
@@ -125,8 +125,8 @@ public:
     ss::future<> serialize_json_manifest_to_output_stream(
       ss::output_stream<char>& output) const;
 
-    // returns term last kafka offset
-    ss::future<std::optional<kafka::offset>>
+    // returns term last sql offset
+    ss::future<std::optional<sql::offset>>
       get_term_last_offset(model::term_id) const;
 
     // Get list of aborted transactions that overlap with the offset range
@@ -182,7 +182,7 @@ private:
     /// \param st is a segment state referenced by offset_key
     std::unique_ptr<remote_segment_batch_reader> borrow_segment_reader(
       storage::log_reader_config config,
-      kafka::offset offset_key,
+      sql::offset offset_key,
       materialized_segment_ptr& st);
 
     /// Return reader back to segment_state

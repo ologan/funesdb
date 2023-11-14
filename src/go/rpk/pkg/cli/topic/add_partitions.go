@@ -16,7 +16,7 @@ import (
 	"os"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -43,8 +43,8 @@ func newAddPartitionsCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			if num <= 0 {
@@ -67,7 +67,7 @@ func newAddPartitionsCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			for _, resp := range resps.Sorted() {
 				msg := "OK"
 				if resp.ErrMessage != "" {
-					zap.L().Sugar().Debugf("redpanda returned error message: %v", resp.ErrMessage)
+					zap.L().Sugar().Debugf("funes returned error message: %v", resp.ErrMessage)
 				}
 				if e := resp.Err; e != nil {
 					if errors.Is(e, kerr.InvalidPartitions) && num > 0 {

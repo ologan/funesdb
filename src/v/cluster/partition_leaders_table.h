@@ -49,7 +49,7 @@ public:
 
     /**
      * Returns previous reader of partition if available. This is required by
-     * Kafka metadata APIs since it require us to return former leader id even
+     * SQL metadata APIs since it require us to return former leader id even
      * it the leader is not present in a given time point
      */
     std::optional<model::node_id> get_previous_leader(

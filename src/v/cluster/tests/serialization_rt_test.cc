@@ -94,8 +94,8 @@ SEASTAR_THREAD_TEST_CASE(broker_metadata_rt_test) {
 
     BOOST_REQUIRE_EQUAL(d.id(), model::node_id(0));
     BOOST_REQUIRE_EQUAL(
-      d.kafka_advertised_listeners()[0].address.host(), "127.0.0.1");
-    BOOST_REQUIRE_EQUAL(d.kafka_advertised_listeners()[0].address.port(), 9092);
+      d.sql_advertised_listeners()[0].address.host(), "127.0.0.1");
+    BOOST_REQUIRE_EQUAL(d.sql_advertised_listeners()[0].address.port(), 9092);
     BOOST_REQUIRE_EQUAL(d.rpc_address().host(), "172.0.1.2");
     BOOST_REQUIRE_EQUAL(d.properties().cores, 8);
     BOOST_REQUIRE_EQUAL(d.properties().available_memory_gb, 1024);
@@ -713,7 +713,7 @@ cluster::node::local_state random_local_state() {
         };
     }
     cluster::node::local_state data{
-      .redpanda_version
+      .funes_version
       = tests::random_named_string<cluster::node::application_version>(),
       .logical_version = tests::random_named_int<cluster::cluster_version>(),
       .uptime = tests::random_duration_ms(),
@@ -964,7 +964,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     }
     {
         cluster::init_tm_tx_request data{
-          tests::random_named_string<kafka::transactional_id>(),
+          tests::random_named_string<sql::transactional_id>(),
           std::chrono::duration_cast<std::chrono::milliseconds>(
             random_timeout_clock_duration()),
           random_timeout_clock_duration()};
@@ -1040,7 +1040,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     {
         cluster::begin_group_tx_request data{
           model::random_ntp(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
           random_timeout_clock_duration(),
@@ -1051,7 +1051,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     {
         // with default ntp ctor
         cluster::begin_group_tx_request data{
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
           random_timeout_clock_duration(),
@@ -1072,7 +1072,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     {
         cluster::prepare_group_tx_request data{
           model::random_ntp(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           tests::random_named_int<model::term_id>(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
@@ -1083,7 +1083,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     {
         // with default ntp ctor
         cluster::prepare_group_tx_request data{
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           tests::random_named_int<model::term_id>(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
@@ -1100,7 +1100,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
           model::random_ntp(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           random_timeout_clock_duration()};
 
         roundtrip_test(data);
@@ -1110,7 +1110,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
         cluster::commit_group_tx_request data{
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           random_timeout_clock_duration()};
 
         roundtrip_test(data);
@@ -1122,7 +1122,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     {
         cluster::abort_group_tx_request data{
           model::random_ntp(),
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
           random_timeout_clock_duration()};
@@ -1132,7 +1132,7 @@ SEASTAR_THREAD_TEST_CASE(serde_reflection_roundtrip) {
     {
         // with default ntp ctor
         cluster::abort_group_tx_request data{
-          tests::random_named_string<kafka::group_id>(),
+          tests::random_named_string<sql::group_id>(),
           random_producer_identity(),
           tests::random_named_int<model::tx_seq>(),
           random_timeout_clock_duration()};

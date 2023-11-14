@@ -41,7 +41,7 @@ Use this command after invoking 'self-test start' to determine the status of
 the jobs launched. Possible results are:
 
 * One or more jobs still running
-  * Returns the IDs of Redpanda nodes still running self-tests.
+  * Returns the IDs of Funes nodes still running self-tests.
 
 * No jobs running:
   * Returns cached results for all nodes of the last completed test.
@@ -76,7 +76,7 @@ the jobs launched. Possible results are:
 				return
 			}
 
-			// .. or redpanda has never run any tests, no cached data exists
+			// .. or funes has never run any tests, no cached data exists
 			if isUninitialized(reports) {
 				fmt.Println("All nodes are idle with no cached test results")
 				return

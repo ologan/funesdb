@@ -297,7 +297,7 @@ errc plugin_frontend::validator::validate_mutation(const transform_cmd& cmd) {
                     k);
                   return errc::transform_invalid_environment;
               }
-              if (k.find("REDPANDA_") == 0) {
+              if (k.find("FUNES_") == 0) {
                   vlog(
                     clusterlog.info,
                     "attempted deploy of transform {} contained reserved "
@@ -403,10 +403,10 @@ errc plugin_frontend::validator::validate_mutation(const transform_cmd& cmd) {
                 loggable_string(cmd.value.name()));
               return errc::transform_invalid_create;
           }
-          if (cmd.value.input_topic.ns != model::kafka_namespace) {
+          if (cmd.value.input_topic.ns != model::sql_namespace) {
               vlog(
                 clusterlog.info,
-                "attempted to deploy transform {} to a non-kafka topic {}",
+                "attempted to deploy transform {} to a non-sql topic {}",
                 cmd.value.name,
                 loggable_string(cmd.value.input_topic.ns()));
               return errc::transform_invalid_create;
@@ -468,10 +468,10 @@ errc plugin_frontend::validator::validate_mutation(const transform_cmd& cmd) {
               return errc::transform_invalid_create;
           }
           for (const auto& out_name : cmd.value.output_topics) {
-              if (out_name.ns != model::kafka_namespace) {
+              if (out_name.ns != model::sql_namespace) {
                   vlog(
                     clusterlog.info,
-                    "attempted to deploy transform {} to a non-kafka topic {}",
+                    "attempted to deploy transform {} to a non-sql topic {}",
                     cmd.value.name,
                     loggable_string(out_name.ns()));
                   return errc::transform_invalid_create;

@@ -1,11 +1,11 @@
 /*
  * Copyright 2023 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_storage/async_manifest_view.h"
@@ -61,7 +61,7 @@ static ss::sstring to_string(const async_view_search_query_t& t) {
     return ss::visit(
       t,
       [&](model::offset ro) { return ssx::sformat("[offset: {}]", ro); },
-      [&](kafka::offset ko) { return ssx::sformat("[kafka offset: {}]", ko); },
+      [&](sql::offset ko) { return ssx::sformat("[sql offset: {}]", ko); },
       [&](model::timestamp ts) { return ssx::sformat("[timestamp: {}]", ts); });
 }
 
@@ -78,9 +78,9 @@ contains(const partition_manifest& m, const async_view_search_query_t& query) {
           return o >= m.get_start_offset().value_or(model::offset::max())
                  && o <= m.get_last_offset();
       },
-      [&](kafka::offset k) {
-          return k >= m.get_start_kafka_offset()
-                 && k < m.get_next_kafka_offset();
+      [&](sql::offset k) {
+          return k >= m.get_start_sql_offset()
+                 && k < m.get_next_sql_offset();
       },
       [&](model::timestamp t) {
           return m.size() > 0 && t >= m.begin()->base_timestamp
@@ -689,7 +689,7 @@ async_manifest_view::get_retention_backlog() noexcept {
     co_return error_outcome::failure;
 }
 
-ss::future<result<std::optional<kafka::offset>, error_outcome>>
+ss::future<result<std::optional<sql::offset>, error_outcome>>
 async_manifest_view::get_term_last_offset(model::term_id term) noexcept {
     const auto& stmm = stm_manifest();
     vassert(
@@ -707,13 +707,13 @@ async_manifest_view::get_term_last_offset(model::term_id term) noexcept {
 
         if (last->segment_term == term) {
             // Fast path, most requests should query the last term
-            co_return last->next_kafka_offset() - kafka::offset(1);
+            co_return last->next_sql_offset() - sql::offset(1);
         } else {
             // look for first segment in next term, segments are sorted by
             // base_offset and term
             for (auto const& p : stmm) {
                 if (p.segment_term > term) {
-                    co_return p.base_kafka_offset() - kafka::offset(1);
+                    co_return p.base_sql_offset() - sql::offset(1);
                 }
             }
         }
@@ -763,7 +763,7 @@ async_manifest_view::get_term_last_offset(model::term_id term) noexcept {
         }
 
         try {
-            std::optional<kafka::offset> res_offset;
+            std::optional<sql::offset> res_offset;
             co_await ss::repeat(
               [this, &res_offset, term, cursor = std::move(res.value())] {
                   const auto& manifest = *cursor->manifest();
@@ -774,8 +774,8 @@ async_manifest_view::get_term_last_offset(model::term_id term) noexcept {
                     term);
                   for (auto meta : manifest) {
                       if (meta.segment_term > term) {
-                          res_offset = meta.base_kafka_offset()
-                                       - kafka::offset(1);
+                          res_offset = meta.base_sql_offset()
+                                       - sql::offset(1);
                           vlog(
                             _ctxlog.debug,
                             "Scan found offset {} at term {}",
@@ -838,10 +838,10 @@ bool async_manifest_view::in_archive(async_view_search_query_t o) {
                  && ro < _stm_manifest.get_start_offset().value_or(
                       model::offset::min());
       },
-      [this](kafka::offset ko) {
-          return ko >= _stm_manifest.get_archive_start_kafka_offset()
-                 && ko < _stm_manifest.get_start_kafka_offset().value_or(
-                      kafka::offset::min());
+      [this](sql::offset ko) {
+          return ko >= _stm_manifest.get_archive_start_sql_offset()
+                 && ko < _stm_manifest.get_start_sql_offset().value_or(
+                      sql::offset::min());
       },
       [this](model::timestamp ts) {
           // The condition for timequery is tricky. With offsets there is a
@@ -864,9 +864,9 @@ bool async_manifest_view::in_stm(async_view_search_query_t o) {
             model::offset::max());
           return ro >= so;
       },
-      [this](kafka::offset ko) {
-          auto sko = _stm_manifest.get_start_kafka_offset().value_or(
-            kafka::offset::max());
+      [this](sql::offset ko) {
+          auto sko = _stm_manifest.get_start_sql_offset().value_or(
+            sql::offset::max());
           return ko >= sko;
       },
       [this](model::timestamp ts) {
@@ -928,16 +928,16 @@ async_manifest_view::compute_retention(
         result = time_result;
     }
     if (
-      _stm_manifest.get_start_kafka_offset_override() != kafka::offset{}
-      && _stm_manifest.get_start_kafka_offset_override()
+      _stm_manifest.get_start_sql_offset_override() != sql::offset{}
+      && _stm_manifest.get_start_sql_offset_override()
            > result.offset - result.delta) {
-        // The start kafka offset is placed above the retention boundary. We
+        // The start sql offset is placed above the retention boundary. We
         // need to adjust retention boundary to remove all data up to start
-        // kafka offset.
+        // sql offset.
         vlog(
           _ctxlog.debug,
-          "Start kafka offset override {} exceeds computed retention {}",
-          _stm_manifest.get_start_kafka_offset_override(),
+          "Start sql offset override {} exceeds computed retention {}",
+          _stm_manifest.get_start_sql_offset_override(),
           result.offset);
         auto r = co_await offset_based_retention();
         if (r.has_error()) {
@@ -957,7 +957,7 @@ ss::future<
 async_manifest_view::offset_based_retention() noexcept {
     archive_start_offset_advance result;
     try {
-        auto boundary = _stm_manifest.get_start_kafka_offset_override();
+        auto boundary = _stm_manifest.get_start_sql_offset_override();
         auto res = co_await get_cursor(boundary);
         if (res.has_failure()) {
             if (res.error() == error_outcome::out_of_range) {
@@ -1423,17 +1423,17 @@ std::optional<segment_meta> async_manifest_view::search_spillover_manifests(
           }
           return -1;
       },
-      [&](kafka::offset k) {
+      [&](sql::offset k) {
           vlog(
             _ctxlog.debug,
             "search_spillover_manifest query: {}, num manifests: {}, first: "
             "{}, last: {}",
             query,
             manifests.size(),
-            manifests.empty() ? kafka::offset{}
-                              : manifests.begin()->base_kafka_offset(),
-            manifests.empty() ? kafka::offset{}
-                              : manifests.last_segment()->next_kafka_offset());
+            manifests.empty() ? sql::offset{}
+                              : manifests.begin()->base_sql_offset(),
+            manifests.empty() ? sql::offset{}
+                              : manifests.last_segment()->next_sql_offset());
           const auto& bo_col = manifests.get_base_offset_column();
           const auto& co_col = manifests.get_committed_offset_column();
           const auto& do_col = manifests.get_delta_offset_column();
@@ -1446,8 +1446,8 @@ std::optional<segment_meta> async_manifest_view::search_spillover_manifests(
               static constexpr int64_t min_delta = model::offset::min()();
               auto d_begin = *do_it == min_delta ? 0 : *do_it;
               auto d_end = *de_it == min_delta ? d_begin : *de_it;
-              auto bko = kafka::offset(*bo_it - d_begin);
-              auto nko = kafka::offset(*co_it - d_end);
+              auto bko = sql::offset(*bo_it - d_begin);
+              auto nko = sql::offset(*co_it - d_end);
               if (k >= bko && k <= nko) {
                   return static_cast<int>(bo_it.index());
               }
@@ -1516,8 +1516,8 @@ remote_manifest_path async_manifest_view::get_spillover_manifest_path(
     spillover_manifest_path_components comp{
       .base = meta.base_offset,
       .last = meta.committed_offset,
-      .base_kafka = meta.base_kafka_offset(),
-      .next_kafka = meta.next_kafka_offset(),
+      .base_sql = meta.base_sql_offset(),
+      .next_sql = meta.next_sql_offset(),
       .base_ts = meta.base_timestamp,
       .last_ts = meta.max_timestamp,
     };

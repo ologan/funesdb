@@ -11,6 +11,6 @@ jobs:
         uses: "buildkite/trigger-pipeline-action@v2.0.0"
         with:
           buildkite_api_access_token: ${{ secrets.BUILDKITE_TOKEN }}
-          pipeline: "redpanda/redpanda"
+          pipeline: "funes/funes"
           branch: dev
-          build_env_vars: '{"PROMOTE_REDPANDA_FROM_STAGING": "1", "TARGET_VERSION": "${{ github.ref_name }}"}'
+          build_env_vars: '{"PROMOTE_FUNES_FROM_STAGING": "1", "TARGET_VERSION": "${{ github.ref_name }}"}'

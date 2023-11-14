@@ -11,7 +11,7 @@ import uuid
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.workload_protocol import PWorkload
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 
 class DummyWorkload(PWorkload):
@@ -44,14 +44,14 @@ class DummyWorkload(PWorkload):
 
     def on_cluster_upgraded(self, version: tuple[int, int, int]) -> int:
         versions = [
-            self.ctx.redpanda.get_version(n) for n in self.ctx.redpanda.nodes
+            self.ctx.funes.get_version(n) for n in self.ctx.funes.nodes
         ]
         self.ctx.logger.info(f"got {version=}, running on {versions=}")
         return PWorkload.DONE
 
 
 class MinimalWorkload(PWorkload):
-    def __init__(self, ctx: RedpandaTest) -> None:
+    def __init__(self, ctx: FunesTest) -> None:
         self.ctx = ctx
         self.topic = TopicSpec(
             name=f"topic-{self.__class__.__name__}-{str(uuid.uuid4())}",
@@ -64,7 +64,7 @@ class MinimalWorkload(PWorkload):
         self.ctx.client().delete_topic(self.topic.name)
 
     def on_cluster_upgraded(self, version: tuple[int, int, int]) -> int:
-        offset = RpkTool(self.ctx.redpanda).produce(topic=self.topic.name,
+        offset = RpkTool(self.ctx.funes).produce(topic=self.topic.name,
                                                     key=f"{version}",
                                                     msg=str(uuid.uuid4()))
         self.ctx.logger.info(f"produced to {self.topic.name} at {offset=}")

@@ -14,12 +14,12 @@ import time
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
-from rptest.services.redpanda import SISettings, MetricsEndpoint, ResourceSettings
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import SISettings, MetricsEndpoint, ResourceSettings
+from rptest.tests.funes_test import FunesTest
 from rptest.utils.si_utils import quiesce_uploads
 
 
-class TieredStorageReaderStressTest(RedpandaTest):
+class TieredStorageReaderStressTest(FunesTest):
     segment_upload_interval = 10
     manifest_upload_interval = 1
     expect_throughput = 50 * 1024 * 1024
@@ -60,7 +60,7 @@ class TieredStorageReaderStressTest(RedpandaTest):
         # Artificially limit CPUs, so that we concentrate readers on a small, deterministic
         # number of cores, and have relatively limited memory.  The memory is within the official system
         # requirements (2GB per core).
-        self.redpanda.set_resource_settings(
+        self.funes.set_resource_settings(
             ResourceSettings(memory_mb=4096, num_cpus=2))
 
     def _produce_and_quiesce(self, topic_name: str, msg_size: int,
@@ -73,7 +73,7 @@ class TieredStorageReaderStressTest(RedpandaTest):
 
         self.logger.info(f"Producing {data_size} bytes, timeout = {timeout}")
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     topic_name,
                                     msg_size=msg_size,
                                     msg_count=data_size // msg_size,
@@ -86,12 +86,12 @@ class TieredStorageReaderStressTest(RedpandaTest):
         )
 
         quiesce_uploads(
-            self.redpanda, [topic_name],
+            self.funes, [topic_name],
             self.manifest_upload_interval + self.segment_upload_interval + 30)
 
     def _create_topic(self, topic_name: str, partition_count: int,
                       local_retention: int):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic(
             topic_name,
             partitions=partition_count,
@@ -106,11 +106,11 @@ class TieredStorageReaderStressTest(RedpandaTest):
 
     def _get_stats(self):
         """The stats we care about for reader stress, especially
-        reader count and kafka connection count"""
+        reader count and sql connection count"""
 
         results = {}
-        for node in self.redpanda.nodes:
-            metrics = self.redpanda.metrics(
+        for node in self.funes.nodes:
+            metrics = self.funes.metrics(
                 node, metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
             segment_reader_count = 0
             partition_reader_count = 0
@@ -121,20 +121,20 @@ class TieredStorageReaderStressTest(RedpandaTest):
             hydrations_count = 0
             for family in metrics:
                 for sample in family.samples:
-                    if sample.name == "redpanda_cloud_storage_readers":
+                    if sample.name == "funes_cloud_storage_readers":
                         segment_reader_count += int(sample.value)
-                    if sample.name == "redpanda_cloud_storage_partition_readers":
+                    if sample.name == "funes_cloud_storage_partition_readers":
                         partition_reader_count += int(sample.value)
-                    if sample.name == "redpanda_cloud_storage_partition_readers_delayed_total":
+                    if sample.name == "funes_cloud_storage_partition_readers_delayed_total":
                         partition_reader_delay_count += int(sample.value)
-                    if sample.name == "redpanda_cloud_storage_segment_readers_delayed_total":
+                    if sample.name == "funes_cloud_storage_segment_readers_delayed_total":
                         segment_reader_delay_count += int(sample.value)
-                    if sample.name == "redpanda_cloud_storage_segment_materializations_delayed_total":
+                    if sample.name == "funes_cloud_storage_segment_materializations_delayed_total":
                         materialize_segment_delay_count += int(sample.value)
-                    elif sample.name == "redpanda_rpc_active_connections":
-                        if sample.labels["redpanda_server"] == "kafka":
+                    elif sample.name == "funes_rpc_active_connections":
+                        if sample.labels["funes_server"] == "sql":
                             connection_count += int(sample.value)
-            for family in self.redpanda.metrics(
+            for family in self.funes.metrics(
                     node, metrics_endpoint=MetricsEndpoint.METRICS):
                 for sample in family.samples:
                     if sample.name == "vectorized_cloud_storage_read_path_hydrations_in_progress_total":
@@ -158,15 +158,15 @@ class TieredStorageReaderStressTest(RedpandaTest):
     @cluster(num_nodes=4)
     def reader_stress_test(self):
         """
-        Validate that when Kafka RPCs request far more concurrent readers than we can provide:
-        - we do not leak kafka client connections from long-waiting readers whose
-          originating kafka rpc has long since timed out on the client side
+        Validate that when SQL RPCs request far more concurrent readers than we can provide:
+        - we do not leak sql client connections from long-waiting readers whose
+          originating sql rpc has long since timed out on the client side
         - reader limits are respected to within a reasonable bound
         - the system stays up.
         - that more reasonable reads are still serviced eventually, after we stop hammering
           the cluster with unreasonable reads.
 
-        The easiest way to bury a redpanda cluster in tiered storage reads is to issue
+        The easiest way to bury a funes cluster in tiered storage reads is to issue
         N time queries across M partitions, where each time query happens to target a
         different data chunk.
         """
@@ -194,7 +194,7 @@ class TieredStorageReaderStressTest(RedpandaTest):
 
         peak_readers = partition_count * concurrent_timequeries
         peak_readers_per_shard = peak_readers // (len(
-            (self.redpanda.nodes) * self.redpanda.get_node_cpu_count()))
+            (self.funes.nodes) * self.funes.get_node_cpu_count()))
 
         self._create_topic(topic_name, partition_count, self.segment_size)
         self._produce_and_quiesce(topic_name,
@@ -203,7 +203,7 @@ class TieredStorageReaderStressTest(RedpandaTest):
                                   self.expect_throughput,
                                   fake_timestamp_ms=base_fake_ts)
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         client_timeout = 5
 
@@ -284,10 +284,10 @@ class TieredStorageReaderStressTest(RedpandaTest):
 
             assert hwms['connections'] <= total_timequeries
             assert hwms[
-                'partition_readers'] <= self.readers_per_shard * self.redpanda.get_node_cpu_count(
+                'partition_readers'] <= self.readers_per_shard * self.funes.get_node_cpu_count(
                 )
             assert hwms[
-                'segment_readers'] <= self.readers_per_shard * self.redpanda.get_node_cpu_count(
+                'segment_readers'] <= self.readers_per_shard * self.funes.get_node_cpu_count(
                 )
 
         # TODO: assert on reader HWM once we enforce it more strongly
@@ -311,11 +311,11 @@ class TieredStorageReaderStressTest(RedpandaTest):
 
         """
         Active chunk hydrations block remote segment readers during reader creation,
-        which in turn keep kafka connections open. A connection can only be closed
+        which in turn keep sql connections open. A connection can only be closed
         once the download finishes, so we wait for active downloads to finish first.
         """
         self.logger.info("Waiting for active hydrations to finish")
-        self.redpanda.wait_until(
+        self.funes.wait_until(
             lambda: is_metric_zero(lambda s: s['hydrations_count'],
                                    'active hydrations'),
             timeout_sec=15,
@@ -323,13 +323,13 @@ class TieredStorageReaderStressTest(RedpandaTest):
             err_msg="Waiting for active hydrations to finish")
 
         # Once downloads are done, connections should be closed very shortly after.
-        self.logger.info("Waiting for all Kafka connections to close")
-        self.redpanda.wait_until(
+        self.logger.info("Waiting for all SQL connections to close")
+        self.funes.wait_until(
             lambda: is_metric_zero(lambda s: s["connections"],
-                                   "kafka connections"),
+                                   "sql connections"),
             timeout_sec=3,
             backoff_sec=1,
-            err_msg="Waiting for Kafka connections to close")
+            err_msg="Waiting for SQL connections to close")
 
         # No new downloads should be started once all reader activity is done
         for _ in range(10):

@@ -113,7 +113,7 @@ class S3Client:
         # certain verbs (including ListObjectsv2) may return NoSuchBucket
         # for some time after creating the bucket, even though the creation
         # returned 200 and other methods work on the bucket.
-        # Related: https://github.com/redpanda-data/redpanda/issues/8490
+        # Related: https://github.com/redpanda-data/funes/issues/8490
         wait_until(
             bucket_is_listable,
             timeout_sec=300,
@@ -428,7 +428,7 @@ class S3Client:
             except:
                 # For debugging NoSuchBucket errors in tests: if we can't list
                 # this bucket, then try to list what buckets exist.
-                # Related: https://github.com/redpanda-data/redpanda/issues/8490
+                # Related: https://github.com/redpanda-data/funes/issues/8490
                 self.logger.error(
                     f"Error in list_objects '{bucket}', listing all buckets")
                 for k, v in self.list_buckets(client=client).items():

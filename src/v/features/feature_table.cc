@@ -47,8 +47,8 @@ std::string_view to_string_view(feature f) {
         return "seeds_driven_bootstrap_capable";
     case feature::tm_stm_cache:
         return "tm_stm_cache";
-    case feature::kafka_gssapi:
-        return "kafka_gssapi";
+    case feature::sql_gssapi:
+        return "sql_gssapi";
     case feature::partition_move_revert_cancel:
         return "partition_move_cancel_revert";
     case feature::node_isolation:
@@ -125,11 +125,11 @@ std::string_view to_string_view(feature_state::state s) {
     __builtin_unreachable();
 };
 
-// The version that this redpanda node will report: increment this
+// The version that this funes node will report: increment this
 // on protocol changes to raft0 structures, like adding new services.
 //
 // For your convenience, a rough guide to the history of how logical
-// versions mapped to redpanda release versions:
+// versions mapped to funes release versions:
 //  22.1.1 -> 3  (22.1.5 was version 4)
 //  22.2.1 -> 5  (22.2.6 later proceeds to version 6)
 //  22.3.1 -> 7  (22.3.6 later proceeds to verison 8)
@@ -144,7 +144,7 @@ std::string_view to_string_view(feature_state::state s) {
 static constexpr cluster_version latest_version = cluster_version{11};
 
 // The earliest version we can upgrade from.  This is the version that
-// a freshly initialized node will start at: e.g. a 23.1 Redpanda joining
+// a freshly initialized node will start at: e.g. a 23.1 Funes joining
 // a cluster of 22.3.6 peers would do this:
 // - Start up blank, initialize feature table to version 7
 // - Send join request advertising version range 7-9
@@ -187,7 +187,7 @@ feature_table::feature_table() {
     // Intentionally undocumented environment variable, only for use
     // in integration tests.
     const bool enable_test_features
-      = (std::getenv("__REDPANDA_TEST_FEATURES") != nullptr);
+      = (std::getenv("__FUNES_TEST_FEATURES") != nullptr);
 
     _feature_state.reserve(
       feature_schema.size()
@@ -205,7 +205,7 @@ feature_table::feature_table() {
     // to simulate upgrading from a .z release where it is explicit_only
     // to a .z release where it is auto-activating.
     const bool no_auto_activate_bravo
-      = (std::getenv("__REDPANDA_TEST_FEATURE_NO_AUTO_ACTIVATE_BRAVO") != nullptr);
+      = (std::getenv("__FUNES_TEST_FEATURE_NO_AUTO_ACTIVATE_BRAVO") != nullptr);
     if (no_auto_activate_bravo) {
         for (auto& spec : test_extra_schema) {
             if (spec.name == "__test_bravo") {
@@ -241,7 +241,7 @@ cluster_version feature_table::get_latest_logical_version() {
     if (latest_version_cache == invalid_version) {
         latest_version_cache = latest_version;
 
-        auto override = std::getenv("__REDPANDA_LATEST_LOGICAL_VERSION");
+        auto override = std::getenv("__FUNES_LATEST_LOGICAL_VERSION");
         if (override != nullptr) {
             try {
                 latest_version_cache = cluster_version{std::stoi(override)};
@@ -265,7 +265,7 @@ cluster_version feature_table::get_earliest_logical_version() {
     if (earliest_version_cache == invalid_version) {
         earliest_version_cache = earliest_version;
 
-        auto override = std::getenv("__REDPANDA_EARLIEST_LOGICAL_VERSION");
+        auto override = std::getenv("__FUNES_EARLIEST_LOGICAL_VERSION");
         if (override != nullptr) {
             try {
                 earliest_version_cache = cluster_version{std::stoi(override)};
@@ -610,7 +610,7 @@ void feature_table::set_original_version(cluster::cluster_version v) {
 }
 
 /*
- * Redpanda does not permit upgrading from arbitrarily old versions.  We
+ * Funes does not permit upgrading from arbitrarily old versions.  We
  * test & support upgrades from one feature release series to the next
  * feature release series only.
  *
@@ -630,7 +630,7 @@ void feature_table::set_original_version(cluster::cluster_version v) {
  *  - At this point the cluster's logical version remains at
  *    the logical version of 22.1.1, because not all the nodes
  *    have reported the new version 22.2.1.
- *  - If user now tries to start redpanda 22.3.1 on node 1 or 2,
+ *  - If user now tries to start funes 22.3.1 on node 1 or 2,
  *    it will refuse to start.
  *  - The user must get their cluster into a healthy state at version
  *    22.2.1 (e.g. by decommissioning the failed node) before they
@@ -651,10 +651,10 @@ void feature_table::assert_compatible_version(bool override) {
         // some major backport.
         vlog(
           featureslog.info,
-          "Upgrading: this node has logical version {} (Redpanda {}), cluster "
+          "Upgrading: this node has logical version {} (Funes {}), cluster "
           "is undergoing upgrade from previous logical version {}",
           binary_version,
-          redpanda_version(),
+          funes_version(),
           active_version);
 
         // Compare the old version with our compiled-in knowledge of

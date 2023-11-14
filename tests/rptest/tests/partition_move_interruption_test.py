@@ -19,7 +19,7 @@ from rptest.services.verifiable_producer import TopicPartition
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.services.admin import Admin
 from rptest.tests.partition_movement import PartitionMovementMixin
-from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, SISettings, MetricsEndpoint
+from rptest.services.funes import RESTART_LOG_ALLOW_LIST, SISettings, MetricsEndpoint
 from rptest.utils.mode_checks import cleanup_on_early_exit, skip_debug_mode
 
 NO_RECOVERY = "no_recovery"
@@ -59,19 +59,19 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
             self.min_records = 100000
 
     def get_moving_to_node_metrics(self, node):
-        metrics = self.redpanda.metrics_sample(
+        metrics = self.funes.metrics_sample(
             "moving_to_node", [node],
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
         return int(sum([metric.value for metric in metrics.samples]))
 
     def get_moving_from_node_metrics(self, node):
-        metrics = self.redpanda.metrics_sample(
+        metrics = self.funes.metrics_sample(
             "moving_from_node", [node],
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
         return int(sum([metric.value for metric in metrics.samples]))
 
     def get_cancelling_movements_for_node_metrics(self, node):
-        metrics = self.redpanda.metrics_sample(
+        metrics = self.funes.metrics_sample(
             "node_cancelling_movements", [node],
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
         return int(sum([metric.value for metric in metrics.samples]))
@@ -84,8 +84,8 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         self.logger.debug(
             f"Checking metrics for movement from {prev_assignment_nodes} to {assignment_nodes}"
         )
-        for node in self.redpanda.nodes:
-            node_id = self.redpanda.idx(node)
+        for node in self.funes.nodes:
+            node_id = self.funes.idx(node)
             moving_to_node_partitions_amount = self.get_moving_to_node_metrics(
                 node)
             moving_to_node_sum += moving_to_node_partitions_amount
@@ -139,9 +139,9 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         self.check_metrics()
 
     def _throttle_recovery(self, new_rate: int):
-        self.redpanda.set_cluster_config(
+        self.funes.set_cluster_config(
             {"raft_learner_recovery_rate": str(new_rate)})
-        wait_for_recovery_throttle_rate(redpanda=self.redpanda,
+        wait_for_recovery_throttle_rate(funes=self.funes,
                                         new_rate=new_rate)
 
     @cluster(num_nodes=7, log_allow_list=RESTART_LOG_ALLOW_LIST)
@@ -155,7 +155,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         Cancel partition moving with active consumer / producer
         """
 
-        self.start_redpanda(num_nodes=5,
+        self.start_funes(num_nodes=5,
                             extra_rp_conf={
                                 "default_topic_replications": 3,
                                 "compacted_log_segment_size": 1 * (2**20),
@@ -186,8 +186,8 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
             self._random_move_and_cancel(unclean_abort)
             if recovery == RESTART_RECOVERY:
                 # restart one of the nodes after each move
-                self.redpanda.restart_nodes(
-                    [random.choice(self.redpanda.nodes)])
+                self.funes.restart_nodes(
+                    [random.choice(self.funes.nodes)])
         # start consumer late in the process for the compaction to trigger
         if compacted:
             self.start_consumer(1, verify_offsets=False)
@@ -216,7 +216,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         Cancel partition moving with active consumer / producer
         """
 
-        self.start_redpanda(
+        self.start_funes(
             num_nodes=5,
             extra_rp_conf={
                 "default_topic_replications": 3,
@@ -266,8 +266,8 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
                                           previous_assignment=prev_assignment)
             if recovery == RESTART_RECOVERY:
                 # restart one of the nodes after each move
-                self.redpanda.restart_nodes(
-                    [random.choice(self.redpanda.nodes)])
+                self.funes.restart_nodes(
+                    [random.choice(self.funes.nodes)])
 
         if unclean_abort:
             # do not run offsets validation as we may experience data loss since partition movement is forcibly cancelling
@@ -285,7 +285,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
     def increase_replication_factor(self, topic, partition,
                                     requested_replication_factor):
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         assignments = self._get_assignments(admin, topic, partition=partition)
         assert requested_replication_factor > len(assignments)
 
@@ -310,7 +310,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
     @cluster(num_nodes=5, log_allow_list=RESTART_LOG_ALLOW_LIST)
     def test_forced_cancellation(self):
         partitions = 4
-        self.start_redpanda(
+        self.start_funes(
             num_nodes=3,
             extra_rp_conf={'default_topic_replications': 3},
         )
@@ -326,7 +326,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         self.start_consumer(1)
         self.await_startup()
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         partition = random.randint(0, partitions - 1)
 
         # get current assignments
@@ -345,11 +345,11 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         # nodes form new assignment to make sure that new quorum is no
         # longer available
         to_stop = random.choice(new_assignment)['node_id']
-        self.redpanda.stop_node(self.redpanda.get_node(to_stop))
+        self.funes.stop_node(self.funes.get_node(to_stop))
 
         # wait for new controller to be elected
         def new_controller():
-            return self.redpanda.idx(self.redpanda.controller()) != to_stop
+            return self.funes.idx(self.funes.controller()) != to_stop
 
         wait_until(new_controller, 10, 1)
 
@@ -363,7 +363,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         admin.force_abort_partition_move(self.topic, partition=partition)
 
         # # restart the node
-        # self.redpanda.start_node(self.redpanda.get_node(to_stop))
+        # self.funes.start_node(self.funes.get_node(to_stop))
 
         # wait for previous assignment to be set
         def cancelled():
@@ -372,7 +372,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
             converged = self._equal_assignments(info["replicas"], assignment)
             return converged and info["status"] == "done"
 
-        # wait until redpanda reports complete
+        # wait until funes reports complete
         wait_until(cancelled, timeout_sec=30, backoff_sec=2)
 
         # do not run offsets validation as we may experience data loss since cancellation is forced
@@ -386,7 +386,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         """
         Cancel all partition moves in the cluster
         """
-        self.start_redpanda(num_nodes=5,
+        self.start_funes(num_nodes=5,
                             extra_rp_conf={
                                 "default_topic_replications": 3,
                             })
@@ -413,7 +413,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
 
         self.logger.info(f"moving {current_movements}")
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         ongoing = admin.list_reconfigurations()
         assert len(ongoing) > 0
 
@@ -440,7 +440,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         """
         Cancel all partition moves directed to/from given node
         """
-        self.start_redpanda(num_nodes=5,
+        self.start_funes(num_nodes=5,
                             extra_rp_conf={
                                 "default_topic_replications": 3,
                             })
@@ -467,12 +467,12 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
 
         self.logger.info(f"moving {current_movements}")
 
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         ongoing = admin.list_reconfigurations()
         assert len(ongoing) > 0
 
-        target_node_id = self.redpanda.idx(
-            (random.choice(self.redpanda.nodes)))
+        target_node_id = self.funes.idx(
+            (random.choice(self.funes.nodes)))
 
         self.logger.info(
             "cancelling all node {target_node_id} reconfigurations")
@@ -506,8 +506,8 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
                             min_records=self.min_records)
 
     def get_node_by_id(self, id):
-        for n in self.redpanda.nodes:
-            if self.redpanda.node_id(n) == id:
+        for n in self.funes.nodes:
+            if self.funes.node_id(n) == id:
                 return n
         return None
 
@@ -517,7 +517,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         Cancel partition moving with active consumer / producer
         """
 
-        self.start_redpanda(num_nodes=5,
+        self.start_funes(num_nodes=5,
                             extra_rp_conf={
                                 "default_topic_replications": 3,
                             })
@@ -534,7 +534,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
 
         metadata = self.client().describe_topics()
         topic, partition = self._random_partition(metadata)
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         assignments = self._get_assignments(admin, topic, partition)
         prev_assignments = assignments.copy()
 
@@ -545,21 +545,21 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
         # throttle recovery to prevent partition move from finishing
         self._throttle_recovery(10)
         to_stop = None
-        for n in self.redpanda.nodes:
-            id = self.redpanda.node_id(n)
+        for n in self.funes.nodes:
+            id = self.funes.node_id(n)
             if id not in replica_ids:
                 previous = assignments.pop()
                 assignments.append({"node_id": id, "core": 0})
                 # stop a node that is going to be removed from current partition assignment
                 to_stop = self.get_node_by_id(previous['node_id'])
-                self.redpanda.stop_node(to_stop)
+                self.funes.stop_node(to_stop)
                 break
 
         def new_controller():
-            leader_id = admin.get_partition_leader(namespace="redpanda",
+            leader_id = admin.get_partition_leader(namespace="funes",
                                                    topic="controller",
                                                    partition=0)
-            return leader_id != -1 and leader_id != self.redpanda.node_id(
+            return leader_id != -1 and leader_id != self.funes.node_id(
                 to_stop)
 
         wait_until(new_controller, 30)
@@ -577,7 +577,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
                             min_records=self.min_records)
 
         def move_finished():
-            for n in self.redpanda.started_nodes():
+            for n in self.funes.started_nodes():
                 partition_info = admin.get_partitions(topic=topic,
                                                       partition=partition,
                                                       node=n)
@@ -597,7 +597,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
     @matrix(replication_factor=[1, 3])
     def test_cancellations_interrupted_with_restarts(self, replication_factor):
 
-        self.start_redpanda(num_nodes=5,
+        self.start_funes(num_nodes=5,
                             extra_rp_conf={
                                 "default_topic_replications": 3,
                             })
@@ -616,7 +616,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
 
         topic = spec.name
         partition = 0
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         assignments = self._get_assignments(admin, topic, partition)
         prev_assignments = assignments.copy()
@@ -633,7 +633,7 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
             )
             replica_ids = [a['node_id'] for a in prev_assignments]
             available_ids = [
-                self.redpanda.node_id(n) for n in self.redpanda.nodes
+                self.funes.node_id(n) for n in self.funes.nodes
             ]
             random.shuffle(available_ids)
             for id in available_ids:
@@ -656,14 +656,14 @@ class PartitionMoveInterruption(PartitionMovementMixin, EndToEndTest):
                     pass
 
             self._throttle_recovery(10000000)
-            for n in self.redpanda.nodes:
-                self.redpanda.stop_node(n, forced=True)
-            for n in self.redpanda.nodes:
-                self.redpanda.start_node(n)
+            for n in self.funes.nodes:
+                self.funes.stop_node(n, forced=True)
+            for n in self.funes.nodes:
+                self.funes.start_node(n)
 
             def move_finished():
 
-                for n in self.redpanda.started_nodes():
+                for n in self.funes.started_nodes():
                     partition_info = admin.get_partitions(topic=topic,
                                                           partition=partition,
                                                           node=n)

@@ -11,14 +11,14 @@
 
 #pragma once
 
-#include "pandaproxy/schema_registry/types.h"
+#include "funesproxy/schema_registry/types.h"
 #include "wasm/ffi.h"
 #include "wasm/schema_registry.h"
 
 namespace wasm {
 
 /**
- * The WASM module for redpanda schema registry.
+ * The WASM module for funes schema registry.
  *
  * This provides an ABI to WASM guests for the wasm::schema_registry wrapper
  */
@@ -31,30 +31,30 @@ public:
     schema_registry_module& operator=(schema_registry_module&&) = default;
     ~schema_registry_module() = default;
 
-    static constexpr std::string_view name = "redpanda_schema_registry";
+    static constexpr std::string_view name = "funes_schema_registry";
 
     // Start ABI exports
 
     ss::future<int32_t> get_schema_definition_len(
-      pandaproxy::schema_registry::schema_id, uint32_t*);
+      funesproxy::schema_registry::schema_id, uint32_t*);
 
     ss::future<int32_t> get_schema_definition(
-      pandaproxy::schema_registry::schema_id, ffi::array<uint8_t>);
+      funesproxy::schema_registry::schema_id, ffi::array<uint8_t>);
 
     ss::future<int32_t> get_subject_schema_len(
-      pandaproxy::schema_registry::subject,
-      pandaproxy::schema_registry::schema_version,
+      funesproxy::schema_registry::subject,
+      funesproxy::schema_registry::schema_version,
       uint32_t*);
 
     ss::future<int32_t> get_subject_schema(
-      pandaproxy::schema_registry::subject,
-      pandaproxy::schema_registry::schema_version,
+      funesproxy::schema_registry::subject,
+      funesproxy::schema_registry::schema_version,
       ffi::array<uint8_t>);
 
     ss::future<int32_t> create_subject_schema(
-      pandaproxy::schema_registry::subject,
+      funesproxy::schema_registry::subject,
       ffi::array<uint8_t>,
-      pandaproxy::schema_registry::schema_id*);
+      funesproxy::schema_registry::schema_id*);
 
     // End ABI exports
 

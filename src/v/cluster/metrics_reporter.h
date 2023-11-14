@@ -74,10 +74,10 @@ public:
         cluster_version original_logical_version{invalid_version};
 
         std::vector<node_metrics> nodes;
-        bool has_kafka_gssapi;
+        bool has_sql_gssapi;
 
         static constexpr int64_t max_size_for_rp_env = 80;
-        ss::sstring redpanda_environment;
+        ss::sstring funes_environment;
         ss::sstring id_hash;
     };
     static constexpr ss::shard_id shard = 0;

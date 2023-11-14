@@ -41,7 +41,7 @@ uint32_t internal_header_only_crc(const record_batch_header& header) {
       static_cast<std::underlying_type_t<record_batch_type>>(header.type),
       header.crc,
 
-      /*Below are same fields as kafka - but at no cost on x86 since they are
+      /*Below are same fields as sql - but at no cost on x86 since they are
          hashed as little endian*/
       header.attrs.value(),
       header.last_offset_delta,

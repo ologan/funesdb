@@ -10,13 +10,13 @@
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.services.rpk_consumer import RpkConsumer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.types import TopicSpec
 
 
-class BytesSentTest(RedpandaTest):
+class BytesSentTest(FunesTest):
     """
     Produce and consume some data then confirm the bytes sent metric.
     """
@@ -35,13 +35,13 @@ class BytesSentTest(RedpandaTest):
     def _bytes_sent(self):
         bytes_sent = 0
 
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             # Convert the metrics generator to a list
-            metrics = list(self.redpanda.metrics(node))
+            metrics = list(self.funes.metrics(node))
 
-            # Find the metric family that tracks bytes sent from kafka subsystem
+            # Find the metric family that tracks bytes sent from sql subsystem
             family_filter = filter(
-                lambda fam: fam.name == "vectorized_kafka_rpc_sent_bytes",
+                lambda fam: fam.name == "vectorized_sql_rpc_sent_bytes",
                 metrics)
             family = next(family_filter)
 
@@ -52,7 +52,7 @@ class BytesSentTest(RedpandaTest):
         return bytes_sent
 
     def _consume_and_count_bytes(self):
-        consumer = RpkConsumer(self._ctx, self.redpanda, self.topic)
+        consumer = RpkConsumer(self._ctx, self.funes, self.topic)
         consumer.start()
 
         self._bytes_received = 0
@@ -84,8 +84,8 @@ class BytesSentTest(RedpandaTest):
         records_size = 512
 
         # Produce some data (10240 records * 512 bytes = 5MB of data)
-        kafka_tools = KafkaCliTools(self.redpanda)
-        kafka_tools.produce(self.topic, num_records, records_size, acks=-1)
+        sql_tools = SQLCliTools(self.funes)
+        sql_tools.produce(self.topic, num_records, records_size, acks=-1)
 
         # Establish the current counter which won't be zero, but
         # we don't really care what the actual value is

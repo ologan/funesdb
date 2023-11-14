@@ -13,7 +13,7 @@
 #include "config/configuration.h"
 #include "metrics/metrics.h"
 #include "model/metadata.h"
-#include "pandaproxy/schema_registry/schema_id_validation.h"
+#include "funesproxy/schema_registry/schema_id_validation.h"
 #include "prometheus/prometheus_sanitize.h"
 
 #include <seastar/core/metrics.hh>
@@ -149,7 +149,7 @@ void replicated_partition_probe::setup_internal_metrics(const model::ntp& ntp) {
 
     if (
       config::shard_local_cfg().enable_schema_id_validation()
-      != pandaproxy::schema_registry::schema_id_validation_mode::none) {
+      != funesproxy::schema_registry::schema_id_validation_mode::none) {
         _metrics.add_group(
           prometheus_sanitize::metrics_name("cluster:partition"),
           {
@@ -183,7 +183,7 @@ void replicated_partition_probe::setup_public_metrics(const model::ntp& ntp) {
     };
 
     _public_metrics.add_group(
-      prometheus_sanitize::metrics_name("kafka"),
+      prometheus_sanitize::metrics_name("sql"),
       {
         // Partition Level Metrics
         sm::make_gauge(
@@ -254,7 +254,7 @@ void replicated_partition_probe::setup_public_metrics(const model::ntp& ntp) {
       });
     if (
       config::shard_local_cfg().enable_schema_id_validation()
-      != pandaproxy::schema_registry::schema_id_validation_mode::none) {
+      != funesproxy::schema_registry::schema_id_validation_mode::none) {
         _public_metrics.add_group(
           prometheus_sanitize::metrics_name("cluster:partition"),
           {

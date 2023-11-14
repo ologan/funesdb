@@ -33,7 +33,7 @@ func ReplaceFile(fs afero.Fs, filename string, contents []byte, newPerms os.File
 
 	// Create a temp file first.
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	bFilename := fmt.Sprintf("redpanda-%v", r.Int())
+	bFilename := fmt.Sprintf("funes-%v", r.Int())
 	temp := filepath.Join(filepath.Dir(filename), bFilename)
 
 	// If the directory does not exist, create it. We do not preserve perms

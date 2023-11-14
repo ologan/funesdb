@@ -45,7 +45,7 @@ of the cluster. Available tests to run:
 
 * Network tests:
   * Throughput test: 8192-bit messages
-    * Unique pairs of Redpanda nodes each act as a client and a server.
+    * Unique pairs of Funes nodes each act as a client and a server.
     * The test pushes as much data over the wire, within the test parameters.
 
 This command immediately returns on success, and the tests run asynchronously. The
@@ -60,7 +60,7 @@ command.`,
 
 			// Warn user before continuing, proceed only via explicit signal
 			if !noConfirm {
-				confirmed, err := out.Confirm("Redpanda self-test will run benchmarks of disk and network hardware that will consume significant system resources. Do not start self-test if large workloads are already running on the system.")
+				confirmed, err := out.Confirm("Funes self-test will run benchmarks of disk and network hardware that will consume significant system resources. Do not start self-test if large workloads are already running on the system.")
 				out.MaybeDie(err, "unable to confirm user confirmation: %v", err)
 				if !confirmed {
 					out.Exit("self-test start was cancelled")
@@ -77,7 +77,7 @@ command.`,
 			// Make HTTP POST request to leader that starts the actual test
 			tid, err := cl.StartSelfTest(cmd.Context(), onNodes, tests)
 			out.MaybeDie(err, "unable to start self test: %v", err)
-			fmt.Printf("Redpanda self-test has started, test identifier: %v, To check the status run:\n    rpk cluster self-test status\n", tid)
+			fmt.Printf("Funes self-test has started, test identifier: %v, To check the status run:\n    rpk cluster self-test status\n", tid)
 		},
 	}
 

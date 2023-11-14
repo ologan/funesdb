@@ -27,7 +27,7 @@ class PartitionMovementMixin():
     def _choose_replacement(admin, assignments, allow_no_ops=True):
         """
         Does not produce assignments that contain duplicate nodes. This is a
-        limitation in redpanda raft implementation.
+        limitation in funes raft implementation.
         """
         replication_factor = len(assignments)
         node_ids = lambda x: set([a["node_id"] for a in x])
@@ -91,12 +91,12 @@ class PartitionMovementMixin():
 
     def _get_current_partitions(self, admin, topic, partition_id):
         def keep(p):
-            return p["ns"] == "kafka" and p["topic"] == topic and p[
+            return p["ns"] == "sql" and p["topic"] == topic and p[
                 "partition_id"] == partition_id
 
         result = []
-        for node in self.redpanda._started:
-            node_id = self.redpanda.idx(node)
+        for node in self.funes._started:
+            node_id = self.funes.idx(node)
             partitions = admin.get_partitions(node=node)
             partitions = filter(keep, partitions)
             for partition in partitions:
@@ -105,13 +105,13 @@ class PartitionMovementMixin():
 
     def _wait_post_move(self, topic, partition, assignments, timeout_sec):
         # We need to add retries, becasue of eventual consistency. Metadata will be updated but it can take some time.
-        admin = Admin(self.redpanda,
+        admin = Admin(self.funes,
                       retry_codes=[404, 503, 504],
                       retries_amount=10)
 
         def status_done():
             results = []
-            for n in self.redpanda._started:
+            for n in self.funes._started:
                 info = admin.get_partitions(topic, partition, node=n)
                 self.logger.info(
                     f"current assignments for {topic}-{partition}: {info}")
@@ -121,7 +121,7 @@ class PartitionMovementMixin():
 
             return all(results)
 
-        # wait until redpanda reports complete
+        # wait until funes reports complete
         wait_until(status_done, timeout_sec=timeout_sec, backoff_sec=2)
 
         def derived_done():
@@ -134,11 +134,11 @@ class PartitionMovementMixin():
 
     def _wait_post_cancel(self, topic, partition, prev_assignments,
                           new_assignment, timeout_sec):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def cancel_finished():
             results = []
-            for n in self.redpanda._started:
+            for n in self.funes._started:
                 info = admin.get_partitions(topic, partition, node=n)
                 results.append(info["status"] == "done")
 
@@ -161,7 +161,7 @@ class PartitionMovementMixin():
         assert movement_cancelled or movement_finished
 
     def _do_move_and_verify(self, topic, partition, timeout_sec):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         _, new_assignment = self._dispatch_random_partition_move(
             topic=topic, partition=partition)
@@ -176,7 +176,7 @@ class PartitionMovementMixin():
         topic, partition = self._random_partition(metadata)
         # timeout for __consumer_offsets topic has to be long enough
         # to wait for compaction to finish. For resource constrained machines
-        # and redpanda debug builds it may take a very long time
+        # and funes debug builds it may take a very long time
         timeout_sec = 360 if topic == "__consumer_offsets" else 90
 
         self.logger.info(f"selected topic-partition: {topic}-{partition}")
@@ -196,7 +196,7 @@ class PartitionMovementMixin():
         
         :return: a tuple of lists, list of previous assignments and list of replaced assignments
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         if x_core_only:
             selected = copy.deepcopy(assignments)
             brokers = admin.get_brokers()
@@ -223,7 +223,7 @@ class PartitionMovementMixin():
         :param partition: partition id to be moved
         :param x_core_only: when true assignment nodes will not be changed, only cores
         """
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         assignments = self._get_assignments(admin, topic, partition)
         prev_assignments = assignments.copy()
 
@@ -245,13 +245,13 @@ class PartitionMovementMixin():
         return prev_assignments, assignments
 
     def _wait_for_move_in_progress(self, topic, partition, timeout=10):
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
 
         def move_in_progress():
             return [
                 admin.get_partitions(topic, partition,
                                      node=n)['status'] == 'in_progress'
-                for n in self.redpanda._started
+                for n in self.funes._started
             ]
 
         wait_until(move_in_progress, timeout_sec=timeout)
@@ -273,7 +273,7 @@ class PartitionMovementMixin():
         or partition is empty, initial movement assignment must be provided
         """
         self._wait_for_move_in_progress(topic, partition)
-        admin = Admin(self.redpanda)
+        admin = Admin(self.funes)
         try:
             if unclean_abort:
                 admin.force_abort_partition_move(topic, partition)

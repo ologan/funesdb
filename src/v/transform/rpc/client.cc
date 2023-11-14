@@ -69,7 +69,7 @@ static constexpr auto coordinator_partition = model::partition_id{0};
 
 model::ntp offsets_ntp(model::partition_id id) {
     return {
-      model::kafka_internal_namespace, model::transform_offsets_topic, id};
+      model::sql_internal_namespace, model::transform_offsets_topic, id};
 }
 
 cluster::errc map_errc(std::error_code ec) {
@@ -216,7 +216,7 @@ ss::future<cluster::errc> client::do_produce_once(produce_request req) {
       req.topic_data.size());
     const auto& tp = req.topic_data.front().tp;
     auto leader = _leaders->get_leader_node(
-      model::topic_namespace_view(model::kafka_namespace, tp.topic),
+      model::topic_namespace_view(model::sql_namespace, tp.topic),
       tp.partition);
     if (!leader) {
         co_return cluster::errc::not_leader;

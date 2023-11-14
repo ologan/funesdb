@@ -12,7 +12,7 @@
 #pragma once
 
 #include "hashing/murmur.h"
-#include "kafka/protocol/types.h"
+#include "sql/protocol/types.h"
 #include "model/fundamental.h"
 #include "reflection/adl.h"
 
@@ -37,7 +37,7 @@ static tx_hash_type get_default_range_size(int32_t tm_partitions_amount) {
 }
 
 // Return hash of tx_id in range [0, tx_tm_hash_max]
-inline tx_hash_type get_tx_id_hash(const kafka::transactional_id& tx_id) {
+inline tx_hash_type get_tx_id_hash(const sql::transactional_id& tx_id) {
     auto copy = ss::sstring(tx_id);
     return murmur2(copy.data(), copy.size());
 }
@@ -177,8 +177,8 @@ using repartitioning_id = named_type<int64_t, struct repartitioning_id_type>;
 struct hosted_txs
   : serde::envelope<hosted_txs, serde::version<0>, serde::compat_version<0>> {
     tx_hash_ranges_set hash_ranges{};
-    absl::node_hash_set<kafka::transactional_id> excluded_transactions{};
-    absl::node_hash_set<kafka::transactional_id> included_transactions{};
+    absl::node_hash_set<sql::transactional_id> excluded_transactions{};
+    absl::node_hash_set<sql::transactional_id> included_transactions{};
 
     hosted_txs() = default;
 
@@ -186,8 +186,8 @@ struct hosted_txs
 
     hosted_txs(
       tx_hash_ranges_set ranges,
-      absl::node_hash_set<kafka::transactional_id> excluded_txs,
-      absl::node_hash_set<kafka::transactional_id> included_txs)
+      absl::node_hash_set<sql::transactional_id> excluded_txs,
+      absl::node_hash_set<sql::transactional_id> included_txs)
       : hash_ranges(std::move(ranges))
       , excluded_transactions(std::move(excluded_txs))
       , included_transactions(std::move(included_txs)) {}
@@ -211,7 +211,7 @@ struct hosted_txs
 namespace hosted_transactions {
 template<class T>
 tx_hash_ranges_errc
-exclude_transaction(T& self, const kafka::transactional_id& tx_id) {
+exclude_transaction(T& self, const sql::transactional_id& tx_id) {
     if (self.excluded_transactions.contains(tx_id)) {
         return tx_hash_ranges_errc::success;
     }
@@ -232,7 +232,7 @@ exclude_transaction(T& self, const kafka::transactional_id& tx_id) {
 
 template<class T>
 tx_hash_ranges_errc
-include_transaction(T& self, const kafka::transactional_id& tx_id) {
+include_transaction(T& self, const sql::transactional_id& tx_id) {
     if (self.included_transactions.contains(tx_id)) {
         return tx_hash_ranges_errc::success;
     }
@@ -273,7 +273,7 @@ tx_hash_ranges_errc add_range(T& self, const tx_hash_range& range) {
 }
 
 template<class T>
-bool contains(T& self, const kafka::transactional_id& tx_id) {
+bool contains(T& self, const sql::transactional_id& tx_id) {
     if (self.excluded_transactions.contains(tx_id)) {
         return false;
     }

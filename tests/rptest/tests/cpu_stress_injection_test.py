@@ -8,20 +8,20 @@
 # by the Apache License, Version 2.0
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from ducktape.utils.util import wait_until
 
 
-class CpuStressInjectionTest(RedpandaTest):
+class CpuStressInjectionTest(FunesTest):
     def __init__(self, test_context):
         super(CpuStressInjectionTest, self).__init__(test_context,
                                                      num_brokers=1)
 
     def has_started_stress(self):
-        return self.redpanda.search_log_any("Started stress fiber")
+        return self.funes.search_log_any("Started stress fiber")
 
     def has_reactor_stalls(self):
-        return self.redpanda.search_log_any("Reactor stalled for")
+        return self.funes.search_log_any("Reactor stalled for")
 
     @cluster(num_nodes=1)
     def test_stress_fibers_ms(self):
@@ -29,8 +29,8 @@ class CpuStressInjectionTest(RedpandaTest):
         Test that time-based stress fibers can reliably spit out reactor
         stalls.
         """
-        admin = Admin(self.redpanda)
-        node = self.redpanda.nodes[0]
+        admin = Admin(self.funes)
+        node = self.funes.nodes[0]
         admin.stress_fiber_start(node,
                                  10,
                                  min_ms_per_scheduling_point=30,
@@ -47,8 +47,8 @@ class CpuStressInjectionTest(RedpandaTest):
         """
         Basic test for count-based stress fibers.
         """
-        admin = Admin(self.redpanda)
-        node = self.redpanda.nodes[0]
+        admin = Admin(self.funes)
+        node = self.funes.nodes[0]
         admin.stress_fiber_start(node,
                                  10,
                                  min_spins_per_scheduling_point=1000,
@@ -67,8 +67,8 @@ class CpuStressInjectionTest(RedpandaTest):
         """
         Test that misconfiguring does not result in any started stress fibers.
         """
-        admin = Admin(self.redpanda)
-        node = self.redpanda.nodes[0]
+        admin = Admin(self.funes)
+        node = self.funes.nodes[0]
         try:
             admin.stress_fiber_start(node,
                                      10,

@@ -35,7 +35,7 @@ func Test_extractTarGzAndReplace(t *testing.T) {
 					ScramBits:  "256",
 					SeedServer: []string{"127.0.0.1:9092", "redpanda.com"},
 				},
-				expDest: "/tmp/full/redpanda-starter-app",
+				expDest: "/tmp/full/funes-starter-app",
 				expHash: v.Hash,
 			}, {
 				name: fmt.Sprintf("parse and execute %v template correctly - no user:pw", k),
@@ -45,7 +45,7 @@ func Test_extractTarGzAndReplace(t *testing.T) {
 					ScramBits:  "256",
 					SeedServer: []string{"127.0.0.1:9092", "redpanda.com"},
 				},
-				expDest: "/tmp/no-user/redpanda-starter-app",
+				expDest: "/tmp/no-user/funes-starter-app",
 				expHash: v.Hash,
 			}, {
 				name: fmt.Sprintf("parse and execute %v template correctly - no TLS", k),
@@ -57,7 +57,7 @@ func Test_extractTarGzAndReplace(t *testing.T) {
 					ScramBits:  "256",
 					SeedServer: []string{"127.0.0.1:9092", "redpanda.com"},
 				},
-				expDest: "/tmp/no-tls/redpanda-starter-app",
+				expDest: "/tmp/no-tls/funes-starter-app",
 				expHash: v.Hash,
 			}, {
 				name: fmt.Sprintf("parse and execute %v template correctly - extract in pwd", k),
@@ -68,7 +68,7 @@ func Test_extractTarGzAndReplace(t *testing.T) {
 					ScramBits:  "256",
 					SeedServer: []string{"127.0.0.1:9092", "redpanda.com"},
 				},
-				expDest: "redpanda-starter-app",
+				expDest: "funes-starter-app",
 				expHash: v.Hash,
 			},
 		}

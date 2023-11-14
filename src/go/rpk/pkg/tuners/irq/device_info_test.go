@@ -142,7 +142,7 @@ func TestFindModalias(t *testing.T) {
 		{"in device", "/sys/devices/vbd-51792/block/xvdf/", "/sys/devices/vbd-51792/modalias", false},
 		{"starting very deep", "/sys/devices/vbd-51792/block/xvdf/xvdf-1/xvdf-part/block/xvdf-a", "/sys/devices/vbd-51792/modalias", false},
 		{"no modalias", "/sys/devices/vbd-51792/block/xvdf/", "", true},
-		{"no modalias in unknown path", "/home/redpanda/opt/bin/device", "", true},
+		{"no modalias in unknown path", "/home/funes/opt/bin/device", "", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()

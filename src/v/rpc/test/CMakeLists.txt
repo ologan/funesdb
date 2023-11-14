@@ -50,11 +50,11 @@ rp_test(
   SOURCES rpc_gen_cycling_test.cc
   LIBRARIES v::seastar_testing_main v::rpc_testing
   LABELS rpc
-  INPUT_FILES ${CMAKE_CURRENT_SOURCE_DIR}/redpanda.crt
-              ${CMAKE_CURRENT_SOURCE_DIR}/redpanda.key
+  INPUT_FILES ${CMAKE_CURRENT_SOURCE_DIR}/funes.crt
+              ${CMAKE_CURRENT_SOURCE_DIR}/funes.key
               ${CMAKE_CURRENT_SOURCE_DIR}/root_certificate_authority.chain_cert
-              ${CMAKE_CURRENT_SOURCE_DIR}/redpanda.other.crt
-              ${CMAKE_CURRENT_SOURCE_DIR}/redpanda.other.key
+              ${CMAKE_CURRENT_SOURCE_DIR}/funes.other.crt
+              ${CMAKE_CURRENT_SOURCE_DIR}/funes.other.key
               ${CMAKE_CURRENT_SOURCE_DIR}/root_certificate_authority.other.chain_cert
   ARGS "-- -c 1"
 )

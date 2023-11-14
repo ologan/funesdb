@@ -10,12 +10,12 @@
 from rptest.services.cluster import cluster
 
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
-from rptest.services.redpanda import SecurityConfig
+from rptest.services.funes import SecurityConfig
 from time import sleep
 
-from confluent_kafka import (Producer, KafkaException)
+from confluent_sql import (Producer, SQLException)
 
 TOPIC_AUTHORIZATION_FAILED = 29
 CLUSTER_AUTHORIZATION_FAILED = 31
@@ -24,10 +24,10 @@ TRANSACTIONAL_ID_AUTHORIZATION_FAILED = 53
 
 def on_delivery(err, msg):
     if err is not None:
-        raise KafkaException(err)
+        raise SQLException(err)
 
 
-class ScramfulEosTest(RedpandaTest):
+class ScramfulEosTest(FunesTest):
     topics = [TopicSpec(name="topic1")]
 
     def __init__(self, test_context):
@@ -51,7 +51,7 @@ class ScramfulEosTest(RedpandaTest):
             try:
                 func()
                 break
-            except KafkaException as e:
+            except SQLException as e:
                 if retries == 0:
                     raise e
                 assert e.args[0].code(
@@ -60,7 +60,7 @@ class ScramfulEosTest(RedpandaTest):
 
     def write_by_bob(self, algorithm):
         producer = Producer({
-            "bootstrap.servers": self.redpanda.brokers(),
+            "bootstrap.servers": self.funes.brokers(),
             "enable.idempotence": True,
             "retries": 5,
             "sasl.mechanism": algorithm,
@@ -76,9 +76,9 @@ class ScramfulEosTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_idempotent_write_fails(self):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.sasl_create_user("bob", "bob", algorithm)
 
         try:
@@ -86,15 +86,15 @@ class ScramfulEosTest(RedpandaTest):
             assert False, "bob should not have access to topic1"
         except AssertionError as e:
             raise e
-        except KafkaException as e:
+        except SQLException as e:
             assert e.args[0].code(
             ) == TOPIC_AUTHORIZATION_FAILED, "TOPIC_AUTHORIZATION_FAILED error is expected"
 
     @cluster(num_nodes=3)
     def test_idempotent_write_passes_1(self):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.sasl_create_user("bob", "bob", algorithm)
         rpk.sasl_allow_principal("User:bob", ["write", "read", "describe"],
                                  "topic", "topic1", username, password,
@@ -104,9 +104,9 @@ class ScramfulEosTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_idempotent_write_passes_2(self):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.sasl_create_user("bob", "bob", algorithm)
         rpk.sasl_allow_principal("User:bob", ["write", "read", "describe"],
                                  "topic", "*", username, password, algorithm)
@@ -115,7 +115,7 @@ class ScramfulEosTest(RedpandaTest):
 
     def init_by_bob(self, tx_id, algorithm):
         producer = Producer({
-            "bootstrap.servers": self.redpanda.brokers(),
+            "bootstrap.servers": self.funes.brokers(),
             "enable.idempotence": True,
             "retries": 5,
             "sasl.mechanism": algorithm,
@@ -128,9 +128,9 @@ class ScramfulEosTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_tx_init_fails(self):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.sasl_create_user("bob", "bob", algorithm)
         rpk.sasl_allow_principal("User:bob", ["write", "read", "describe"],
                                  "topic", "topic1", username, password,
@@ -141,15 +141,15 @@ class ScramfulEosTest(RedpandaTest):
             assert False, "bob should not have access to txns"
         except AssertionError as e:
             raise e
-        except KafkaException as e:
+        except SQLException as e:
             assert e.args[0].code(
             ) == TRANSACTIONAL_ID_AUTHORIZATION_FAILED, "TRANSACTIONAL_ID_AUTHORIZATION_FAILED is expected"
 
     @cluster(num_nodes=3)
     def test_tx_init_passes_1(self):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.sasl_create_user("bob", "bob", algorithm)
         rpk.sasl_allow_principal("User:bob", ["write", "read", "describe"],
                                  "topic", "topic1", username, password,
@@ -163,9 +163,9 @@ class ScramfulEosTest(RedpandaTest):
 
     @cluster(num_nodes=3)
     def test_tx_init_passes_2(self):
-        username, password, algorithm = self.redpanda.SUPERUSER_CREDENTIALS
+        username, password, algorithm = self.funes.SUPERUSER_CREDENTIALS
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.sasl_create_user("bob", "bob", algorithm)
         rpk.sasl_allow_principal("User:bob", ["write", "read", "describe"],
                                  "topic", "topic1", username, password,

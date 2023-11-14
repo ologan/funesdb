@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package redpanda
+package funes
 
 import (
 	"time"
@@ -52,11 +52,11 @@ type RecordHeader struct {
 	Value []byte
 }
 
-// Record is a record that has been written to Redpanda.
+// Record is a record that has been written to Funes.
 type Record struct {
 	// Key is an optional field.
 	Key []byte
-	// Value is the blob of data that is written to Redpanda.
+	// Value is the blob of data that is written to Funes.
 	Value []byte
 	// Headers are client specified key/value pairs that are
 	// attached to a record.
@@ -73,7 +73,7 @@ type Record struct {
 	// The offset of this record in the partition.
 	//
 	// For output records this field is left unset,
-	// as it will be set by Redpanda.
+	// as it will be set by Funes.
 	Offset int64
 }
 

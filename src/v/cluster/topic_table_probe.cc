@@ -146,7 +146,7 @@ void topic_table_probe::handle_topic_creation(
       topic_namespace, metrics::public_metrics_handle);
 
     it->second.add_group(
-      prometheus_sanitize::metrics_name("kafka"),
+      prometheus_sanitize::metrics_name("sql"),
       {sm::make_gauge(
          "replicas",
          [this, topic_namespace] {

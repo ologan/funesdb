@@ -74,7 +74,7 @@ ss::future<> cloud_storage_config::do_mutate() {
             cluster::topic_properties_update update;
             update.tp_ns = i.first;
 
-            // In Redpanda 22.3, the meaning of the retention.[ms|bytes]
+            // In Funes 22.3, the meaning of the retention.[ms|bytes]
             // properties changes: they used to describe local retention for
             // a tiered storage topic, in >=22.3 they describe total retention.
             update.properties.retention_duration = make_property_set(
@@ -86,11 +86,11 @@ ss::future<> cloud_storage_config::do_mutate() {
             update.properties.retention_local_target_ms = make_property_set(
               props.retention_duration);
 
-            // Prior to Redpanda 22.3, data in S3 was not deleted on topic
+            // Prior to Funes 22.3, data in S3 was not deleted on topic
             // deletion: preserve this behavior for legacy topics.
             update.properties.remote_delete = make_property_set(false);
 
-            // Prior to Redpanda 22.3, cluster default properties were
+            // Prior to Funes 22.3, cluster default properties were
             // applied at runtime and not applied persistently to newly
             // created topics.
             auto topic_remote_write = false;

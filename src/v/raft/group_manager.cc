@@ -79,7 +79,7 @@ ss::future<> group_manager::stop() {
     f = f.then([this] { return _recovery_scheduler.stop(); });
 
     if (!_heartbeats.is_stopped()) {
-        // In normal redpanda process shutdown, heartbeats would
+        // In normal funes process shutdown, heartbeats would
         // have been stopped earlier.  Do it here if that didn't happen,
         // e.g. in a unit test.
         f = f.then([this] { return _heartbeats.stop(); });

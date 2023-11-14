@@ -1,10 +1,10 @@
 # Copyright 2021 Redpanda Data, Inc.
 #
-# Licensed as a Redpanda Enterprise file under the Redpanda Community
+# Licensed as a Funes Enterprise file under the Funes Community
 # License (the "License"); you may not use this file except in compliance with
 # the License. You may obtain a copy of the License at
 #
-# https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+# https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
 
 import re
 
@@ -12,13 +12,13 @@ import requests
 from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, SISettings, get_cloud_storage_type
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.services.funes import CloudStorageType, SISettings, get_cloud_storage_type
+from rptest.tests.funes_test import FunesTest
 from rptest.util import (
     expect_http_error,
     produce_until_segments,
@@ -26,7 +26,7 @@ from rptest.util import (
 )
 from random import choice
 
-# Log errors expected when connectivity between redpanda and the S3
+# Log errors expected when connectivity between funes and the S3
 # backend is disrupted
 CONNECTION_ERROR_LOGS = [
     "archival - .*Failed to create archivers",
@@ -36,7 +36,7 @@ CONNECTION_ERROR_LOGS = [
 ]
 
 
-class SIAdminApiTest(RedpandaTest):
+class SIAdminApiTest(FunesTest):
 
     log_segment_size = 1048576  # 1MB
     local_retention = log_segment_size * 2  # Retain 2 segments
@@ -58,10 +58,10 @@ class SIAdminApiTest(RedpandaTest):
                                              si_settings=si_settings)
 
         self._s3_port = si_settings.cloud_storage_api_endpoint_port
-        self.kafka_tools = KafkaCliTools(self.redpanda)
-        self.rpk = RpkTool(self.redpanda)
-        self.superuser = self.redpanda.SUPERUSER_CREDENTIALS
-        self.admin = Admin(self.redpanda,
+        self.sql_tools = SQLCliTools(self.funes)
+        self.rpk = RpkTool(self.funes)
+        self.superuser = self.funes.SUPERUSER_CREDENTIALS
+        self.admin = Admin(self.funes,
                            auth=(self.superuser.username,
                                  self.superuser.password))
 
@@ -70,7 +70,7 @@ class SIAdminApiTest(RedpandaTest):
         # We can't set 'admin_api_require_auth' in 'extra_rp_conf'. The
         # test will fail to start in this case. But we can swith the
         # feature on after start.
-        self.redpanda.set_cluster_config({'admin_api_require_auth': True})
+        self.funes.set_cluster_config({'admin_api_require_auth': True})
 
     @cluster(num_nodes=3, log_allow_list=CONNECTION_ERROR_LOGS)
     @matrix(cloud_storage_type=get_cloud_storage_type())
@@ -86,7 +86,7 @@ class SIAdminApiTest(RedpandaTest):
         shadow indexing subsystem. After validation the starting
         offset have to change from initial 0 to some other value.
         """
-        self.kafka_tools.alter_topic_config(
+        self.sql_tools.alter_topic_config(
             self.topic,
             {
                 TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES:
@@ -94,22 +94,22 @@ class SIAdminApiTest(RedpandaTest):
             },
         )
 
-        produce_until_segments(redpanda=self.redpanda,
+        produce_until_segments(funes=self.funes,
                                topic=self.topic,
                                partition_idx=0,
                                count=10,
                                acks=-1)
 
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         self.topic,
                                         target_bytes=self.local_retention)
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         for partition in rpk.describe_topic(self.topic):
             self.logger.info(f"describe topic result {partition}")
             assert partition.start_offset == 0, f"start-offset of the partition is supposed to be 0 instead of {partition.start_offset}"
 
-        self.redpanda.si_settings.set_expected_damage({"missing_segments"})
+        self.funes.si_settings.set_expected_damage({"missing_segments"})
         segment_to_remove = self.find_deletion_candidate()
         self.logger.info(f"trying to remove segment {segment_to_remove}")
         self.cloud_storage_client.delete_object(self.s3_bucket_name,
@@ -117,7 +117,7 @@ class SIAdminApiTest(RedpandaTest):
 
         self.logger.info("trying to sync remote partition")
 
-        node = choice(self.redpanda.nodes)
+        node = choice(self.funes.nodes)
         validation_result = self.admin.si_sync_local_state(self.topic, 0, node)
         self.logger.info(f"sync result {validation_result}")
 
@@ -140,15 +140,15 @@ class SIAdminApiTest(RedpandaTest):
 
     def _get_non_controller_node(self):
         self.admin.wait_stable_configuration('controller',
-                                             namespace='redpanda')
+                                             namespace='funes')
         controller_leader = self.admin.get_partition_leader(
-            namespace='redpanda', topic='controller', partition=0)
+            namespace='funes', topic='controller', partition=0)
         not_controller = next(
             (node_id for node_id in
-             {self.redpanda.node_id(node)
-              for node in self.redpanda.nodes}
+             {self.funes.node_id(node)
+              for node in self.funes.nodes}
              if node_id != controller_leader))
-        return self.redpanda.get_node(not_controller)
+        return self.funes.get_node(not_controller)
 
     @cluster(num_nodes=3)
     def test_topic_recovery_redirects_to_controller_leader(self):
@@ -203,12 +203,12 @@ class SIAdminApiTest(RedpandaTest):
         assert "cloud_log_size_bytes" in response
         assert response["cloud_log_size_bytes"] == 0
 
-        self.redpanda.set_cluster_config({"cloud_storage_enabled": False},
+        self.funes.set_cluster_config({"cloud_storage_enabled": False},
                                          expect_restart=True)
 
         with expect_http_error(400):
             not_enabled_response = self.admin.get_partition_manifest(
                 "test-topic", 0)
 
-        self.redpanda.si_settings.set_expected_damage(
+        self.funes.si_settings.set_expected_damage(
             {"ntr_no_topic_manifest"})

@@ -119,7 +119,7 @@ SEASTAR_THREAD_TEST_CASE(hash_ranges_addition_intersects_test) {
 SEASTAR_THREAD_TEST_CASE(hash_ranges_include_exclude_test) {
     cluster::tx_hash_ranges_errc add_res;
 
-    kafka::transactional_id tx_id("tx_1");
+    sql::transactional_id tx_id("tx_1");
     cluster::tm_stm::locally_hosted_txs hosted_transactions_1{};
     add_res = cluster::hosted_transactions::add_range(
       hosted_transactions_1, {0, cluster::tx_tm_hash_max});

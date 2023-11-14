@@ -28,7 +28,7 @@ enum class errc {
     shutting_down,
 
     // Used when receiving an undefined errc (e.g. from a newer version of
-    // Redpanda).
+    // Funes).
     unknown = std::numeric_limits<uint8_t>::max(),
 };
 struct errc_category final : public std::error_category {

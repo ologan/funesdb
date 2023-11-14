@@ -1,8 +1,8 @@
 version: '3'
 
 networks:
-  redpanda-test:
-    name: redpanda-test
+  funes-test:
+    name: funes-test
     driver: bridge
 
 services:
@@ -28,7 +28,7 @@ services:
       timeout: 20s
     image: minio/minio:RELEASE.2023-01-25T00-19-54Z
     networks:
-    - redpanda-test
+    - funes-test
   azurite:
     container_name: azurite
     restart: always
@@ -36,9 +36,9 @@ services:
     - 10000:10000
     image: mcr.microsoft.com/azure-storage/azurite:3.25.0
     networks:
-    - redpanda-test
+    - funes-test
   rp:
-    image: vectorized/redpanda-test-node
+    image: vectorized/funes-test-node
     privileged: true
     pids_limit: 32768
     ulimits:
@@ -51,6 +51,6 @@ services:
     - minio
     volumes:
     - '${BUILD_ROOT}:${BUILD_ROOT}'
-    - '${BUILD_ROOT}/redpanda_installs:/opt/redpanda_installs'
+    - '${BUILD_ROOT}/funes_installs:/opt/funes_installs'
     networks:
-    - redpanda-test
+    - funes-test

@@ -161,7 +161,7 @@ ss::future<tm_stm::op_status> tm_stm::try_init_hosted_transactions(
 }
 
 ss::future<tm_stm::op_status> tm_stm::include_hosted_transaction(
-  model::term_id term, kafka::transactional_id tx_id) {
+  model::term_id term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] including hosted transactions in term: {}",
@@ -181,7 +181,7 @@ ss::future<tm_stm::op_status> tm_stm::include_hosted_transaction(
 }
 
 ss::future<tm_stm::op_status> tm_stm::exclude_hosted_transaction(
-  model::term_id term, kafka::transactional_id tx_id) {
+  model::term_id term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] excluding hosted transactions in term: {}",
@@ -209,7 +209,7 @@ uint8_t tm_stm::active_snapshot_version() {
     return tm_snapshot_v0::version;
 }
 
-std::optional<tm_transaction> tm_stm::find_tx(kafka::transactional_id tx_id) {
+std::optional<tm_transaction> tm_stm::find_tx(sql::transactional_id tx_id) {
     auto tx_opt = _cache->find_mem(tx_id);
     if (tx_opt) {
         return tx_opt;
@@ -218,7 +218,7 @@ std::optional<tm_transaction> tm_stm::find_tx(kafka::transactional_id tx_id) {
 }
 
 ss::future<checked<tm_transaction, tm_stm::op_status>>
-tm_stm::get_tx(kafka::transactional_id tx_id) {
+tm_stm::get_tx(sql::transactional_id tx_id) {
     auto r = co_await sync(_sync_timeout);
     if (!r.has_value()) {
         co_return r.error();
@@ -495,7 +495,7 @@ tm_stm::do_update_tx(tm_transaction tx, model::term_id term) {
 }
 
 ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_aborting(
-  model::term_id expected_term, kafka::transactional_id tx_id) {
+  model::term_id expected_term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] marking transaction as aborted in term: {}",
@@ -515,7 +515,7 @@ ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_aborting(
 }
 
 ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_prepared(
-  model::term_id expected_term, kafka::transactional_id tx_id) {
+  model::term_id expected_term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] marking transaction as prepared in term: {}",
@@ -552,7 +552,7 @@ ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_prepared(
 }
 
 ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_killed(
-  model::term_id expected_term, kafka::transactional_id tx_id) {
+  model::term_id expected_term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] marking transaction as killed in term: {}",
@@ -574,7 +574,7 @@ ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_killed(
 }
 
 ss::future<checked<tm_transaction, tm_stm::op_status>>
-tm_stm::reset_transferring(model::term_id term, kafka::transactional_id tx_id) {
+tm_stm::reset_transferring(model::term_id term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] resetting transfer of transaction in term: {}",
@@ -616,7 +616,7 @@ tm_stm::reset_transferring(model::term_id term, kafka::transactional_id tx_id) {
 }
 
 ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_ongoing(
-  model::term_id expected_term, kafka::transactional_id tx_id) {
+  model::term_id expected_term, sql::transactional_id tx_id) {
     vlog(
       _ctx_log.trace,
       "[tx_id={}] marking transaction as ongoing in term: {}",
@@ -650,7 +650,7 @@ ss::future<checked<tm_transaction, tm_stm::op_status>> tm_stm::mark_tx_ongoing(
 
 ss::future<tm_stm::op_status> tm_stm::re_register_producer(
   model::term_id expected_term,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::producer_identity pid,
   model::producer_identity last_pid) {
@@ -689,7 +689,7 @@ ss::future<tm_stm::op_status> tm_stm::re_register_producer(
 
 ss::future<tm_stm::op_status> tm_stm::register_new_producer(
   model::term_id expected_term,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::producer_identity pid) {
     return ss::with_gate(
@@ -701,7 +701,7 @@ ss::future<tm_stm::op_status> tm_stm::register_new_producer(
 
 ss::future<tm_stm::op_status> tm_stm::do_register_new_producer(
   model::term_id expected_term,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::chrono::milliseconds transaction_timeout_ms,
   model::producer_identity pid) {
     vlog(
@@ -756,7 +756,7 @@ ss::future<tm_stm::op_status> tm_stm::do_register_new_producer(
 
 ss::future<tm_stm::op_status> tm_stm::add_partitions(
   model::term_id expected_term,
-  kafka::transactional_id tx_id,
+  sql::transactional_id tx_id,
   std::vector<tm_transaction::tx_partition> partitions) {
     auto tx_opt = find_tx(tx_id);
     if (!tx_opt) {
@@ -824,8 +824,8 @@ ss::future<tm_stm::op_status> tm_stm::add_partitions(
 
 ss::future<tm_stm::op_status> tm_stm::add_group(
   model::term_id expected_term,
-  kafka::transactional_id tx_id,
-  kafka::group_id group_id,
+  sql::transactional_id tx_id,
+  sql::group_id group_id,
   model::term_id etag) {
     auto tx_opt = find_tx(tx_id);
     if (!tx_opt) {
@@ -879,7 +879,7 @@ ss::future<tm_stm::op_status> tm_stm::add_group(
     co_return tm_stm::op_status::success;
 }
 
-bool tm_stm::hosts(const kafka::transactional_id& tx_id) {
+bool tm_stm::hosts(const sql::transactional_id& tx_id) {
     if (!_feature_table.local().is_active(
           features::feature::transaction_partitioning)) {
         return true;
@@ -1025,7 +1025,7 @@ tm_stm::apply_tm_update(model::record_batch_header hdr, model::record_batch b) {
       "broken model::record_batch_type::tm_update. expected tx.pid {} got: {}",
       tx.pid.id,
       p_id);
-    auto tx_id = kafka::transactional_id(
+    auto tx_id = sql::transactional_id(
       reflection::adl<ss::sstring>{}.from(key_reader));
     vassert(
       tx_id == tx.id,
@@ -1119,7 +1119,7 @@ bool tm_stm::is_expired(const tm_transaction& tx) {
     return _transactional_id_expiration < now_ts - tx.last_update_ts;
 }
 
-ss::lw_shared_ptr<mutex> tm_stm::get_tx_lock(kafka::transactional_id tid) {
+ss::lw_shared_ptr<mutex> tm_stm::get_tx_lock(sql::transactional_id tid) {
     auto [lock_it, inserted] = _tx_locks.try_emplace(tid, nullptr);
     if (inserted) {
         lock_it->second = ss::make_lw_shared<mutex>();
@@ -1128,7 +1128,7 @@ ss::lw_shared_ptr<mutex> tm_stm::get_tx_lock(kafka::transactional_id tid) {
 }
 
 ss::future<txlock_unit>
-tm_stm::lock_tx(kafka::transactional_id tx_id, std::string_view lock_name) {
+tm_stm::lock_tx(sql::transactional_id tx_id, std::string_view lock_name) {
     auto [lock_it, inserted] = _tx_locks.try_emplace(tx_id, nullptr);
     if (inserted) {
         lock_it->second = ss::make_lw_shared<mutex>();
@@ -1138,7 +1138,7 @@ tm_stm::lock_tx(kafka::transactional_id tx_id, std::string_view lock_name) {
 }
 
 std::optional<txlock_unit>
-tm_stm::try_lock_tx(kafka::transactional_id tx_id, std::string_view lock_name) {
+tm_stm::try_lock_tx(sql::transactional_id tx_id, std::string_view lock_name) {
     auto [lock_it, inserted] = _tx_locks.try_emplace(tx_id, nullptr);
     if (inserted) {
         lock_it->second = ss::make_lw_shared<mutex>();
@@ -1150,7 +1150,7 @@ tm_stm::try_lock_tx(kafka::transactional_id tx_id, std::string_view lock_name) {
     return std::nullopt;
 }
 
-absl::btree_set<kafka::transactional_id> tm_stm::get_expired_txs() {
+absl::btree_set<sql::transactional_id> tm_stm::get_expired_txs() {
     auto now_ts = clock_type::now();
     auto ids = _cache->filter_all_txid_by_tx([this, now_ts](auto tx) {
         return _transactional_id_expiration < now_ts - tx.last_update_ts;
@@ -1180,7 +1180,7 @@ std::optional<tm_transaction> tm_stm::oldest_tx() const {
 ss::future<checked<tm_transaction, tm_stm::op_status>>
 tm_stm::delete_partition_from_tx(
   model::term_id term,
-  kafka::transactional_id tid,
+  sql::transactional_id tid,
   tm_transaction::tx_partition ntp) {
     if (!_raft->is_leader()) {
         co_return tm_stm::op_status::not_leader;
@@ -1207,7 +1207,7 @@ tm_stm::delete_partition_from_tx(
 }
 
 ss::future<tm_stm::op_status>
-tm_stm::expire_tx(model::term_id term, kafka::transactional_id tx_id) {
+tm_stm::expire_tx(model::term_id term, sql::transactional_id tx_id) {
     auto tx_opt = co_await get_tx(tx_id);
     if (!tx_opt.has_value()) {
         co_return tm_stm::op_status::unknown;

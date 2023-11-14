@@ -15,7 +15,7 @@
 #include "cluster/partition_manager.h"
 #include "cluster/shard_table.h"
 #include "cluster/types.h"
-#include "kafka/server/partition_proxy.h"
+#include "sql/server/partition_proxy.h"
 #include "model/ktp.h"
 #include "model/metadata.h"
 #include "model/namespace.h"
@@ -163,7 +163,7 @@ ss::future<result<model::offset, cluster::errc>> local_service::produce(
       *shard,
       ntp,
       [timeout, r = std::move(rdr), &produced_offset](
-        kafka::partition_proxy* partition) mutable {
+        sql::partition_proxy* partition) mutable {
           return partition
             ->replicate(std::move(r), make_replicate_options(timeout))
             .then([&produced_offset](result<model::offset> r) {
@@ -226,7 +226,7 @@ ss::future<result<iobuf, cluster::errc>> local_service::load_wasm_binary(
       *shard,
       model::wasm_binaries_internal_ntp,
       [this, offset, timeout, &data](
-        kafka::partition_proxy* partition) mutable {
+        sql::partition_proxy* partition) mutable {
           storage::log_reader_config reader_config(
             /*start_offset=*/offset,
             /*max_offset=*/model::next_offset(offset),
@@ -285,7 +285,7 @@ local_service::consume_wasm_binary_reader(
 ss::future<find_coordinator_response>
 local_service::find_coordinator(find_coordinator_request request) {
     model::ntp ntp(
-      model::kafka_internal_namespace,
+      model::sql_internal_namespace,
       model::transform_offsets_topic,
       coordinator_partition);
     auto shard = _partition_manager->shard_owner(ntp);
@@ -301,7 +301,7 @@ local_service::find_coordinator(find_coordinator_request request) {
 ss::future<offset_commit_response>
 local_service::offset_commit(offset_commit_request request) {
     model::ntp ntp(
-      model::kafka_internal_namespace,
+      model::sql_internal_namespace,
       model::transform_offsets_topic,
       request.coordinator);
     auto shard = _partition_manager->shard_owner(ntp);
@@ -317,7 +317,7 @@ local_service::offset_commit(offset_commit_request request) {
 ss::future<offset_fetch_response>
 local_service::offset_fetch(offset_fetch_request request) {
     model::ntp ntp(
-      model::kafka_internal_namespace,
+      model::sql_internal_namespace,
       model::transform_offsets_topic,
       request.coordinator);
     offset_fetch_response response{};

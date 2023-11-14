@@ -37,7 +37,7 @@ public:
       config::binding<uint32_t> partitions_per_shard,
       config::binding<uint32_t> partitions_reserve_shard0,
       config::binding<std::vector<ss::sstring>>
-        kafka_topics_skipping_allocation,
+        sql_topics_skipping_allocation,
       config::binding<bool> enable_rack_awareness);
 
     // Replica placement APIs
@@ -201,7 +201,7 @@ private:
     config::binding<std::optional<int32_t>> _fds_per_partition;
     config::binding<uint32_t> _partitions_per_shard;
     config::binding<uint32_t> _partitions_reserve_shard0;
-    config::binding<std::vector<ss::sstring>> _internal_kafka_topics;
+    config::binding<std::vector<ss::sstring>> _internal_sql_topics;
     config::binding<bool> _enable_rack_awareness;
 };
 } // namespace cluster

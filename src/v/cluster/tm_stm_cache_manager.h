@@ -12,7 +12,7 @@
 #pragma once
 
 #include "cluster/tm_stm_cache.h"
-#include "kafka/server/coordinator_ntp_mapper.h"
+#include "sql/server/coordinator_ntp_mapper.h"
 #include "model/fundamental.h"
 
 #include <optional>

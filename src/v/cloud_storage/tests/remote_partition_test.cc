@@ -1,11 +1,11 @@
 /*
  * Copyright 2021 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "bytes/iobuf.h"
@@ -167,12 +167,12 @@ static model::record_batch_header read_single_batch_from_remote_partition(
     return model::record_batch_header{};
 }
 
-// Returns true if a kafka::offset scan returns the expected existence of the
+// Returns true if a sql::offset scan returns the expected existence of the
 // record.
 bool check_fetch(
-  cloud_storage_fixture& fixture, kafka::offset ko, bool expect_exists) {
+  cloud_storage_fixture& fixture, sql::offset ko, bool expect_exists) {
     auto hdr = read_single_batch_from_remote_partition(
-      fixture, kafka::offset_cast(ko), expect_exists);
+      fixture, sql::offset_cast(ko), expect_exists);
     bool exists = hdr.record_count > 0;
     bool ret = expect_exists == exists;
     if (!ret) {
@@ -181,10 +181,10 @@ bool check_fetch(
     return ret;
 }
 
-// Returns true if a kafka::offset scan returns the expected number of records.
+// Returns true if a sql::offset scan returns the expected number of records.
 bool check_scan(
-  cloud_storage_fixture& fixture, kafka::offset ko, int expected_num_records) {
-    auto seg_hdrs = scan_remote_partition(fixture, kafka::offset_cast(ko));
+  cloud_storage_fixture& fixture, sql::offset ko, int expected_num_records) {
+    auto seg_hdrs = scan_remote_partition(fixture, sql::offset_cast(ko));
     int num_data_records = 0;
     for (const auto& hdr : seg_hdrs) {
         num_data_records += hdr.record_count;
@@ -354,7 +354,7 @@ FIXTURE_TEST(
       *this, api, cache, segment_name_format::v3);
 }
 
-FIXTURE_TEST(test_scan_by_kafka_offset, cloud_storage_fixture) {
+FIXTURE_TEST(test_scan_by_sql_offset, cloud_storage_fixture) {
     // mo: 0     5 6    11 12   17 18
     //     [a    ] [b    ] [c    ] end
     // ko: 0     2 3     5 6     8 9
@@ -371,13 +371,13 @@ FIXTURE_TEST(test_scan_by_kafka_offset, cloud_storage_fixture) {
       *this, model::offset(0), model::offset_delta(0), batch_types);
     print_segments(segments);
     for (int i = 0; i <= 8; i++) {
-        BOOST_REQUIRE(check_scan(*this, kafka::offset(i), 9 - i));
-        BOOST_REQUIRE(check_fetch(*this, kafka::offset(i), true));
+        BOOST_REQUIRE(check_scan(*this, sql::offset(i), 9 - i));
+        BOOST_REQUIRE(check_fetch(*this, sql::offset(i), true));
     }
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(9), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(9), false));
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(10), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(10), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(9), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(9), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(10), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(10), false));
 }
 
 FIXTURE_TEST(test_overlapping_segments, cloud_storage_fixture) {
@@ -416,10 +416,10 @@ FIXTURE_TEST(test_overlapping_segments, cloud_storage_fixture) {
              + manifest.get_legacy_manifest_format_and_path().second().string(),
       .body = body};
     set_expectations_and_listen(expectations);
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(0), 9));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(0), 9));
 }
 
-FIXTURE_TEST(test_scan_by_kafka_offset_truncated, cloud_storage_fixture) {
+FIXTURE_TEST(test_scan_by_sql_offset_truncated, cloud_storage_fixture) {
     // mo: 6    11 12   17
     //     [b    ] [c    ] end
     // ko: 3     5 6     8
@@ -435,19 +435,19 @@ FIXTURE_TEST(test_scan_by_kafka_offset_truncated, cloud_storage_fixture) {
       *this, model::offset(6), model::offset_delta(3), batch_types);
     print_segments(segments);
     for (int i = 0; i <= 2; i++) {
-        BOOST_REQUIRE(check_fetch(*this, kafka::offset(i), false));
+        BOOST_REQUIRE(check_fetch(*this, sql::offset(i), false));
     }
     for (int i = 3; i <= 8; i++) {
-        BOOST_REQUIRE(check_scan(*this, kafka::offset(i), 9 - i));
-        BOOST_REQUIRE(check_fetch(*this, kafka::offset(i), true));
+        BOOST_REQUIRE(check_scan(*this, sql::offset(i), 9 - i));
+        BOOST_REQUIRE(check_fetch(*this, sql::offset(i), true));
     }
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(9), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(9), false));
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(10), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(10), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(9), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(9), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(10), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(10), false));
 }
 
-FIXTURE_TEST(test_scan_by_kafka_offset_repeats, cloud_storage_fixture) {
+FIXTURE_TEST(test_scan_by_sql_offset_repeats, cloud_storage_fixture) {
     // mo: 0     5 6    11 12   17
     //     [a    ] [b    ] [c    ] end
     // ko: 0     2 3     3 3     3
@@ -465,14 +465,14 @@ FIXTURE_TEST(test_scan_by_kafka_offset_repeats, cloud_storage_fixture) {
     print_segments(segments);
     for (int i = 0; i <= 3; i++) {
         vlog(test_log.info, "Checking offset {}, expect {} batches", i, 4 - i);
-        BOOST_CHECK(check_scan(*this, kafka::offset(i), 4 - i));
-        BOOST_CHECK(check_fetch(*this, kafka::offset(i), true));
+        BOOST_CHECK(check_scan(*this, sql::offset(i), 4 - i));
+        BOOST_CHECK(check_fetch(*this, sql::offset(i), true));
     }
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(4), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(4), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(4), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(4), false));
 }
 FIXTURE_TEST(
-  test_scan_by_kafka_offset_repeats_truncated, cloud_storage_fixture) {
+  test_scan_by_sql_offset_repeats_truncated, cloud_storage_fixture) {
     // mo: 6    11 12   17
     //     [b    ] [c    ] end
     // ko: 3     3 3     3
@@ -487,14 +487,14 @@ FIXTURE_TEST(
     auto segments = setup_s3_imposter(
       *this, model::offset(6), model::offset_delta(3), batch_types);
     print_segments(segments);
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(2), false));
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(3), 1));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(3), true));
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(4), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(4), false));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(2), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(3), 1));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(3), true));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(4), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(4), false));
 }
 
-FIXTURE_TEST(test_scan_by_kafka_offset_same_bounds, cloud_storage_fixture) {
+FIXTURE_TEST(test_scan_by_sql_offset_same_bounds, cloud_storage_fixture) {
     // mo: 0     5 6    11 12   17 18
     //     [a    ] [b    ] [c    ] end
     // ko: 0     5 6     6 6     6 7
@@ -511,15 +511,15 @@ FIXTURE_TEST(test_scan_by_kafka_offset_same_bounds, cloud_storage_fixture) {
       *this, model::offset(0), model::offset_delta(0), batch_types);
     print_segments(segments);
     for (int i = 0; i <= 6; i++) {
-        BOOST_REQUIRE(check_scan(*this, kafka::offset(i), 7 - i));
-        BOOST_REQUIRE(check_fetch(*this, kafka::offset(i), true));
+        BOOST_REQUIRE(check_scan(*this, sql::offset(i), 7 - i));
+        BOOST_REQUIRE(check_fetch(*this, sql::offset(i), true));
     }
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(7), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(7), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(7), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(7), false));
 }
 
 FIXTURE_TEST(
-  test_scan_by_kafka_offset_same_bounds_truncated, cloud_storage_fixture) {
+  test_scan_by_sql_offset_same_bounds_truncated, cloud_storage_fixture) {
     // mo: 6    11 12   17
     //     [b    ] [c    ] end
     // ko: 6     6 6     6
@@ -535,12 +535,12 @@ FIXTURE_TEST(
       *this, model::offset(6), model::offset_delta(0), batch_types);
     print_segments(segments);
     for (int i = 0; i < 6; i++) {
-        BOOST_REQUIRE(check_fetch(*this, kafka::offset(i), false));
+        BOOST_REQUIRE(check_fetch(*this, sql::offset(i), false));
     }
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(6), 1));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(6), true));
-    BOOST_REQUIRE(check_scan(*this, kafka::offset(7), 0));
-    BOOST_REQUIRE(check_fetch(*this, kafka::offset(7), false));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(6), 1));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(6), true));
+    BOOST_REQUIRE(check_scan(*this, sql::offset(7), 0));
+    BOOST_REQUIRE(check_fetch(*this, sql::offset(7), false));
 }
 
 FIXTURE_TEST(
@@ -1631,7 +1631,7 @@ FIXTURE_TEST(
 FIXTURE_TEST(test_remote_partition_scan_after_recovery, cloud_storage_fixture) {
     const char* manifest_json = R"json({
       "version": 1,
-      "namespace": "kafka",
+      "namespace": "sql",
       "topic": "test-topic",
       "partition": 42,
       "revision": 0,

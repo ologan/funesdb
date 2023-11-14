@@ -27,7 +27,7 @@ public:
     // to store it in group service for expire
     // old txs.
     virtual ss::future<begin_group_tx_reply> begin_group_tx(
-      kafka::group_id,
+      sql::group_id,
       model::producer_identity,
       model::tx_seq,
       model::timeout_clock::duration,
@@ -38,7 +38,7 @@ public:
       begin_group_tx_locally(begin_group_tx_request) = 0;
 
     virtual ss::future<commit_group_tx_reply> commit_group_tx(
-      kafka::group_id,
+      sql::group_id,
       model::producer_identity,
       model::tx_seq,
       model::timeout_clock::duration)
@@ -48,7 +48,7 @@ public:
       commit_group_tx_locally(commit_group_tx_request) = 0;
 
     virtual ss::future<abort_group_tx_reply> abort_group_tx(
-      kafka::group_id,
+      sql::group_id,
       model::producer_identity,
       model::tx_seq,
       model::timeout_clock::duration)

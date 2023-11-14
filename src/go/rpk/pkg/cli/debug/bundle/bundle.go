@@ -19,7 +19,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/httpapi"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -29,8 +29,8 @@ import (
 type bundleParams struct {
 	fs                      afero.Fs
 	p                       *config.RpkProfile
-	y                       *config.RedpandaYaml
-	yActual                 *config.RedpandaYaml
+	y                       *config.FunesYaml
+	yActual                 *config.FunesYaml
 	cl                      *kgo.Client
 	logsSince               string
 	logsUntil               string
@@ -73,15 +73,15 @@ func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 			// capturing a debug *can* have access sometimes (k8s).
 			var (
 				p           = cfg.VirtualProfile()
-				y           = cfg.VirtualRedpandaYaml()
-				yActual, ok = cfg.ActualRedpandaYaml()
+				y           = cfg.VirtualFunesYaml()
+				yActual, ok = cfg.ActualFunesYaml()
 			)
 			if !ok {
 				yActual = y
 			}
 
-			cl, err := kafka.NewFranzClient(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			cl, err := sql.NewFranzClient(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer cl.Close()
 
 			logsLimit, err := units.FromHumanSize(logsSizeLimit)
@@ -123,7 +123,7 @@ func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 		},
 	}
 
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	p.InstallAdminFlags(cmd)
 
 	f := cmd.Flags()
@@ -135,7 +135,7 @@ func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 	f.StringVar(&logsSizeLimit, "logs-size-limit", "100MiB", "Read the logs until the given size is reached (e.g. 3MB, 1GiB)")
 	f.StringVar(&controllerLogsSizeLimit, "controller-logs-size-limit", "20MB", "The size limit of the controller logs that can be stored in the bundle (e.g. 3MB, 1GiB)")
 	f.StringVar(&uploadURL, "upload-url", "", "If provided, where to upload the bundle in addition to creating a copy on disk")
-	f.StringVarP(&namespace, "namespace", "n", "redpanda", "The namespace to use to collect the resources from (k8s only)")
+	f.StringVarP(&namespace, "namespace", "n", "funes", "The namespace to use to collect the resources from (k8s only)")
 
 	return cmd
 }
@@ -172,15 +172,15 @@ func (e *S3EndpointError) Error() string {
 }
 
 const bundleHelpText = `'rpk debug bundle' collects environment data that can help debug and diagnose
-issues with a redpanda cluster, a broker, or the machine it's running on. It
+issues with a funes cluster, a broker, or the machine it's running on. It
 then bundles the collected data into a ZIP file, called a diagnostics bundle.
 
 The files and directories in the diagnostics bundle differ depending on the 
-environment in which Redpanda is running:
+environment in which Funes is running:
 
 COMMON FILES
 
- - Kafka metadata: Broker configs, topic configs, start/committed/end offsets,
+ - SQL metadata: Broker configs, topic configs, start/committed/end offsets,
    groups, group commits.
 
  - Controller logs: The controller logs directory up to a limit set by
@@ -188,7 +188,7 @@ COMMON FILES
 
  - Data directory structure: A file describing the data directory's contents.
 
- - redpanda configuration: The redpanda configuration file (redpanda.yaml;
+ - funes configuration: The funes configuration file (funes.yaml;
    SASL credentials are stripped).
 
  - /proc/cpuinfo: CPU information like make, core count, cache, frequency.
@@ -196,7 +196,7 @@ COMMON FILES
  - /proc/interrupts: IRQ distribution across CPU cores.
 
  - Resource usage data: CPU usage percentage, free memory available for the
-   redpanda process.
+   funes process.
 
  - Clock drift: The ntp clock delta (using pool.ntp.org as a reference) & round
    trip time.
@@ -216,7 +216,7 @@ BARE-METAL
 
  - Disk usage: The disk usage for the data directory, as output by 'du'.
 
- - redpanda logs: The node's redpanda logs written to journald. If --logs-since 
+ - funes logs: The node's funes logs written to journald. If --logs-since 
    or --logs-until are passed, then only the logs within the resulting time frame
    will be included.
 
@@ -238,11 +238,11 @@ KUBERNETES
  - Kubernetes Resources: Kubernetes manifests for all resources in the given 
    Kubernetes namespace (via --namespace).
 
- - redpanda logs: Logs of each Pod in the the given Kubernetes namespace. If 
+ - funes logs: Logs of each Pod in the the given Kubernetes namespace. If 
    --logs-since is passed, only the logs within the given timeframe are 
    included.
 
 
-If you have an upload URL from the Redpanda support team, provide it in the 
---upload-url flag to upload your diagnostics bundle to Redpanda.
+If you have an upload URL from the Funes support team, provide it in the 
+--upload-url flag to upload your diagnostics bundle to Funes.
 `

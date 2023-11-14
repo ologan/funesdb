@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #include "cloud_roles/aws_sts_refresh_impl.h"
@@ -25,7 +25,7 @@ static constexpr std::string_view response_node_credential_path
   = "AssumeRoleWithWebIdentityResponse.AssumeRoleWithWebIdentityResult."
     "Credentials";
 
-/// These variables injected by the AWS operator must be present on the redpanda
+/// These variables injected by the AWS operator must be present on the funes
 /// pod to ensure we can get credentials from STS.
 /// ref:
 /// https://docs.amazonaws.cn/en_us/eks/latest/userguide/specify-service-account-role.html
@@ -37,7 +37,7 @@ struct aws_injected_env_vars {
 };
 
 struct sts_params {
-    static constexpr std::string_view role_session_name = "redpanda_si";
+    static constexpr std::string_view role_session_name = "funes_si";
 
     static constexpr std::string_view api_version = "2011-06-15";
 
@@ -121,7 +121,7 @@ ss::future<api_response> aws_sts_refresh_impl::fetch_credentials() {
       boost::beast::http::field::host,
       fmt::format("{}:{}", address().host(), address().port()));
     assume_req.set(
-      boost::beast::http::field::user_agent, "redpanda.vectorized.io");
+      boost::beast::http::field::user_agent, "funes.vectorized.io");
 
     using namespace fmt::literals;
 

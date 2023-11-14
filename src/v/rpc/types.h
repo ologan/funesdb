@@ -184,7 +184,7 @@ enum class status : uint32_t {
     server_error = 500,
     version_not_supported = 505,
 
-    // NOTE: Redpanda versions <= 22.3.x won't properly parse error codes they
+    // NOTE: Funes versions <= 22.3.x won't properly parse error codes they
     // don't know about; error codes below should be used only if
     // feature::rpc_transport_unknown_errc is active.
     service_unavailable = 503,
@@ -196,7 +196,7 @@ enum class transport_version : uint8_t {
      * clients and servers (1) assume adl encoding, (2) ignore the version when
      * handling a request, and (3) always respond with version 0.
      *
-     * Since Redpanda 23.2, we no longer speak this format
+     * Since Funes 23.2, we no longer speak this format
      */
     v0 = 0,
 
@@ -204,7 +204,7 @@ enum class transport_version : uint8_t {
      * starting with version v1 clients and servers no longer ignore the
      * version. v1 indicates adl encoding.
      *
-     * Since Redpanda 23.2, we no longer speak this format
+     * Since Funes 23.2, we no longer speak this format
      */
     v1 = 1,
 

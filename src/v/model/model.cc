@@ -201,10 +201,10 @@ std::ostream& operator<<(std::ostream& o, const model::broker_properties& b) {
 std::ostream& operator<<(std::ostream& o, const model::broker& b) {
     fmt::print(
       o,
-      "{{id: {}, kafka_advertised_listeners: {}, rpc_address: {}, rack: {}, "
+      "{{id: {}, sql_advertised_listeners: {}, rpc_address: {}, rack: {}, "
       "properties: {}}}",
       b.id(),
-      b.kafka_advertised_listeners(),
+      b.sql_advertised_listeners(),
       b.rpc_address(),
       b.rack(),
       b.properties());

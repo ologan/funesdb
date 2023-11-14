@@ -19,7 +19,7 @@ class ProducerSwarm(Service):
 
     def __init__(self,
                  context,
-                 redpanda,
+                 funes,
                  topic: str,
                  producers: int,
                  records_per_producer: int,
@@ -33,7 +33,7 @@ class ProducerSwarm(Service):
                  keys: Optional[int] = None,
                  messages_per_second_per_producer: Optional[int] = None):
         super(ProducerSwarm, self).__init__(context, num_nodes=1)
-        self._redpanda = redpanda
+        self._funes = funes
         self._topic = topic
         self._producers = producers
         self._records_per_producer = records_per_producer
@@ -47,8 +47,8 @@ class ProducerSwarm(Service):
         self._max_record_size = max_record_size
         self._keys = keys
 
-        if hasattr(redpanda, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
-            security_config = redpanda.security_config()
+        if hasattr(funes, 'GLOBAL_CLOUD_CLUSTER_CONFIG'):
+            security_config = funes.security_config()
             properties['security.protocol'] = 'SASL_SSL'
             properties['sasl.mechanism'] = security_config.get(
                 'sasl_mechanism', 'PLAIN')
@@ -58,14 +58,14 @@ class ProducerSwarm(Service):
                 'sasl_plain_password', None)
 
     def clean_node(self, node):
-        self._redpanda.logger.debug(f"{self.__class__.__name__}.clean_node")
+        self._funes.logger.debug(f"{self.__class__.__name__}.clean_node")
         node.account.kill_process(self.EXE, clean_shutdown=False)
         if node.account.exists(self.LOG_PATH):
             node.account.remove(self.LOG_PATH)
 
     def start_node(self, node, clean=None):
         cmd = f"{self.EXE}"
-        cmd += f" --brokers {self._redpanda.brokers()}"
+        cmd += f" --brokers {self._funes.brokers()}"
         cmd += f" producers --topic {self._topic}"
         cmd += f" --count {self._producers}"
         cmd += f" --messages {self._records_per_producer}"
@@ -93,7 +93,7 @@ class ProducerSwarm(Service):
 
         cmd = f"RUST_LOG={self._log_level} bash /opt/remote/control/start.sh {self.EXE} \"{cmd}\""
         node.account.ssh(cmd)
-        self._redpanda.wait_until(
+        self._funes.wait_until(
             lambda: self.is_alive(node),
             timeout_sec=600,
             backoff_sec=1,
@@ -108,7 +108,7 @@ class ProducerSwarm(Service):
         return "YES" in result
 
     def wait_node(self, node, timeout_sec=600):
-        self._redpanda.wait_until(lambda: not self.is_alive(node),
+        self._funes.wait_until(lambda: not self.is_alive(node),
                                   timeout_sec=timeout_sec,
                                   backoff_sec=5)
         return True

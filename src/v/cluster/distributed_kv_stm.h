@@ -22,7 +22,7 @@ namespace cluster {
 using namespace distributed_kv_stm_types;
 /**
  * Implements simple distributed KV store like semantics using the state
- * machine abstraction. Backed by a Kafka topic with one or more partitions.
+ * machine abstraction. Backed by a SQL topic with one or more partitions.
  *
  * Supports the following operations
  *

@@ -1,11 +1,11 @@
 /*
  * Copyright 2022 Redpanda Data, Inc.
  *
- * Licensed as a Redpanda Enterprise file under the Redpanda Community
+ * Licensed as a Funes Enterprise file under the Funes Community
  * License (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
  *
- * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
+ * https://github.com/redpanda-data/funes/blob/master/licenses/rcl.md
  */
 
 #pragma once
@@ -90,11 +90,11 @@ public:
     /// segments
     const model::offset_delta get_base_offset_delta() const;
 
-    /// Get base offset of the segment (redpanda offset)
+    /// Get base offset of the segment (funes offset)
     const model::offset get_base_rp_offset() const;
 
-    /// Get base offset of the segment (kafka offset)
-    const kafka::offset get_base_kafka_offset() const;
+    /// Get base offset of the segment (sql offset)
+    const sql::offset get_base_sql_offset() const;
 
     ss::future<> stop();
 
@@ -106,13 +106,13 @@ public:
     struct input_stream_with_offsets {
         ss::input_stream<char> stream;
         model::offset rp_offset;
-        kafka::offset kafka_offset;
+        sql::offset sql_offset;
     };
     /// create an input stream _sharing_ the underlying file handle
     /// starting at position @pos
     ss::future<input_stream_with_offsets> offset_data_stream(
-      kafka::offset start,
-      kafka::offset end,
+      sql::offset start,
+      sql::offset end,
       std::optional<model::timestamp>,
       ss::io_priority_class);
 
@@ -147,8 +147,8 @@ public:
 
     /// Return aborted transactions metadata associated with the segment
     ///
-    /// \param from start redpanda offset
-    /// \param to end redpanda offset
+    /// \param from start funes offset
+    /// \param to end funes offset
     ss::future<std::vector<model::tx_range>>
     aborted_transactions(model::offset from, model::offset to);
 
@@ -160,13 +160,13 @@ public:
 
     uint64_t max_hydrated_chunks() const;
 
-    /// Given a kafka offset, determines the starting offset of the chunk it
+    /// Given a sql offset, determines the starting offset of the chunk it
     /// lies in. The precondition is that coarse index must have been hydrated.
     /// The returned start offset is guaranteed to be the start of a batch. If
     /// the coarse index is empty (which may happen when the remote segment is
     /// smaller than chunk size), offset 0 is returned.
     chunk_start_offset_t
-    get_chunk_start_for_kafka_offset(kafka::offset koff) const;
+    get_chunk_start_for_sql_offset(sql::offset koff) const;
 
     const offset_index::coarse_index_t& get_coarse_index() const;
 
@@ -180,10 +180,10 @@ public:
     std::pair<size_t, bool> min_cache_cost() const;
 
 private:
-    /// get a file offset for the corresponding kafka offset
+    /// get a file offset for the corresponding sql offset
     /// if the index is available
     std::optional<offset_index::find_result>
-    maybe_get_offsets(kafka::offset kafka_offset);
+    maybe_get_offsets(sql::offset sql_offset);
 
     /// get a file offset for the corresponding to the timestamp
     /// if the index is available
@@ -319,10 +319,10 @@ class remote_segment_batch_consumer;
 /// The problem here is that shadow-indexing operates on sparse data.
 /// It can't translate every offset. Only the base offsets of uploaded
 /// segment. But it can also translate offsets as it scans the segment.
-/// But this is all done internally, so caller have to proviede kafka
-/// offsets. Mechanisms which require redpanda offset can use
+/// But this is all done internally, so caller have to proviede sql
+/// offsets. Mechanisms which require funes offset can use
 /// '_cur_rp_offset' field. It's guaranteed to point to the same
-/// record batch but the offset is not translated back to kafka. This is
+/// record batch but the offset is not translated back to sql. This is
 /// useful since we can, for instance, compare it to committed_offset of
 /// the uploaded segment to know that we scanned the whole segment.
 ///
@@ -361,14 +361,14 @@ public:
     const storage::log_reader_config& config() const { return _config; }
     storage::log_reader_config& config() { return _config; }
 
-    /// Get max offset (redpanda offset)
+    /// Get max offset (funes offset)
     model::offset max_rp_offset() const { return _seg->get_max_rp_offset(); }
 
-    /// Get base offset (redpanda offset)
+    /// Get base offset (funes offset)
     model::offset base_rp_offset() const { return _seg->get_base_rp_offset(); }
 
-    kafka::offset base_kafka_offset() const {
-        return _seg->get_base_kafka_offset();
+    sql::offset base_sql_offset() const {
+        return _seg->get_base_sql_offset();
     }
 
     bool is_eof() const {
@@ -380,7 +380,7 @@ public:
     }
 
     model::offset current_rp_offset() const { return _cur_rp_offset; }
-    kafka::offset current_kafka_offset() const {
+    sql::offset current_sql_offset() const {
         return _cur_rp_offset - _cur_delta;
     }
 

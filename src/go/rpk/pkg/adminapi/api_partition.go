@@ -21,7 +21,7 @@ type Replica struct {
 	Core   int `json:"core"`
 }
 
-// Partition is the information returned from the Redpanda admin partitions endpoints.
+// Partition is the information returned from the Funes admin partitions endpoints.
 type Partition struct {
 	Namespace   string    `json:"ns"`
 	Topic       string    `json:"topic"`

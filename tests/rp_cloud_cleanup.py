@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from rptest.services.cloud_cluster_utils import CloudClusterUtils
 from rptest.services.provider_clients.rpcloud_client import RpCloudApiClient
-from rptest.services.redpanda_cloud import CloudClusterConfig, ns_name_date_fmt, \
+from rptest.services.funes_cloud import CloudClusterConfig, ns_name_date_fmt, \
     ns_name_prefix
 
 gconfig_path = './'

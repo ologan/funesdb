@@ -14,12 +14,12 @@ import time
 
 from rptest.clients.types import TopicSpec
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.services.redpanda import ResourceSettings
+from rptest.services.funes import ResourceSettings
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.services.rpk_consumer import RpkConsumer
 from rptest.services.metrics_check import MetricCheck
 
-RATE_METRIC = "vectorized_kafka_rpc_connections_wait_rate_total"
+RATE_METRIC = "vectorized_sql_rpc_connections_wait_rate_total"
 
 
 class ConnectionRateLimitTest(PreallocNodesTest):
@@ -38,17 +38,17 @@ class ConnectionRateLimitTest(PreallocNodesTest):
             test_context=test_context,
             num_brokers=1,
             node_prealloc_count=1,
-            extra_rp_conf={"kafka_connection_rate_limit": self.RATE_LIMIT},
+            extra_rp_conf={"sql_connection_rate_limit": self.RATE_LIMIT},
             resource_settings=resource_setting)
 
-        self._producer = KgoVerifierProducer(test_context, self.redpanda,
+        self._producer = KgoVerifierProducer(test_context, self.funes,
                                              self.topics[0], self.MSG_SIZE,
                                              self.PRODUCE_COUNT,
                                              self.preallocated_nodes)
 
     def start_consumer(self):
         return RpkConsumer(context=self.test_context,
-                           redpanda=self.redpanda,
+                           funes=self.funes,
                            topic=self.topics[0],
                            num_msgs=1,
                            save_msgs=True,
@@ -119,8 +119,8 @@ class ConnectionRateLimitTest(PreallocNodesTest):
         time1 = self.get_read_time(self.RANDOM_READ_PARALLEL)
         time2 = self.get_read_time(self.RANDOM_READ_PARALLEL * 2)
 
-        metrics = MetricCheck(self.logger, self.redpanda,
-                              self.redpanda.nodes[0], RATE_METRIC, {})
+        metrics = MetricCheck(self.logger, self.funes,
+                              self.funes.nodes[0], RATE_METRIC, {})
         metrics.evaluate([(RATE_METRIC, lambda a, b: b > 0)])
 
         assert time2 >= time1 * 1.6, f'Time for first iteration:{time1} Time for second iteration:{time2}'

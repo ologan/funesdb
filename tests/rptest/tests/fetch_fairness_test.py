@@ -15,10 +15,10 @@ from ducktape.mark import parametrize
 from rptest.clients.kcl import KCL
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 
 
-class FetchTest(RedpandaTest):
+class FetchTest(FunesTest):
     def __init__(self, test_ctx, *args, **kwargs):
         self._ctx = test_ctx
         super(FetchTest, self).__init__(test_ctx,
@@ -60,8 +60,8 @@ class FetchTest(RedpandaTest):
 
         # create topics
         self.client().create_topic(specs=topics)
-        self.redpanda.logger.info(f"topics: {topics}")
-        rpk = RpkTool(self.redpanda)
+        self.funes.logger.info(f"topics: {topics}")
+        rpk = RpkTool(self.funes)
 
         # publish 10 messages to each topic/partition
 
@@ -69,7 +69,7 @@ class FetchTest(RedpandaTest):
             t = s.name
             for p in range(0, s.partition_count):
                 for i in range(0, records_per_partition):
-                    self.redpanda.logger.info(f"producing to : {t}/{p}")
+                    self.funes.logger.info(f"producing to : {t}/{p}")
                     rpk.produce(t,
                                 f"k.{t}.{p}.{i}",
                                 f"p.{t}.{p}.{i}",
@@ -79,7 +79,7 @@ class FetchTest(RedpandaTest):
         # this way we should receive exactly one record per each partition
 
         consumed_frequency = defaultdict(lambda: 0)
-        kcl = KCL(self.redpanda)
+        kcl = KCL(self.funes)
 
         expected_frequency = records_per_partition / 2
         # issue single kcl command that will generate multiple fetch requests
@@ -97,7 +97,7 @@ class FetchTest(RedpandaTest):
             consumed_frequency[(parts[1], parts[2])] += 1
 
         for p, freq in consumed_frequency.items():
-            self.redpanda.logger.info(f"consumed {freq} messages from: {p}")
+            self.funes.logger.info(f"consumed {freq} messages from: {p}")
             # assert that frequency is in expected range
             assert freq <= expected_frequency + 0.1 * expected_frequency
             assert freq >= expected_frequency - 0.1 * expected_frequency

@@ -100,7 +100,7 @@ ss::future<> tx_registry_stm::apply(const model::record_batch& b) {
 }
 
 std::optional<model::partition_id>
-tx_registry_stm::find_hosting_partition(kafka::transactional_id tid) {
+tx_registry_stm::find_hosting_partition(sql::transactional_id tid) {
     for (auto& [partition, hosted] : _mapping.mapping) {
         if (hosted_transactions::contains(hosted, tid)) {
             return partition;

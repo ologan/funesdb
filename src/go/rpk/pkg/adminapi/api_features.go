@@ -32,7 +32,7 @@ type Feature struct {
 	WasActive bool         `json:"was_active"`
 }
 
-// FeaturesResponse contains information on the features available on a Redpanda cluster.
+// FeaturesResponse contains information on the features available on a Funes cluster.
 type FeaturesResponse struct {
 	ClusterVersion int       `json:"cluster_version"`
 	Features       []Feature `json:"features"`

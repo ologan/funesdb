@@ -10,13 +10,13 @@
 from rptest.services.cluster import cluster
 from rptest.clients.types import TopicSpec
 
-from rptest.tests.redpanda_test import RedpandaTest
-from confluent_kafka.cimpl import KafkaException, KafkaError
-from confluent_kafka import Producer
+from rptest.tests.funes_test import FunesTest
+from confluent_sql.cimpl import SQLException, SQLError
+from confluent_sql import Producer
 from rptest.clients.rpk import RpkTool
 
 
-class TxOverflowTest(RedpandaTest):
+class TxOverflowTest(FunesTest):
     topics = [TopicSpec(partition_count=1, replication_factor=3)]
 
     def __init__(self, test_context):
@@ -31,7 +31,7 @@ class TxOverflowTest(RedpandaTest):
                                              log_level="trace")
 
     def set_max_transactions_per_coordinator(self, n):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.cluster_config_set("max_transactions_per_coordinator", str(n))
 
     @cluster(num_nodes=3)
@@ -39,7 +39,7 @@ class TxOverflowTest(RedpandaTest):
         producers = []
         for i in range(20):
             p = Producer({
-                'bootstrap.servers': self.redpanda.brokers(),
+                'bootstrap.servers': self.funes.brokers(),
                 'transactional.id': f"tx_{i}",
             })
             p.init_transactions()
@@ -57,7 +57,7 @@ class TxOverflowTest(RedpandaTest):
         producers = []
         for i in range(20):
             p = Producer({
-                'bootstrap.servers': self.redpanda.brokers(),
+                'bootstrap.servers': self.funes.brokers(),
                 'transactional.id': f"tx_{i}",
             })
             p.init_transactions()
@@ -69,6 +69,6 @@ class TxOverflowTest(RedpandaTest):
         try:
             oldest_producer.commit_transaction()
             assert False, ""
-        except KafkaException as e:
+        except SQLException as e:
             assert e.args[0].code(
-            ) == KafkaError.INVALID_PRODUCER_ID_MAPPING, f"observed code={e.args[0].code()}"
+            ) == SQLError.INVALID_PRODUCER_ID_MAPPING, f"observed code={e.args[0].code()}"

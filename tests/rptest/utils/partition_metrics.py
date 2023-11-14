@@ -1,9 +1,9 @@
-from rptest.services.redpanda import RedpandaService
+from rptest.services.funes import FunesService
 
 
 class PartitionMetrics:
-    def __init__(self, redpanda: RedpandaService):
-        self.redpanda = redpanda
+    def __init__(self, funes: FunesService):
+        self.funes = funes
 
     """ Convenience class for grabbing partition metrics. """
 
@@ -25,12 +25,12 @@ class PartitionMetrics:
 
     def _sum_metrics(self, metric_name):
 
-        family = self.redpanda.metrics_sample(metric_name,
-                                              nodes=self.redpanda.nodes)
+        family = self.funes.metrics_sample(metric_name,
+                                              nodes=self.funes.nodes)
         assert family, "Missing metrics."
         total = 0
         for sample in family.samples:
             total += sample.value
 
-        self.redpanda.logger.debug(f"sum: {metric_name} - {total}")
+        self.funes.logger.debug(f"sum: {metric_name} - {total}")
         return total

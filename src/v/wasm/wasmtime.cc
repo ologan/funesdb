@@ -345,8 +345,8 @@ private:
 absl::flat_hash_map<ss::sstring, ss::sstring>
 make_environment_vars(const model::transform_metadata& meta) {
     absl::flat_hash_map<ss::sstring, ss::sstring> env = meta.environment;
-    env.emplace("REDPANDA_INPUT_TOPIC", meta.input_topic.tp());
-    env.emplace("REDPANDA_OUTPUT_TOPIC", meta.output_topics.begin()->tp());
+    env.emplace("FUNES_INPUT_TOPIC", meta.input_topic.tp());
+    env.emplace("FUNES_OUTPUT_TOPIC", meta.output_topics.begin()->tp());
     return env;
 }
 
@@ -1134,7 +1134,7 @@ wasmtime_runtime::wasmtime_runtime(std::unique_ptr<schema_registry> sr)
     // https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#asynchronous-wasm
     wasmtime_config_async_support_set(config, true);
     // Set max stack size to generally be as big as a contiguous memory
-    // region we're willing to allocate in Redpanda.
+    // region we're willing to allocate in Funes.
     wasmtime_config_async_stack_size_set(config, vm_stack_size);
     // The stack size needs to be less than the async stack size, and
     // whatever is difference between the two is how much host functions can
@@ -1146,7 +1146,7 @@ wasmtime_runtime::wasmtime_runtime(std::unique_ptr<schema_registry> sr)
     wasmtime_config_dynamic_memory_guard_size_set(config, 0_KiB);
     wasmtime_config_dynamic_memory_reserved_for_growth_set(config, 0_KiB);
     // Don't modify the unwind info as registering these symbols causes C++
-    // exceptions to grab a lock in libgcc and deadlock the Redpanda
+    // exceptions to grab a lock in libgcc and deadlock the Funes
     // process.
     wasmtime_config_native_unwind_info_set(config, false);
 

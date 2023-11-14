@@ -7,10 +7,10 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierSeqConsumer
-from rptest.services.redpanda import SISettings, MetricsEndpoint
+from rptest.services.funes import SISettings, MetricsEndpoint
 from rptest.clients.types import TopicSpec
 from rptest.clients.rpk import RpkTool
 from rptest.utils.si_utils import BucketView, quiesce_uploads, NTP
@@ -18,7 +18,7 @@ from ducktape.mark import parametrize
 import time
 
 
-class TieredStorageSinglePartitionTest(RedpandaTest):
+class TieredStorageSinglePartitionTest(FunesTest):
     log_segment_size = 128 * 1024 * 1024
     segment_upload_interval = 30
     manifest_upload_interval = 10
@@ -69,7 +69,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
                                data durability.
         """
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         produce_byte_rate = 50 * 1024 * 1024
 
@@ -89,14 +89,14 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
         self.logger.info(
             f"Configuring to spill metadata after {spillover_segments} segments"
         )
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             'cloud_storage_spillover_manifest_max_segments':
             spillover_segments
         })
 
         # We will consume data back at the end: set a large enough cache size
         # to accommodate the streaming bandwidth
-        self.redpanda.set_cluster_config({
+        self.funes.set_cluster_config({
             'cloud_storage_cache_size':
             # Enough cache space to consume twice as fast as we produced
             SISettings.cache_size_for_throughput(produce_byte_rate * 2)
@@ -117,7 +117,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
                            produce_byte_rate) * throughput_tolerance_factor
 
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -131,8 +131,8 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
         if restart_stress:
             while producer.produce_status.acked < msg_count:
                 time.sleep(5)
-                for node in self.redpanda.nodes:
-                    self.redpanda.restart_nodes([node])
+                for node in self.funes.nodes:
+                    self.funes.restart_nodes([node])
 
             def metadata_readable():
                 return next(rpk.describe_topic(
@@ -140,7 +140,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
 
             # Wait for the cluster to recover after final restart, so that subsequent
             # post-stress success conditions can count on their queries succeeding.
-            self.redpanda.wait_until(metadata_readable,
+            self.funes.wait_until(metadata_readable,
                                      timeout_sec=30,
                                      backoff_sec=1)
 
@@ -154,7 +154,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
             f"Produced {write_bytes} in {produce_duration}s, {mbps}MiB/s")
 
         # Producer should be within a factor of two of the intended byte rate, or something
-        # is wrong with the test (running on nodes that can't keep up?) or with Redpanda
+        # is wrong with the test (running on nodes that can't keep up?) or with Funes
         # (some instability interrupted produce?)
         if not restart_stress:
             assert actual_byte_rate > produce_byte_rate / throughput_tolerance_factor
@@ -177,7 +177,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
         # Measure how far behind the tiered storage uploads are: success condition
         # should be that they are within some time range of the most recently
         # produced data
-        bucket = BucketView(self.redpanda)
+        bucket = BucketView(self.funes)
         manifest = bucket.manifest_for_ntp(self.topic, 0)
         uploaded_ts = max(s['max_timestamp']
                           for s in manifest['segments'].values())
@@ -190,19 +190,19 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
 
         # Wait for all uploads to complete: this should take roughly segment_max_upload_interval_sec
         # plus manifest_max_upload_interval_sec
-        quiesce_uploads(self.redpanda, [self.topic],
+        quiesce_uploads(self.funes, [self.topic],
                         timeout_sec=self.manifest_upload_interval +
                         self.segment_upload_interval)
 
         # Check manifest upload metrics:
         #  - we should not have uploaded the manifest more times
         #    then there were manifest upload intervals in the runtime.
-        manifest_uploads = self.redpanda.metric_sum(
+        manifest_uploads = self.funes.metric_sum(
             metric_name=
-            "redpanda_cloud_storage_partition_manifest_uploads_total",
+            "funes_cloud_storage_partition_manifest_uploads_total",
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
-        segment_uploads = self.redpanda.metric_sum(
-            metric_name="redpanda_cloud_storage_segment_uploads_total",
+        segment_uploads = self.funes.metric_sum(
+            metric_name="funes_cloud_storage_segment_uploads_total",
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS)
         self.logger.info(
             f"Upload counts: {manifest_uploads} manifests, {segment_uploads} segments"
@@ -210,7 +210,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
         assert manifest_uploads > 0
         assert segment_uploads > 0
 
-        # Check the kafka-raft offset delta: this is an indication of how
+        # Check the sql-raft offset delta: this is an indication of how
         # many extra raft records we wrote for archival_metadata_stm.
         #
         # At the maximum, this should be:
@@ -228,7 +228,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
         segment_count = len(manifest['segments'])
 
         spill_manifests = bucket.get_spillover_manifests(
-            NTP(ns='kafka', topic=self.topic, partition=0))
+            NTP(ns='sql', topic=self.topic, partition=0))
         if spill_manifests is not None:
             for spill_meta, spill_manifest in spill_manifests.items():
                 segment_count += len(spill_manifest['segments'])
@@ -257,7 +257,7 @@ class TieredStorageSinglePartitionTest(RedpandaTest):
         # validating all data.
         consumer = KgoVerifierSeqConsumer.oneshot(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             loop=False,
             timeout_sec=produce_duration * throughput_tolerance_factor)

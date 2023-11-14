@@ -46,7 +46,7 @@ type InstallPack struct {
 	Artifacts       InstallPackArtifacts `json:"artifacts"`
 	Version         string               `json:"version"`
 	Certified       bool                 `json:"certified"`
-	RedpandaVersion string               `json:"redpandaVersion"`
+	FunesVersion string               `json:"funesVersion"`
 	ReleasedAt      time.Time            `json:"releasedAt"`
 }
 

@@ -20,6 +20,6 @@ jobs:
             test-release-pipeline
             test-arm64
           static-args: |
-            org=redpanda-data
-            repo=redpanda
+            org=funes-data
+            repo=funes
             milestone=auto

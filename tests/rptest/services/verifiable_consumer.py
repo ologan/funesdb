@@ -15,7 +15,7 @@
 #
 # Modifications Copyright 2021 Redpanda Data, Inc.
 # - Reformatted code
-# - Replaced dependency on Kafka with Redpanda
+# - Replaced dependency on SQL with Funes
 
 import json
 import os
@@ -157,7 +157,7 @@ class ConsumerEventHandler(object):
 
 class VerifiableConsumer(BackgroundThreadService):
     """
-    This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
+    This service wraps org.apache.sql.tools.VerifiableConsumer for use in
     system testing. 
     """
 
@@ -253,7 +253,7 @@ class VerifiableConsumer(BackgroundThreadService):
     def __init__(self,
                  context,
                  num_nodes,
-                 redpanda,
+                 funes,
                  topic,
                  group_id,
                  static_membership=False,
@@ -266,7 +266,7 @@ class VerifiableConsumer(BackgroundThreadService):
                  reset_policy="earliest",
                  verify_offsets=True):
         super(VerifiableConsumer, self).__init__(context, num_nodes)
-        self.redpanda = redpanda
+        self.funes = funes
         self.topic = topic
         self.group_id = group_id
         self.reset_policy = reset_policy
@@ -380,9 +380,9 @@ class VerifiableConsumer(BackgroundThreadService):
             state.record_committed(tp, offset["offset"], verify_position=False)
 
     def start_cmd(self, node):
-        cmd = "java -cp /opt/redpanda-tests/java/e2e-verifiers/target/e2e-verifiers-1.0.jar"
+        cmd = "java -cp /opt/funes-tests/java/e2e-verifiers/target/e2e-verifiers-1.0.jar"
         cmd += " -Dlog4j.configuration=file:%s" % VerifiableConsumer.LOG4J_CONFIG
-        cmd += " org.apache.kafka.tools.VerifiableConsumer"
+        cmd += " org.apache.sql.tools.VerifiableConsumer"
         if self.on_record_consumed:
             cmd += " --verbose"
 
@@ -397,7 +397,7 @@ class VerifiableConsumer(BackgroundThreadService):
 
         cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
                (self.reset_policy, self.group_id, self.topic,
-                self.redpanda.brokers(),
+                self.funes.brokers(),
                 self.session_timeout_sec*1000)
 
         if self.max_messages > 0:

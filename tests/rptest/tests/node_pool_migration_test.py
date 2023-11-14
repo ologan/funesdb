@@ -13,14 +13,14 @@ import random
 from threading import Thread
 
 import requests
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 from time import sleep
 from rptest.clients.default import DefaultClient
 from rptest.services.kgo_verifier_services import KgoVerifierConsumerGroupConsumer, KgoVerifierProducer
 from rptest.tests.prealloc_nodes import PreallocNodesTest
 
 from rptest.clients.rpk import RpkTool
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
@@ -28,7 +28,7 @@ from ducktape.mark import matrix
 from rptest.clients.types import TopicSpec
 from rptest.tests.end_to_end import EndToEndTest
 from rptest.services.admin import Admin
-from rptest.services.redpanda import CHAOS_LOG_ALLOW_LIST, RESTART_LOG_ALLOW_LIST, RedpandaService, make_redpanda_service
+from rptest.services.funes import CHAOS_LOG_ALLOW_LIST, RESTART_LOG_ALLOW_LIST, FunesService, make_funes_service
 from rptest.utils.node_operations import NodeDecommissionWaiter
 
 
@@ -44,13 +44,13 @@ class NodePoolMigrationTest(PreallocNodesTest):
                                                     node_prealloc_count=1)
 
     def setup(self):
-        # defer starting redpanda to test body
+        # defer starting funes to test body
         pass
 
     @property
     def admin(self):
         # retry on timeout and service unavailable
-        return Admin(self.redpanda, retry_codes=[503, 504])
+        return Admin(self.funes, retry_codes=[503, 504])
 
     def _create_topics(self, replication_factors=[1, 3]):
         """
@@ -78,8 +78,8 @@ class NodePoolMigrationTest(PreallocNodesTest):
     def _check_state_consistent(self, decommissioned_id):
 
         not_decommissioned = [
-            n for n in self.redpanda.started_nodes()
-            if self.redpanda.node_id(n) != decommissioned_id
+            n for n in self.funes.started_nodes()
+            if self.funes.node_id(n) != decommissioned_id
         ]
 
         def _state_consistent():
@@ -105,7 +105,7 @@ class NodePoolMigrationTest(PreallocNodesTest):
 
     def _wait_for_node_removed(self, node_id, decommissioned_ids):
         waiter = NodeDecommissionWaiter(
-            self.redpanda,
+            self.funes,
             node_id,
             self.logger,
             progress_timeout=120,
@@ -128,9 +128,9 @@ class NodePoolMigrationTest(PreallocNodesTest):
             try:
 
                 results = []
-                for n in self.redpanda.nodes:
+                for n in self.funes.nodes:
                     # do not query decommissioned nodes
-                    if self.redpanda.node_id(n) in decommissioned_ids:
+                    if self.funes.node_id(n) in decommissioned_ids:
                         continue
 
                     brokers = self.admin.get_brokers(node=n)
@@ -175,7 +175,7 @@ class NodePoolMigrationTest(PreallocNodesTest):
         )
         self.producer = KgoVerifierProducer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self._topic,
             self.msg_size,
             self.msg_count,
@@ -191,7 +191,7 @@ class NodePoolMigrationTest(PreallocNodesTest):
     def start_consumer(self):
         self.consumer = KgoVerifierConsumerGroupConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self._topic,
             self.msg_size,
             readers=1,
@@ -218,10 +218,10 @@ class NodePoolMigrationTest(PreallocNodesTest):
         assert self.consumer.consumer_status.validator.invalid_reads == 0, f"Invalid reads in topic: {self._topic}, invalid reads count: {self.consumer.consumer_status.validator.invalid_reads}"
 
     def _replicas_per_node(self):
-        kafkacat = KafkaCat(self.redpanda)
+        sqlcat = SQLCat(self.funes)
         node_replicas = {}
-        md = kafkacat.metadata()
-        self.redpanda.logger.debug(f"metadata: {md}")
+        md = sqlcat.metadata()
+        self.funes.logger.debug(f"metadata: {md}")
         for topic in md['topics']:
             for p in topic['partitions']:
                 for r in p['replicas']:
@@ -234,13 +234,13 @@ class NodePoolMigrationTest(PreallocNodesTest):
 
     @cluster(num_nodes=11, log_allow_list=RESTART_LOG_ALLOW_LIST)
     @matrix(balancing_mode=['off', 'node_add'])
-    def test_migrating_redpanda_nodes_to_new_pool(self, balancing_mode):
-        initial_pool = self.redpanda.nodes[0:5]
-        new_pool = self.redpanda.nodes[5:]
-        self.redpanda.set_seed_servers(initial_pool)
+    def test_migrating_funes_nodes_to_new_pool(self, balancing_mode):
+        initial_pool = self.funes.nodes[0:5]
+        new_pool = self.funes.nodes[5:]
+        self.funes.set_seed_servers(initial_pool)
 
-        # start redpanda on initial pool of nodes
-        self.redpanda.start(nodes=initial_pool,
+        # start funes on initial pool of nodes
+        self.funes.start(nodes=initial_pool,
                             auto_assign_node_id=True,
                             omit_seeds_on_idx_one=False)
         self.admin.patch_cluster_config(
@@ -250,16 +250,16 @@ class NodePoolMigrationTest(PreallocNodesTest):
         self.start_producer()
         self.start_consumer()
         # add new nodes to the cluster
-        self.redpanda.for_nodes(
+        self.funes.for_nodes(
             new_pool,
-            lambda n: self.redpanda.start_node(n, auto_assign_node_id=True))
+            lambda n: self.funes.start_node(n, auto_assign_node_id=True))
 
         def all_nodes_present():
-            for n in self.redpanda.nodes:
+            for n in self.funes.nodes:
                 brokers = self.admin.get_brokers(node=n)
                 if len(brokers) != len(initial_pool) + len(new_pool):
                     self.logger.info(
-                        f"Node: {n.account.hostname}(node_id: {self.redpanda.node_id(n)}) contains {len(brokers)} while we expect it to have {len(initial_pool) + len(new_pool)} brokers"
+                        f"Node: {n.account.hostname}(node_id: {self.funes.node_id(n)}) contains {len(brokers)} while we expect it to have {len(initial_pool) + len(new_pool)} brokers"
                     )
                     return False
             return True
@@ -271,7 +271,7 @@ class NodePoolMigrationTest(PreallocNodesTest):
             err_msg=
             "Not all nodes that were supposed to join the cluster are members")
         decommissioned_ids = [
-            self.redpanda.node_id(to_decommission)
+            self.funes.node_id(to_decommission)
             for to_decommission in initial_pool
         ]
 

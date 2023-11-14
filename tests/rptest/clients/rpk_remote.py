@@ -10,10 +10,10 @@
 
 class RpkRemoteTool:
     """
-    Wrapper around rpk. Runs commands on the Redpanda cluster nodes. 
+    Wrapper around rpk. Runs commands on the Funes cluster nodes. 
     """
-    def __init__(self, redpanda, node):
-        self._redpanda = redpanda
+    def __init__(self, funes, node):
+        self._funes = funes
         self._node = node
 
     def config_set(self, key, value, format=None, path=None, timeout=30):
@@ -33,7 +33,7 @@ class RpkRemoteTool:
         return self._execute([
             self._rpk_binary(), 'debug', 'bundle', "--output", output_file,
             "--api-urls",
-            self._redpanda.admin_endpoints()
+            self._funes.admin_endpoints()
         ])
 
     def cluster_config_force_reset(self, property_name):
@@ -46,20 +46,20 @@ class RpkRemoteTool:
         return self._execute([self._rpk_binary(), 'cluster', 'config', 'lint'])
 
     def tune(self, tuner):
-        return self._execute([self._rpk_binary(), 'redpanda', 'tune', tuner])
+        return self._execute([self._rpk_binary(), 'funes', 'tune', tuner])
 
     def mode_set(self, mode):
-        return self._execute([self._rpk_binary(), 'redpanda', 'mode', mode])
+        return self._execute([self._rpk_binary(), 'funes', 'mode', mode])
 
-    def redpanda_start(self, log_file, additional_args="", env_vars=""):
+    def funes_start(self, log_file, additional_args="", env_vars=""):
         return self._execute([
             env_vars,
-            self._rpk_binary(), "redpanda", "start", "-v", additional_args,
+            self._rpk_binary(), "funes", "start", "-v", additional_args,
             ">>", log_file, "2>&1", "&"
         ])
 
     def _run_config(self, cmd, path=None, timeout=30):
-        cmd = [self._rpk_binary(), 'redpanda', 'config'] + cmd
+        cmd = [self._rpk_binary(), 'funes', 'config'] + cmd
 
         if path is not None:
             cmd += ['--config', path]
@@ -74,9 +74,9 @@ class RpkRemoteTool:
         cmd = ["create", name]
         return self._run_profile(cmd)
 
-    def create_profile_redpanda(self, name, cfg_location):
+    def create_profile_funes(self, name, cfg_location):
         return self._run_profile(
-            ['create', name, "--from-redpanda", cfg_location])
+            ['create', name, "--from-funes", cfg_location])
 
     def use_profile(self, name):
         cmd = ["use", name]
@@ -121,7 +121,7 @@ class RpkRemoteTool:
             "--client-secret", secret, "--save", "--no-profile"
         ]
 
-        self._redpanda.logger.debug(
+        self._funes.logger.debug(
             "Executing command: %s cloud login --client-id %s --client-secret [redacted]",
             self._rpk_binary(), id)
 
@@ -138,7 +138,7 @@ class RpkRemoteTool:
 
     def _execute(self, cmd, timeout=30, log_cmd=True):
         if log_cmd:
-            self._redpanda.logger.debug("Executing command: %s", cmd)
+            self._funes.logger.debug("Executing command: %s", cmd)
 
         return self._node.account.ssh_output(
             ' '.join(cmd),
@@ -146,7 +146,7 @@ class RpkRemoteTool:
         ).decode('utf-8')
 
     def _rpk_binary(self):
-        return self._redpanda.find_binary('rpk')
+        return self._funes.find_binary('rpk')
 
     def read_timestamps(self, topic: str, partition: int, count: int,
                         timeout_sec: int):
@@ -158,7 +158,7 @@ class RpkRemoteTool:
         """
         cmd = [
             self._rpk_binary(), "--brokers",
-            self._redpanda.brokers(), "topic", "consume", topic, "-f",
+            self._funes.brokers(), "topic", "consume", topic, "-f",
             "\"%o %d\\n\"", "--num",
             str(count), "-p",
             str(partition)
@@ -168,7 +168,7 @@ class RpkRemoteTool:
             try:
                 offset, ts = line.split()
             except:
-                self._redpanda.logger.error(f"Bad line: '{line}'")
+                self._funes.logger.error(f"Bad line: '{line}'")
                 raise
 
             yield (int(offset), int(ts))

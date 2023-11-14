@@ -280,7 +280,7 @@ public:
     }
 
     // This produces a segment meta that do not respect invariants in
-    // redpanda. the only invariant is base_offset < committed_offset
+    // funes. the only invariant is base_offset < committed_offset
     // furthermore, base_offset is always the same, just a placeholer
     auto read_generic_segment_meta() -> cloud_storage::segment_meta {
         constexpr static auto base_offset = model::offset{10};

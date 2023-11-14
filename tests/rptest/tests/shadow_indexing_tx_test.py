@@ -9,11 +9,11 @@
 
 from ducktape.mark import matrix
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import CloudStorageType, SISettings, get_cloud_storage_type
+from rptest.services.funes import CloudStorageType, SISettings, get_cloud_storage_type
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
-from rptest.tests.redpanda_test import RedpandaTest
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.tests.funes_test import FunesTest
+from rptest.clients.sql_cli_tools import SQLCliTools
 from rptest.utils.mode_checks import skip_debug_mode
 from rptest.util import (
     segments_count,
@@ -22,7 +22,7 @@ from rptest.util import (
 from rptest.services.kgo_verifier_services import KgoVerifierProducer, KgoVerifierSeqConsumer
 
 
-class ShadowIndexingTxTest(RedpandaTest):
+class ShadowIndexingTxTest(FunesTest):
     segment_size = 1048576  # 1 Mb
     topics = (TopicSpec(name='panda-topic',
                         partition_count=1,
@@ -44,11 +44,11 @@ class ShadowIndexingTxTest(RedpandaTest):
                                                    si_settings=si_settings)
 
     def setUp(self):
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         super(ShadowIndexingTxTest, self).setUp()
         for topic in self.topics:
-            rpk.alter_topic_config(topic.name, 'redpanda.remote.write', 'true')
-            rpk.alter_topic_config(topic.name, 'redpanda.remote.read', 'true')
+            rpk.alter_topic_config(topic.name, 'funes.remote.write', 'true')
+            rpk.alter_topic_config(topic.name, 'funes.remote.read', 'true')
 
     @cluster(num_nodes=4)
     @matrix(cloud_storage_type=get_cloud_storage_type())
@@ -60,7 +60,7 @@ class ShadowIndexingTxTest(RedpandaTest):
         msg_count = 10000
         per_transaction = 10
         producer = KgoVerifierProducer(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic,
                                        msg_size=msg_size,
                                        msg_count=msg_count,
@@ -79,18 +79,18 @@ class ShadowIndexingTxTest(RedpandaTest):
         # Re-use node for consumer later
         traffic_node = producer.nodes[0]
 
-        kafka_tools = KafkaCliTools(self.redpanda)
+        sql_tools = SQLCliTools(self.funes)
         local_retention = 3 * self.segment_size
-        kafka_tools.alter_topic_config(
+        sql_tools.alter_topic_config(
             self.topic,
             {TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES: local_retention},
         )
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         self.topic,
                                         target_bytes=local_retention)
 
         consumer = KgoVerifierSeqConsumer(self.test_context,
-                                          self.redpanda,
+                                          self.funes,
                                           self.topic,
                                           msg_size,
                                           loop=False,
@@ -114,41 +114,41 @@ class ShadowIndexingTxTest(RedpandaTest):
         """
 
         local_retention = 3 * self.segment_size
-        kafka_tools = KafkaCliTools(self.redpanda)
-        kafka_tools.alter_topic_config(
+        sql_tools = SQLCliTools(self.funes)
+        sql_tools.alter_topic_config(
             self.topic,
             {TopicSpec.PROPERTY_RETENTION_LOCAL_TARGET_BYTES: local_retention},
         )
 
         KgoVerifierProducer.oneshot(self.test_context,
-                                    self.redpanda,
+                                    self.funes,
                                     self.topic,
                                     msg_size=16384,
                                     msg_count=((10 * self.segment_size) //
                                                16384))
 
-        wait_for_local_storage_truncate(self.redpanda,
+        wait_for_local_storage_truncate(self.funes,
                                         self.topic,
                                         target_bytes=local_retention)
 
         KgoVerifierSeqConsumer.oneshot(self.test_context,
-                                       self.redpanda,
+                                       self.funes,
                                        self.topic,
                                        16384,
                                        loop=False)
 
         # There should have been no failures to download
         # vectorized_cloud_storage_failed_manifest_downloads
-        metric = self.redpanda.metrics_sample(
+        metric = self.funes.metrics_sample(
             "vectorized_cloud_storage_failed_manifest_downloads")
         assert len(metric.samples)
         for sample in metric.samples:
             assert sample.value == 0, f"Saw >0 failed manifest downloads {sample}"
 
         # There should be zero .tx files in the cache
-        for node in self.redpanda.nodes:
+        for node in self.funes.nodes:
             cached_tx_manifests = int(
                 node.account.ssh_output(
-                    f"find \"{self.redpanda.cache_dir}\" -type f -name \"*.tx\" | wc -l",
+                    f"find \"{self.funes.cache_dir}\" -type f -name \"*.tx\" | wc -l",
                     combine_stderr=False).strip())
             assert cached_tx_manifests == 0, f"Found {cached_tx_manifests} cached manifests on {node.name}"

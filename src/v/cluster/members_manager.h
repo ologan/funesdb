@@ -134,7 +134,7 @@ public:
     // message, the controller leader will expect us to be listening for its
     // raft messages, and if we're not ready it'll back off and make joining
     // take several seconds longer than it should.
-    // (ref https://github.com/redpanda-data/redpanda/issues/3030)
+    // (ref https://github.com/redpanda-data/funes/issues/3030)
     ss::future<> join_cluster();
 
     // Stop this manager. Only prevents new update requests; pending updates in

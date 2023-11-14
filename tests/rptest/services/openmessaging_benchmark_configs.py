@@ -61,7 +61,7 @@ class OMBSampleConfigurations:
     }
 
     # As benchmarked on
-    # - i3en.6xlarge for 3 Redpanda;
+    # - i3en.6xlarge for 3 Funes;
     # - c5n.9xlarge for 2 clients
     #
     # Publish latencies

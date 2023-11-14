@@ -16,11 +16,11 @@ from ducktape.utils.util import wait_until
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import MetricsEndpoint
+from rptest.services.funes import MetricsEndpoint
 from rptest.services.rpk_producer import RpkProducer
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.services.kcat_consumer import KcatConsumer
-from rptest.clients.kafka_cat import KafkaCat
+from rptest.clients.sql_cat import SQLCat
 
 # This file is about throughput limiting that works at shard/node/cluster (SNC)
 # levels, like cluster-wide and node-wide throughput limits
@@ -29,7 +29,7 @@ kiB = 1024
 MiB = 1024 * kiB
 
 
-class ThroughputLimitsSnc(RedpandaTest):
+class ThroughputLimitsSnc(FunesTest):
     """
     Tests for throughput limiting that works at shard/node/cluster (SNC)
     levels, like cluster-wide and node-wide throughput limits
@@ -43,27 +43,27 @@ class ThroughputLimitsSnc(RedpandaTest):
         if rnd_seed_override is None:
             # default seed value is composed from
             # - current time - the way the default generator ctor does
-            # - hash of the redpanda service instance - to avoid possible
+            # - hash of the funes service instance - to avoid possible
             #   identical seeds while running multiple tests in parallel
             #   with --repeat
             self.rnd_seed = int(time.time() * 1_000_000_000) + hash(
-                self.redpanda.service_id)
+                self.funes.service_id)
         else:
             self.rnd_seed = rnd_seed_override
         self.logger.info(f"Random seed: {self.rnd_seed}")
         self.rnd = random.Random(self.rnd_seed)
-        self.rpk = RpkTool(self.redpanda)
+        self.rpk = RpkTool(self.funes)
 
     class ConfigProp(Enum):
-        QUOTA_NODE_MAX_IN = "kafka_throughput_limit_node_in_bps"
-        QUOTA_NODE_MAX_EG = "kafka_throughput_limit_node_out_bps"
-        THROTTLE_DELAY_MAX_MS = "max_kafka_throttle_delay_ms"
-        BAL_WINDOW_MS = "kafka_quota_balancer_window_ms"
-        BAL_PERIOD_MS = "kafka_quota_balancer_node_period_ms"
-        QUOTA_SHARD_MIN_RATIO = "kafka_quota_balancer_min_shard_throughput_ratio"
-        QUOTA_SHARD_MIN_BPS = "kafka_quota_balancer_min_shard_throughput_bps"
-        CONTROLLED_API_KEYS = "kafka_throughput_controlled_api_keys"
-        THROUGHPUT_CONTROL = "kafka_throughput_control"
+        QUOTA_NODE_MAX_IN = "sql_throughput_limit_node_in_bps"
+        QUOTA_NODE_MAX_EG = "sql_throughput_limit_node_out_bps"
+        THROTTLE_DELAY_MAX_MS = "max_sql_throttle_delay_ms"
+        BAL_WINDOW_MS = "sql_quota_balancer_window_ms"
+        BAL_PERIOD_MS = "sql_quota_balancer_node_period_ms"
+        QUOTA_SHARD_MIN_RATIO = "sql_quota_balancer_min_shard_throughput_ratio"
+        QUOTA_SHARD_MIN_BPS = "sql_quota_balancer_min_shard_throughput_bps"
+        CONTROLLED_API_KEYS = "sql_throughput_controlled_api_keys"
+        THROUGHPUT_CONTROL = "sql_throughput_control"
 
     api_names = [
         "add_offsets_to_txn", "add_partitions_to_txn", "alter_configs",
@@ -172,7 +172,7 @@ class ThroughputLimitsSnc(RedpandaTest):
         raise Exception(f"Unsupported ConfigProp: {prop}")
 
     def current_effective_node_quota(self) -> Tuple[int, int]:
-        metrics = self.redpanda.metrics_sample(
+        metrics = self.funes.metrics_sample(
             "quotas_quota_effective", metrics_endpoint=MetricsEndpoint.METRICS)
 
         assert metrics, "Effective quota metric is missing"
@@ -203,9 +203,9 @@ class ThroughputLimitsSnc(RedpandaTest):
             val = self.get_config_parameter_random_value(prop)
             self.config[prop] = val
             if not val is None:
-                self.redpanda.add_extra_rp_conf({prop.value: val})
+                self.funes.add_extra_rp_conf({prop.value: val})
         self.logger.info(
-            f"Initial cluster props: {self.redpanda._extra_rp_conf}")
+            f"Initial cluster props: {self.funes._extra_rp_conf}")
         super(ThroughputLimitsSnc, self).setUp()
 
         # TBD: parameterize to run under load or not
@@ -222,7 +222,7 @@ class ThroughputLimitsSnc(RedpandaTest):
                 self.config[config_param] = config_value
                 change[config_param.value] = config_value
             self.logger.info(f"Changing cluster prop: {change}")
-            self.redpanda.set_cluster_config(change)
+            self.funes.set_cluster_config(change)
 
             # set_cluster_config waits for the prop to be replicated
             # it takes time so no need for a sleep()
@@ -232,7 +232,7 @@ class ThroughputLimitsSnc(RedpandaTest):
                 config_val = self.config[config_prop]
                 if config_val is None:
                     return
-                expected_node_quota = config_val * len(self.redpanda.nodes)
+                expected_node_quota = config_val * len(self.funes.nodes)
                 if effective_node_quota == expected_node_quota:
                     return
                 e = (
@@ -266,14 +266,14 @@ class ThroughputLimitsSnc(RedpandaTest):
         egress limit should not timeout or prevent other such consumers from
         joining a cgroup
         """
-        self.redpanda.add_extra_rp_conf({
+        self.funes.add_extra_rp_conf({
             self.ConfigProp.QUOTA_NODE_MAX_EG.value:
             400 * kiB,
-            "kafka_batch_max_bytes":
+            "sql_batch_max_bytes":
             1 * MiB,
         })
-        self.redpanda.set_seed_servers(self.redpanda.nodes)
-        self.redpanda.start(omit_seeds_on_idx_one=False)
+        self.funes.set_seed_servers(self.funes.nodes)
+        self.funes.start(omit_seeds_on_idx_one=False)
 
         partition_count = 2
         self.topics = [TopicSpec(partition_count=partition_count)]
@@ -281,7 +281,7 @@ class ThroughputLimitsSnc(RedpandaTest):
 
         msg_count = 2000
         producer = RpkProducer(self.test_context,
-                               self.redpanda,
+                               self.funes,
                                self.topic,
                                msg_size=10 * kiB,
                                msg_count=msg_count // partition_count,
@@ -290,10 +290,10 @@ class ThroughputLimitsSnc(RedpandaTest):
 
         def on_message(consumer: KcatConsumer, message: dict):
             message["payload"] = f"<{len(message['payload'])} bytes>"
-            consumer._redpanda.logger.debug(f"{consumer._caption}{message}")
+            consumer._funes.logger.debug(f"{consumer._caption}{message}")
 
         consumer = KcatConsumer(self.test_context,
-                                self.redpanda,
+                                self.funes,
                                 self.topic,
                                 offset=KcatConsumer.OffsetMeta.beginning,
                                 cgroup_name="cg01",
@@ -310,7 +310,7 @@ class ThroughputLimitsSnc(RedpandaTest):
 
         consumer2 = KcatConsumer(
             self.test_context,
-            self.redpanda,
+            self.funes,
             self.topic,
             offset=KcatConsumer.OffsetMeta.stored,
             offset_default=KcatConsumer.OffsetDefaultMeta.beginning,

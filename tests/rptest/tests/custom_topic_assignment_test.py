@@ -9,16 +9,16 @@
 
 from rptest.services.cluster import cluster
 from ducktape.utils.util import wait_until
-from rptest.clients.python_librdkafka import PythonLibrdkafka
+from rptest.clients.python_librdsql import PythonLibrdsql
 from rptest.clients.rpk import RpkTool
-from rptest.tests.redpanda_test import RedpandaTest
-from confluent_kafka.admin import NewTopic
-from confluent_kafka.error import KafkaException, KafkaError
+from rptest.tests.funes_test import FunesTest
+from confluent_sql.admin import NewTopic
+from confluent_sql.error import SQLException, SQLError
 
-from rptest.clients.kafka_cli_tools import KafkaCliTools
+from rptest.clients.sql_cli_tools import SQLCliTools
 
 
-class CustomTopicAssignmentTest(RedpandaTest):
+class CustomTopicAssignmentTest(FunesTest):
     def __init__(self, test_context):
         # Disable balancer so replicas are not shuffled around after creation
         rp_conf = {"partition_autobalancing_mode": "off"}
@@ -28,9 +28,9 @@ class CustomTopicAssignmentTest(RedpandaTest):
                              extra_rp_conf=rp_conf)
 
     def create_and_validate(self, name, custom_assignment):
-        self.redpanda.logger.info(
+        self.funes.logger.info(
             f"creating topic {name} with {custom_assignment}")
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
 
         self.client().create_topic_with_assignment(name, custom_assignment)
 
@@ -38,7 +38,7 @@ class CustomTopicAssignmentTest(RedpandaTest):
             replicas_per_partition = {}
             for p in rpk.describe_topic(name):
                 replicas_per_partition[p.id] = list(p.replicas)
-            self.redpanda.logger.debug(
+            self.funes.logger.debug(
                 f"requested replicas: {custom_assignment}, current replicas: {replicas_per_partition}"
             )
 
@@ -65,7 +65,7 @@ class CustomTopicAssignmentTest(RedpandaTest):
 
     @cluster(num_nodes=5)
     def test_custom_assignment_validation(self):
-        client = PythonLibrdkafka(self.redpanda).get_client()
+        client = PythonLibrdsql(self.funes).get_client()
 
         def expect_failed_create_topic(name, custom_assignment,
                                        expected_error):
@@ -80,20 +80,20 @@ class CustomTopicAssignmentTest(RedpandaTest):
             try:
                 fut.result()
                 assert False
-            except KafkaException as e:
-                kafka_error = e.args[0]
-                self.redpanda.logger.debug(
-                    f"topic {name} creation failed: {kafka_error}, expected error: {expected_error}"
+            except SQLException as e:
+                sql_error = e.args[0]
+                self.funes.logger.debug(
+                    f"topic {name} creation failed: {sql_error}, expected error: {expected_error}"
                 )
-                assert kafka_error.code() == expected_error
+                assert sql_error.code() == expected_error
 
         # not unique replicas
         expect_failed_create_topic("invalid-1", [[1, 1, 2]],
-                                   KafkaError.INVALID_REQUEST)
+                                   SQLError.INVALID_REQUEST)
         # not existing broker
         expect_failed_create_topic("invalid-1", [[1, 10, 2]],
-                                   KafkaError.BROKER_NOT_AVAILABLE)
+                                   SQLError.BROKER_NOT_AVAILABLE)
 
         # different replication factors
         expect_failed_create_topic("invalid-1", [[1, 2, 3], [4]],
-                                   KafkaError.INVALID_REPLICATION_FACTOR)
+                                   SQLError.INVALID_REPLICATION_FACTOR)

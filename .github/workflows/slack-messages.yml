@@ -4,7 +4,7 @@ on:
     types: [published]
 
 env: 
-  MESSAGE: "Redpanda release ${{ github.event.release.tag_name }} has been published: ${{ github.event.release.html_url }}"
+  MESSAGE: "Funes release ${{ github.event.release.tag_name }} has been published: ${{ github.event.release.html_url }}"
 
 jobs:
   post-slack-message:

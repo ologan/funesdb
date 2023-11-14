@@ -11,7 +11,7 @@ from rptest.services.cluster import cluster
 from ducktape.errors import DucktapeError
 from time import sleep
 
-from rptest.tests.redpanda_test import RedpandaTest
+from rptest.tests.funes_test import FunesTest
 from rptest.clients.rpk import RpkTool
 
 import subprocess
@@ -23,7 +23,7 @@ TX_ERROR_LOGS = []
 NOT_LEADER_FOR_PARTITION = "Tried to send a message to a replica that is not the leader for some partition"
 
 
-class SaramaProduceTest(RedpandaTest):
+class SaramaProduceTest(FunesTest):
     def __init__(self, test_context):
         extra_rp_conf = {
             "enable_idempotence": True,
@@ -39,26 +39,26 @@ class SaramaProduceTest(RedpandaTest):
 
     @cluster(num_nodes=3, log_allow_list=TX_ERROR_LOGS)
     def test_produce(self):
-        verifier_bin = "/opt/redpanda-tests/go/sarama/produce_test/produce_test"
+        verifier_bin = "/opt/funes-tests/go/sarama/produce_test/produce_test"
 
-        self.redpanda.logger.info("creating topics")
+        self.funes.logger.info("creating topics")
 
-        rpk = RpkTool(self.redpanda)
+        rpk = RpkTool(self.funes)
         rpk.create_topic("topic1")
 
-        self.redpanda.logger.info("testing sarama produce")
+        self.funes.logger.info("testing sarama produce")
         retries = 5
         for i in range(0, retries):
             try:
                 cmd = "{verifier_bin} --brokers {brokers}".format(
-                    verifier_bin=verifier_bin, brokers=self.redpanda.brokers())
+                    verifier_bin=verifier_bin, brokers=self.funes.brokers())
                 subprocess.check_output(["/bin/sh", "-c", cmd],
                                         stderr=subprocess.STDOUT)
-                self.redpanda.logger.info("sarama produce test passed")
+                self.funes.logger.info("sarama produce test passed")
                 break
             except subprocess.CalledProcessError as e:
                 error = str(e.output)
-                self.redpanda.logger.info("sarama produce failed with " +
+                self.funes.logger.info("sarama produce failed with " +
                                           error)
                 if i + 1 != retries and NOT_LEADER_FOR_PARTITION in error:
                     sleep(5)

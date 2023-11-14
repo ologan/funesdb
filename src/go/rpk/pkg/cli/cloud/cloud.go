@@ -20,7 +20,7 @@ import (
 func NewCommand(fs afero.Fs, p *config.Params, execFn func(string, []string) error) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cloud",
-		Short: "Interact with Redpanda cloud",
+		Short: "Interact with Funes cloud",
 	}
 
 	cmd.AddCommand(

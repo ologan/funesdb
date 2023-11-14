@@ -10,7 +10,7 @@
 #include <system_error>
 
 model::topic_namespace make_tp_ns(const ss::sstring& tp) {
-    return model::topic_namespace(model::kafka_namespace, model::topic(tp));
+    return model::topic_namespace(model::sql_namespace, model::topic(tp));
 }
 
 FIXTURE_TEST(test_creating_partitions, rebalancing_tests_fixture) {

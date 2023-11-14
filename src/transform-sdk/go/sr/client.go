@@ -66,7 +66,7 @@ type SubjectSchema struct {
 	ID      int
 }
 
-// SchemaRegistryClient is a client for interacting with the schema registry within Redpanda.
+// SchemaRegistryClient is a client for interacting with the schema registry within Funes.
 //
 // The client provides caching out of the box, which can be configured with options.
 type SchemaRegistryClient interface {

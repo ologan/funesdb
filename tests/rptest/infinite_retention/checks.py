@@ -42,7 +42,7 @@ class NamesToConstants(NodeTransformer):
         return node
 
 
-class RedpandaChecksBase(object):
+class FunesChecksBase(object):
     """
     Base class to hold all checks related to specific test.
     Improves readability and code cleanines.
@@ -185,7 +185,7 @@ class RedpandaChecksBase(object):
             )
 
 
-class InfiniteRetentionChecks(RedpandaChecksBase):
+class InfiniteRetentionChecks(FunesChecksBase):
     """
     Class with checks that used accross multiple tests in infinite retention
     """
@@ -196,7 +196,7 @@ class InfiniteRetentionChecks(RedpandaChecksBase):
         """
         Producer should be within a factor of two of the intended byte rate,
         or something is wrong with the test (running on nodes that can't
-        keep up?) or with Redpanda (some instability interrupted produce?)
+        keep up?) or with Funes (some instability interrupted produce?)
         """
         self.add_arg("produce_byte_rate", self.params.produce_byte_rate)
         self.add_arg("producer_tolerance", self.params.producer_tolerance)
@@ -225,7 +225,7 @@ class InfiniteRetentionChecks(RedpandaChecksBase):
         self.add_check(
             "Producer should be within a factor of two of the intended byte rate, "
             "or something is wrong with the test (running on nodes that can't "
-            "keep up?) or with Redpanda (some instability interrupted produce?)",
+            "keep up?) or with Funes (some instability interrupted produce?)",
             "actual_byte_rate > produce_byte_rate / producer_tolerance",
         )
 

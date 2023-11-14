@@ -9,7 +9,7 @@
 
 #include "config/broker_authn_endpoint.h"
 
-#include "kafka/client/exceptions.h"
+#include "sql/client/exceptions.h"
 #include "model/metadata.h"
 #include "utils/string_switch.h"
 

@@ -14,7 +14,7 @@ import (
 	"fmt"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
-	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/kafka"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/sql"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/out"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -50,8 +50,8 @@ Allow write permissions to user buzz to transactional id "txn":
 			p, err := p.LoadVirtualProfile(fs)
 			out.MaybeDie(err, "unable to load config: %v", err)
 
-			adm, err := kafka.NewAdmin(fs, p)
-			out.MaybeDie(err, "unable to initialize kafka client: %v", err)
+			adm, err := sql.NewAdmin(fs, p)
+			out.MaybeDie(err, "unable to initialize sql client: %v", err)
 			defer adm.Close()
 
 			b, err := a.createCreations()
@@ -75,12 +75,12 @@ Allow write permissions to user buzz to transactional id "txn":
 					c.Pattern,
 					c.Operation,
 					c.Permission,
-					kafka.ErrMessage(c.Err),
+					sql.ErrMessage(c.Err),
 				})
 			}
 		},
 	}
-	p.InstallKafkaFlags(cmd)
+	p.InstallSQLFlags(cmd)
 	a.addCreateFlags(cmd)
 	return cmd
 }

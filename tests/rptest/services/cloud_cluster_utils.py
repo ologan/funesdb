@@ -26,10 +26,10 @@ class CloudClusterUtils:
         :param oauth_url_origin: just scheme and hostname
         :param oauth_audience: audience for issued token
         """
-        # Create fake redpanda class with logger only
+        # Create fake funes class with logger only
         self.fake_panda = FakePanda(context, logger)
         # Create rpk to use several functions that is isolated
-        # from actual redpanda service
+        # from actual funes service
         self.rpk = RpkTool(self.fake_panda)
         self.logger = logger
         self.provider = provider.lower()
@@ -118,7 +118,7 @@ class CloudClusterUtils:
         # Install proper cloud plugin version
         self.logger.debug("Installing byoc plugin according to cluster specs")
         cmd = self._get_rpk_cloud_cmd()
-        cmd += ["byoc", "install", f"--redpanda-id={cluster_id}"]
+        cmd += ["byoc", "install", f"--funes-id={cluster_id}"]
         out = self._exec(cmd)
         # TODO: Handle errors
         return out
@@ -126,7 +126,7 @@ class CloudClusterUtils:
     def rpk_cloud_apply(self, cluster_id):
         self.logger.debug("Deploying cluster agent")
         cmd = self._get_rpk_cloud_cmd()
-        cmd += ["byoc", self.provider, "apply", f"--redpanda-id={cluster_id}"]
+        cmd += ["byoc", self.provider, "apply", f"--funes-id={cluster_id}"]
         if self.provider == 'gcp':
             cmd += ["--project-id=" + self.gcp_project_id]
         out = self._exec(cmd, timeout=1800)
@@ -155,7 +155,7 @@ class CloudClusterUtils:
         self.logger.debug(f"...[{cluster_id}] destroying cluster agent")
         cmd = self._get_rpk_cloud_cmd()
         cmd += [
-            "byoc", self.provider, "destroy", f"--redpanda-id={cluster_id}"
+            "byoc", self.provider, "destroy", f"--funes-id={cluster_id}"
         ]
         if self.provider == 'gcp':
             cmd += ["--project-id=" + self.gcp_project_id]
