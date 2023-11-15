@@ -56,9 +56,7 @@ v_cc_library(
     v::funesproxy_schema_registry
     v::storage_resource_mgmt
     v::syschecks
-    v::transform
     v::version 
-    v::wasm
   )
 
 add_subdirectory(tests)

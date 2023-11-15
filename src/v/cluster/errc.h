@@ -68,11 +68,6 @@ enum class errc : int16_t {
     no_partition_assignments,
     failed_to_create_partition,
     partition_operation_failed,
-    transform_does_not_exist,
-    transform_invalid_update,
-    transform_invalid_create,
-    transform_invalid_source,
-    transform_invalid_environment,
     trackable_keys_limit_exceeded,
 };
 struct errc_category final : public std::error_category {
@@ -201,17 +196,6 @@ struct errc_category final : public std::error_category {
         case errc::partition_operation_failed:
             return "Generic failure occurred during partition operation "
                    "execution";
-        case errc::transform_does_not_exist:
-            return "Transform does not exist";
-        case errc::transform_invalid_update:
-            return "Invalid update to transform, topic configuration "
-                   "cannot change";
-        case errc::transform_invalid_source:
-            return "Invalid transform source";
-        case errc::transform_invalid_create:
-            return "Invalid create transform configuration";
-        case errc::transform_invalid_environment:
-            return "Invalid transform environment";
         case errc::trackable_keys_limit_exceeded:
             return "Too many keys are currently tracked, no space for more.";
         }

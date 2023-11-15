@@ -29,7 +29,6 @@
 #include "security/request_auth.h"
 #include "security/types.h"
 #include "storage/node.h"
-#include "transform/fwd.h"
 #include "utils/type_traits.h"
 
 #include <seastar/core/do_with.hh>
@@ -85,7 +84,6 @@ public:
       ss::sharded<memory_sampling>&,
       ss::sharded<cloud_storage::cache>&,
       ss::sharded<resources::cpu_profiler>&,
-      ss::sharded<transform::service>*,
       ss::sharded<security::audit::audit_log_manager>&);
 
     ss::future<> start();
@@ -393,7 +391,6 @@ private:
     void register_cluster_routes();
     void register_cluster_partitions_routes();
     void register_shadow_indexing_routes();
-    void register_wasm_transform_routes();
 
     ss::future<ss::json::json_return_type> patch_cluster_config_handler(
       std::unique_ptr<ss::http::request>, const request_auth_result&);
@@ -552,14 +549,6 @@ private:
     ss::future<ss::json::json_return_type>
       sampled_memory_profile_handler(std::unique_ptr<ss::http::request>);
 
-    // Transform routes
-    ss::future<ss::json::json_return_type>
-      deploy_transform(std::unique_ptr<ss::http::request>);
-    ss::future<ss::json::json_return_type>
-      list_transforms(std::unique_ptr<ss::http::request>);
-    ss::future<ss::json::json_return_type>
-      delete_transform(std::unique_ptr<ss::http::request>);
-
     ss::future<> throw_on_error(
       ss::http::request& req,
       std::error_code ec,
@@ -614,7 +603,6 @@ private:
     ss::sharded<memory_sampling>& _memory_sampling_service;
     ss::sharded<cloud_storage::cache>& _cloud_storage_cache;
     ss::sharded<resources::cpu_profiler>& _cpu_profiler;
-    ss::sharded<transform::service>* _transform_service;
     ss::sharded<security::audit::audit_log_manager>& _audit_mgr;
 
     // Value before the temporary override

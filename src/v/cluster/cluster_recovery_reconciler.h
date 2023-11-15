@@ -48,7 +48,6 @@ public:
         fragmented_vector<security::acl_binding> acls;
         fragmented_vector<topic_configuration> remote_topics;
         fragmented_vector<topic_configuration> local_topics;
-        // TODO: restore wasm plugins/transforms
 
         bool empty() const {
             return !license.has_value() && config.upsert.empty()

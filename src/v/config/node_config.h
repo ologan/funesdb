@@ -48,12 +48,6 @@ public:
     one_or_many_property<model::broker_endpoint> admin;
     one_or_many_property<endpoint_tls_config> admin_api_tls;
 
-    // Coproc/wasm
-    deprecated_property coproc_supervisor_server;
-
-    // Data transforms
-    property<bool> emergency_disable_data_transforms;
-
     // HTTP server content dirs
     property<ss::sstring> admin_api_doc_dir;
     deprecated_property dashboard_dir;

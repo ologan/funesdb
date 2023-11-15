@@ -66,7 +66,6 @@
 #include "model/namespace.h"
 #include "model/record.h"
 #include "model/timeout_clock.h"
-#include "model/transform.h"
 #include "net/dns.h"
 #include "net/tls_certificate_probe.h"
 #include "funesproxy/rest/api.h"
@@ -86,7 +85,6 @@
 #include "funes/admin/api-doc/shadow_indexing.json.hh"
 #include "funes/admin/api-doc/status.json.hh"
 #include "funes/admin/api-doc/transaction.json.hh"
-#include "funes/admin/api-doc/transform.json.hh"
 #include "funes/admin/api-doc/usage.json.hh"
 #include "resource_mgmt/memory_sampling.h"
 #include "rpc/errc.h"
@@ -103,7 +101,6 @@
 #include "security/scram_credential.h"
 #include "ssx/future-util.h"
 #include "ssx/sformat.h"
-#include "transform/api.h"
 #include "utils/fragmented_vector.h"
 #include "utils/string_switch.h"
 #include "utils/utf8.h"
@@ -256,7 +253,6 @@ admin_server::admin_server(
   ss::sharded<memory_sampling>& memory_sampling_service,
   ss::sharded<cloud_storage::cache>& cloud_storage_cache,
   ss::sharded<resources::cpu_profiler>& cpu_profiler,
-  ss::sharded<transform::service>* transform_service,
   ss::sharded<security::audit::audit_log_manager>& audit_mgr)
   : _log_level_timer([this] { log_level_timer_handler(); })
   , _server("admin")
@@ -284,7 +280,6 @@ admin_server::admin_server(
   , _memory_sampling_service(memory_sampling_service)
   , _cloud_storage_cache(cloud_storage_cache)
   , _cpu_profiler(cpu_profiler)
-  , _transform_service(transform_service)
   , _audit_mgr(audit_mgr)
   , _default_blocked_reactor_notify(
       ss::engine().get_blocked_reactor_notify_ms()) {
@@ -347,8 +342,6 @@ void admin_server::configure_admin_routes() {
     rb->register_api_file(_server._routes, "debug");
     rb->register_function(_server._routes, insert_comma);
     rb->register_api_file(_server._routes, "cluster");
-    rb->register_function(_server._routes, insert_comma);
-    rb->register_api_file(_server._routes, "transform");
     register_config_routes();
     register_cluster_config_routes();
     register_raft_routes();
@@ -365,7 +358,6 @@ void admin_server::configure_admin_routes() {
     register_self_test_routes();
     register_cluster_routes();
     register_shadow_indexing_routes();
-    register_wasm_transform_routes();
 }
 
 namespace {
@@ -6284,190 +6276,4 @@ admin_server::sampled_memory_profile_handler(
 
     co_return co_await ss::make_ready_future<ss::json::json_return_type>(
       std::move(resp));
-}
-
-void admin_server::register_wasm_transform_routes() {
-    register_route<superuser>(
-      ss::httpd::transform_json::deploy_transform,
-      [this](auto req) { return deploy_transform(std::move(req)); });
-    register_route<user>(
-      ss::httpd::transform_json::list_transforms,
-      [this](auto req) { return list_transforms(std::move(req)); });
-    register_route<superuser>(
-      ss::httpd::transform_json::delete_transform,
-      [this](auto req) { return delete_transform(std::move(req)); });
-}
-
-ss::future<ss::json::json_return_type>
-admin_server::delete_transform(std::unique_ptr<ss::http::request> req) {
-    if (!_transform_service->local_is_initialized()) {
-        throw ss::httpd::bad_request_exception("data transforms not enabled");
-    }
-    auto name = model::transform_name(req->param["name"]);
-    auto ec = co_await _transform_service->local().delete_transform(
-      std::move(name));
-    co_await throw_on_error(*req, ec, model::controller_ntp);
-    co_return ss::json::json_void();
-}
-
-namespace {
-ss::httpd::transform_json::partition_transform_status::
-  partition_transform_status_status
-  convert_transform_status(
-    model::transform_report::processor::state model_state) {
-    using model_status = model::transform_report::processor::state;
-    using json_status = ss::httpd::transform_json::partition_transform_status::
-      partition_transform_status_status;
-    switch (model_state) {
-    case model_status::inactive:
-        return json_status::inactive;
-    case model_status::running:
-        return json_status::running;
-    case model_status::errored:
-        return json_status::errored;
-    case model_status::unknown:
-        return json_status::unknown;
-    }
-    vlog(adminlog.error, "unknown transform status: {}", uint8_t(model_state));
-    return json_status::unknown;
-}
-} // namespace
-
-ss::future<ss::json::json_return_type>
-admin_server::list_transforms(std::unique_ptr<ss::http::request>) {
-    if (!_transform_service->local_is_initialized()) {
-        throw ss::httpd::bad_request_exception("data transforms not enabled");
-    }
-    auto report = co_await _transform_service->local().list_transforms();
-    ss::json::json_list<ss::httpd::transform_json::transform_metadata>
-      list_result;
-
-    co_return ss::json::json_return_type(
-      ss::json::stream_range_as_array(report.transforms, [](const auto& entry) {
-          const model::transform_report& t = entry.second;
-          ss::httpd::transform_json::transform_metadata meta;
-          meta.name = t.metadata.name();
-          meta.input_topic = t.metadata.input_topic.tp();
-          for (const auto& output_topic : t.metadata.output_topics) {
-              meta.output_topics.push(output_topic.tp());
-          }
-          for (const auto& [k, v] : t.metadata.environment) {
-              ss::httpd::transform_json::environment_variable var;
-              var.key = k;
-              var.value = v;
-              meta.environment.push(var);
-          }
-          for (const auto& [_, processor] : t.processors) {
-              ss::httpd::transform_json::partition_transform_status s;
-              s.partition = processor.id();
-              s.node_id = processor.node();
-              s.status = convert_transform_status(processor.status);
-              s.lag = processor.lag;
-              meta.status.push(s);
-          }
-          return meta;
-      }));
-}
-
-namespace {
-json::validator make_transform_deploy_validator() {
-    const std::string schema = R"(
-{
-    "type": "object",
-    "properties": {
-        "name": {
-            "type": "string"
-        },
-        "input_topic": {
-            "type": "string"
-        },
-        "output_topics": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-        },
-        "environment": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                  "key": {
-                      "type": "string"
-                  },
-                  "value": {
-                      "type": "string"
-                  }
-              },
-              "required": [
-                  "key",
-                  "value"
-              ],
-              "additionalProperties": false
-            }
-        }
-    },
-    "required": ["name", "input_topic", "output_topics"],
-    "additionalProperties": false
-}
-)";
-    return json::validator(schema);
-}
-} // namespace
-
-ss::future<ss::json::json_return_type>
-admin_server::deploy_transform(std::unique_ptr<ss::http::request> req) {
-    if (!_transform_service->local_is_initialized()) {
-        throw ss::httpd::bad_request_exception("data transforms not enabled");
-    }
-    // The request body could be large here, so stream it into an iobuf.
-    iobuf body;
-    auto out_stream = make_iobuf_ref_output_stream(body);
-    co_await ss::copy(*req->content_stream, out_stream);
-    // Now wrap the iobuf in a stream and parse the header JSON document out.
-    iobuf_istreambuf ibuf(body);
-    std::istream stream(&ibuf);
-    json::IStreamWrapper s(stream);
-    // Make sure to stop when the JSON object is over, as after is the Wasm
-    // binary.
-    json::Document doc;
-    doc.ParseStream<
-      rapidjson::kParseDefaultFlags | rapidjson::kParseStopWhenDoneFlag>(s);
-    if (doc.HasParseError()) {
-        throw ss::httpd::bad_request_exception(
-          fmt::format("JSON parse error: {}", doc.GetParseError()));
-    }
-    // Drop the JSON object from the iobuf, so this is just our Wasm binary.
-    body.trim_front(s.Tell());
-    auto validator = make_transform_deploy_validator();
-    apply_validator(validator, doc);
-
-    // Convert JSON into our metadata object.
-    auto name = model::transform_name(doc["name"].GetString());
-    auto input_nt = model::topic_namespace(
-      model::sql_namespace, model::topic(doc["input_topic"].GetString()));
-    std::vector<model::topic_namespace> output_topics;
-    for (const auto& topic : doc["output_topics"].GetArray()) {
-        auto output_nt = model::topic_namespace(
-          model::sql_namespace, model::topic(topic.GetString()));
-        output_topics.push_back(output_nt);
-    }
-    absl::flat_hash_map<ss::sstring, ss::sstring> env;
-    if (doc.HasMember("environment")) {
-        for (const auto& e : doc["environment"].GetArray()) {
-            auto v = e.GetObject();
-            env.insert_or_assign(v["key"].GetString(), v["value"].GetString());
-        }
-    }
-
-    // Now do the deploy!
-    cluster::errc ec = co_await _transform_service->local().deploy_transform(
-      {.name = name,
-       .input_topic = input_nt,
-       .output_topics = output_topics,
-       .environment = std::move(env)},
-      std::move(body));
-
-    co_await throw_on_error(*req, ec, model::controller_ntp);
-    co_return ss::json::json_void();
 }
